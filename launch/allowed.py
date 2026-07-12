@@ -1,0 +1,20 @@
+"""FastAPI 全局访问策略。
+
+当前地基允许任意来源访问，便于本地调试和独立前端接入。正式开放管理接口前，
+应在这里统一收紧来源，而不是让业务路由各自添加 CORS。
+"""
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+
+def FastAPIAllowed(app: "FastAPI") -> None:
+    """配置 FastAPI 跨域。"""
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )

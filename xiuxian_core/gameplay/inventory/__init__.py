@@ -1,0 +1,82 @@
+"""协议、数据库与具体玩法无关的物品资产底座。"""
+
+INVENTORY_FOUNDATION_VERSION = "inventory.foundation.v1"
+
+from .components import ItemComponentRegistry, ItemComponentType
+from .definitions import ItemCatalog, ItemDefinition
+from .models import (
+    AssetAvailability,
+    AssetReservation,
+    InventoryState,
+    ItemAssetKind,
+    ItemContainer,
+    ItemInstance,
+    ItemStack,
+    ProvenanceLot,
+    ReservationMode,
+    SourceReceipt,
+)
+from .integration import (
+    ITEM_ABILITY_COMPONENT_ID,
+    InventoryAbilityExecution,
+    InventoryAbilityExecutor,
+    ItemAbilityComponent,
+    ItemAbilityUse,
+    register_item_ability_component,
+)
+from .transactions import (
+    ConsumeInstance,
+    ConsumeStack,
+    DestroyAsset,
+    GrantInstance,
+    GrantStack,
+    InventoryEngine,
+    InventoryExecution,
+    InventoryOperation,
+    InventoryTransaction,
+    MergeStacks,
+    MoveAsset,
+    ReleaseReservation,
+    ReserveAsset,
+    SplitStack,
+    SwapAssetContainers,
+)
+
+__all__ = [
+    "AssetAvailability",
+    "AssetReservation",
+    "ConsumeInstance",
+    "ConsumeStack",
+    "DestroyAsset",
+    "GrantInstance",
+    "GrantStack",
+    "INVENTORY_FOUNDATION_VERSION",
+    "ITEM_ABILITY_COMPONENT_ID",
+    "InventoryAbilityExecution",
+    "InventoryAbilityExecutor",
+    "InventoryState",
+    "InventoryEngine",
+    "InventoryExecution",
+    "InventoryOperation",
+    "InventoryTransaction",
+    "ItemAssetKind",
+    "ItemAbilityComponent",
+    "ItemAbilityUse",
+    "ItemCatalog",
+    "ItemComponentRegistry",
+    "ItemComponentType",
+    "ItemContainer",
+    "ItemDefinition",
+    "ItemInstance",
+    "ItemStack",
+    "MergeStacks",
+    "MoveAsset",
+    "ProvenanceLot",
+    "ReservationMode",
+    "ReleaseReservation",
+    "ReserveAsset",
+    "SourceReceipt",
+    "SplitStack",
+    "SwapAssetContainers",
+    "register_item_ability_component",
+]

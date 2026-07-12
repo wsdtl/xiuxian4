@@ -1,0 +1,370 @@
+"""把统一奖励规则结果原子提交到 SQLite。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from ..gameplay.context import RuleContext
+from ..gameplay.economy import LedgerState
+from ..gameplay.errors import RuleOutcome
+from ..gameplay.events import RuleEvent
+from ..gameplay.inventory import InventoryState
+from ..gameplay.character import CharacterState
+from ..gameplay.rewards import (
+    RewardClaimState,
+    RewardReceipt,
+    RewardSettlement,
+    RewardSettlementEngine,
+    RewardSettlementExecution,
+    RewardSettlementSnapshot,
+    reward_fingerprint,
+)
+from ..gameplay.weapon import WeaponState
+
+from .errors import CorruptPersistenceData, TransactionMismatch
+from .snapshots import (
+    CHARACTER_AGGREGATE,
+    INVENTORY_AGGREGATE,
+    LEDGER_AGGREGATE,
+    REWARD_CLAIM_AGGREGATE,
+    WEAPON_AGGREGATE,
+    SnapshotRepository,
+)
+from .sqlite import OutboxEventRow, SqliteDatabase
+
+
+@dataclass(frozen=True)
+class RewardSettlementStorageKeys:
+    """一次结算从哪些持久化聚合组装规则快照。"""
+
+    inventory_id: str
+    ledger_id: str
+    character_ids: tuple[str, ...] = ()
+    weapon_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.inventory_id.strip() or not self.ledger_id.strip():
+            raise ValueError("RewardSettlementStorageKeys 缺少库存或账本聚合 id")
+        if len(self.character_ids) != len(set(self.character_ids)):
+            raise ValueError("RewardSettlementStorageKeys 包含重复角色聚合 id")
+        if len(self.weapon_ids) != len(set(self.weapon_ids)):
+            raise ValueError("RewardSettlementStorageKeys 包含重复武器聚合 id")
+        characters = tuple(sorted(self.character_ids))
+        weapons = tuple(sorted(self.weapon_ids))
+        if any(not value.strip() for value in (*characters, *weapons)):
+            raise ValueError("RewardSettlementStorageKeys 包含空聚合 id")
+        object.__setattr__(self, "character_ids", characters)
+        object.__setattr__(self, "weapon_ids", weapons)
+
+
+@dataclass(frozen=True)
+class PendingRuleEvent:
+    transaction_id: str
+    sequence: int
+    event: RuleEvent
+    created_at: datetime
+
+
+class PersistedRewardSettlementService:
+    """规则计算与数据库提交之间唯一允许的奖励写入口。"""
+
+    def __init__(
+        self,
+        database: SqliteDatabase,
+        engine: RewardSettlementEngine,
+        snapshots: SnapshotRepository | None = None,
+    ) -> None:
+        self.database = database
+        self.engine = engine
+        self.snapshots = snapshots or SnapshotRepository()
+
+    def initialize_snapshot(
+        self,
+        keys: RewardSettlementStorageKeys,
+        snapshot: RewardSettlementSnapshot,
+        *,
+        logical_time: datetime,
+    ) -> None:
+        """只用于创建新聚合；任何已存在行都会让整批初始化回滚。"""
+
+        if snapshot.claims.scope_id == "":
+            raise ValueError("奖励领取作用域不能为空")
+        with self.database.unit_of_work() as uow:
+            self.snapshots.insert(
+                uow,
+                INVENTORY_AGGREGATE,
+                keys.inventory_id,
+                snapshot.inventory,
+                logical_time,
+            )
+            self.snapshots.insert(
+                uow,
+                LEDGER_AGGREGATE,
+                keys.ledger_id,
+                snapshot.ledger,
+                logical_time,
+            )
+            if set(keys.character_ids) != set(snapshot.characters):
+                raise ValueError("初始化角色聚合 ID 与快照不一致")
+            if set(keys.weapon_ids) != set(snapshot.weapons):
+                raise ValueError("初始化武器聚合 ID 与快照不一致")
+            for character_id in keys.character_ids:
+                self.snapshots.insert(
+                    uow,
+                    CHARACTER_AGGREGATE,
+                    character_id,
+                    snapshot.characters[character_id],
+                    logical_time,
+                )
+            for asset_id in keys.weapon_ids:
+                self.snapshots.insert(
+                    uow,
+                    WEAPON_AGGREGATE,
+                    asset_id,
+                    snapshot.weapons[asset_id],
+                    logical_time,
+                )
+            self.snapshots.insert(
+                uow,
+                REWARD_CLAIM_AGGREGATE,
+                snapshot.claims.scope_id,
+                snapshot.claims,
+                logical_time,
+            )
+            uow.commit()
+
+    def load_snapshot(
+        self,
+        keys: RewardSettlementStorageKeys,
+        *,
+        claim_scope_id: str,
+    ) -> RewardSettlementSnapshot:
+        with self.database.unit_of_work(write=False) as uow:
+            return self._load_snapshot(uow, keys, claim_scope_id)
+
+    def settle(
+        self,
+        settlement: RewardSettlement,
+        keys: RewardSettlementStorageKeys,
+        *,
+        context: RuleContext,
+    ) -> RuleOutcome[RewardSettlementExecution]:
+        checkpoint = context.random.checkpoint()
+        try:
+            with self.database.unit_of_work() as uow:
+                snapshot = self._load_snapshot(uow, keys, settlement.claim_scope_id)
+                fingerprint = reward_fingerprint(settlement)
+                committed = uow.load_transaction(settlement.id)
+                if committed is not None:
+                    if (
+                        committed.fingerprint != fingerprint
+                        or committed.scope_id != settlement.claim_scope_id
+                    ):
+                        raise TransactionMismatch(
+                            f"同一奖励事务 ID 对应不同内容：{settlement.id}"
+                        )
+                    outcome = self.engine.settle(
+                        settlement,
+                        snapshot=snapshot,
+                        context=context,
+                    )
+                    if outcome.failure:
+                        raise CorruptPersistenceData(
+                            "数据库已有提交事务，但领取快照无法重放同一奖励"
+                        )
+                    assert outcome.value is not None
+                    receipt = self.snapshots.codec.loads(
+                        committed.receipt_payload,
+                        RewardReceipt,
+                    )
+                    if receipt != outcome.value.receipt or not outcome.value.replayed:
+                        raise CorruptPersistenceData("事务表与领取快照中的奖励凭据不一致")
+                    return outcome
+
+                outcome = self.engine.settle(
+                    settlement,
+                    snapshot=snapshot,
+                    context=context,
+                )
+                if outcome.failure:
+                    return outcome
+                assert outcome.value is not None
+                if outcome.value.replayed:
+                    raise CorruptPersistenceData(
+                        "领取快照声明奖励已完成，但缺少数据库提交事务"
+                    )
+                self._save_changed(
+                    uow,
+                    keys,
+                    snapshot,
+                    outcome.value.snapshot,
+                    context.logical_time,
+                )
+                timestamp = context.logical_time.isoformat()
+                uow.insert_transaction(
+                    settlement.id,
+                    fingerprint,
+                    settlement.claim_scope_id,
+                    self.snapshots.codec.dumps(outcome.value.receipt),
+                    timestamp,
+                )
+                for sequence, event in enumerate(outcome.value.events):
+                    uow.append_outbox(
+                        settlement.id,
+                        sequence,
+                        event.kind,
+                        self.snapshots.codec.dumps(event),
+                        timestamp,
+                    )
+                uow.commit()
+                return outcome
+        except Exception:
+            context.random.restore(checkpoint)
+            raise
+
+    def pending_events(self, *, limit: int = 100) -> tuple[PendingRuleEvent, ...]:
+        with self.database.unit_of_work(write=False) as uow:
+            rows = uow.pending_outbox(limit=limit)
+            return tuple(self._pending_event(row) for row in rows)
+
+    def mark_event_published(
+        self,
+        transaction_id: str,
+        sequence: int,
+        *,
+        published_at: datetime,
+    ) -> None:
+        _require_aware(published_at)
+        with self.database.unit_of_work() as uow:
+            uow.mark_outbox_published(
+                transaction_id,
+                sequence,
+                published_at.isoformat(),
+            )
+            uow.commit()
+
+    def _load_snapshot(self, uow, keys, claim_scope_id) -> RewardSettlementSnapshot:
+        inventory = self.snapshots.require(
+            uow,
+            INVENTORY_AGGREGATE,
+            keys.inventory_id,
+            InventoryState,
+        )
+        ledger = self.snapshots.require(
+            uow,
+            LEDGER_AGGREGATE,
+            keys.ledger_id,
+            LedgerState,
+        )
+        characters = {
+            character_id: self.snapshots.require(
+                uow,
+                CHARACTER_AGGREGATE,
+                character_id,
+                CharacterState,
+            )
+            for character_id in keys.character_ids
+        }
+        weapons = {
+            asset_id: self.snapshots.require(
+                uow,
+                WEAPON_AGGREGATE,
+                asset_id,
+                WeaponState,
+            )
+            for asset_id in keys.weapon_ids
+        }
+        claims = self.snapshots.require(
+            uow,
+            REWARD_CLAIM_AGGREGATE,
+            claim_scope_id,
+            RewardClaimState,
+        )
+        return RewardSettlementSnapshot(inventory, ledger, characters, weapons, claims)
+
+    def _save_changed(self, uow, keys, previous, current, logical_time) -> None:
+        self._update_if_changed(
+            uow,
+            INVENTORY_AGGREGATE,
+            keys.inventory_id,
+            previous.inventory,
+            current.inventory,
+            logical_time,
+        )
+        self._update_if_changed(
+            uow,
+            LEDGER_AGGREGATE,
+            keys.ledger_id,
+            previous.ledger,
+            current.ledger,
+            logical_time,
+        )
+        for character_id in keys.character_ids:
+            self._update_if_changed(
+                uow,
+                CHARACTER_AGGREGATE,
+                character_id,
+                previous.characters[character_id],
+                current.characters[character_id],
+                logical_time,
+            )
+        for asset_id in keys.weapon_ids:
+            self._update_if_changed(
+                uow,
+                WEAPON_AGGREGATE,
+                asset_id,
+                previous.weapons[asset_id],
+                current.weapons[asset_id],
+                logical_time,
+            )
+        self._update_if_changed(
+            uow,
+            REWARD_CLAIM_AGGREGATE,
+            previous.claims.scope_id,
+            previous.claims,
+            current.claims,
+            logical_time,
+        )
+
+    def _update_if_changed(
+        self,
+        uow,
+        aggregate_kind,
+        aggregate_id,
+        previous,
+        current,
+        logical_time,
+    ) -> None:
+        if previous == current:
+            return
+        self.snapshots.update(
+            uow,
+            aggregate_kind,
+            aggregate_id,
+            previous,
+            current,
+            logical_time,
+        )
+
+    def _pending_event(self, row: OutboxEventRow) -> PendingRuleEvent:
+        created_at = datetime.fromisoformat(row.created_at)
+        _require_aware(created_at)
+        return PendingRuleEvent(
+            row.transaction_id,
+            row.sequence,
+            self.snapshots.codec.loads(row.payload, RuleEvent),
+            created_at,
+        )
+
+
+def _require_aware(value: datetime) -> None:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("持久化审计时间必须包含时区")
+
+
+__all__ = [
+    "PendingRuleEvent",
+    "PersistedRewardSettlementService",
+    "RewardSettlementStorageKeys",
+]

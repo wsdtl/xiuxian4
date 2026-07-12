@@ -1,0 +1,66 @@
+"""武器与六槽装备共享的原子装配底座。"""
+
+LOADOUT_FOUNDATION_VERSION = "loadout.foundation.v1"
+
+from .models import (
+    ACCESSORY_SLOT_ID,
+    BODY_SLOT_ID,
+    EQUIPMENT_SLOT_IDS,
+    FEET_SLOT_ID,
+    HANDS_SLOT_ID,
+    HEAD_SLOT_ID,
+    LOADOUT_ITEM_COMPONENT_ID,
+    STANDARD_LOADOUT_SLOT_IDS,
+    STANDARD_LOADOUT_SLOT_ORDER,
+    WAIST_SLOT_ID,
+    WEAPON_SLOT_ID,
+    LoadoutItemComponent,
+    LoadoutSlotCatalog,
+    LoadoutSlotDefinition,
+    LoadoutSlotKind,
+    LoadoutState,
+    QualityCatalog,
+    QualityDefinition,
+    register_loadout_item_component,
+    standard_loadout_slot_catalog,
+)
+from .projection import LoadoutContributionAssembler
+from .transactions import (
+    EquipAsset,
+    LoadoutEngine,
+    LoadoutExecution,
+    LoadoutOperation,
+    LoadoutTransaction,
+    UnequipSlot,
+)
+
+__all__ = [
+    "ACCESSORY_SLOT_ID",
+    "BODY_SLOT_ID",
+    "EQUIPMENT_SLOT_IDS",
+    "EquipAsset",
+    "FEET_SLOT_ID",
+    "HANDS_SLOT_ID",
+    "HEAD_SLOT_ID",
+    "LOADOUT_FOUNDATION_VERSION",
+    "LOADOUT_ITEM_COMPONENT_ID",
+    "LoadoutEngine",
+    "LoadoutExecution",
+    "LoadoutItemComponent",
+    "LoadoutContributionAssembler",
+    "LoadoutOperation",
+    "LoadoutSlotCatalog",
+    "LoadoutSlotDefinition",
+    "LoadoutSlotKind",
+    "LoadoutState",
+    "LoadoutTransaction",
+    "QualityCatalog",
+    "QualityDefinition",
+    "STANDARD_LOADOUT_SLOT_IDS",
+    "STANDARD_LOADOUT_SLOT_ORDER",
+    "UnequipSlot",
+    "WAIST_SLOT_ID",
+    "WEAPON_SLOT_ID",
+    "register_loadout_item_component",
+    "standard_loadout_slot_catalog",
+]

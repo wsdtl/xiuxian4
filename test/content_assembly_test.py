@@ -1,0 +1,510 @@
+"""内容包依赖、统一组装、跨目录校验、冻结和指纹测试。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from datetime import datetime, time
+from pathlib import Path
+import sys
+from tempfile import TemporaryDirectory
+from zoneinfo import ZoneInfo
+
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from xiuxian_core.gameplay import (  # noqa: E402
+    AbilityDefinition,
+    AbilityUse,
+    DealDamage,
+    EffectDefinition,
+    EffectReference,
+    RuleContext,
+    RuleEntity,
+    Ruleset,
+    SeededRandomSource,
+    SkinEntry,
+    SkinPack,
+    TagSet,
+)
+from xiuxian_core.gameplay.character import (  # noqa: E402
+    COMBAT_ATTACK,
+    COMBAT_DEFENSE,
+    COMBAT_SPEED,
+    HEALTH_MAXIMUM,
+    SPIRIT_MAXIMUM,
+    CharacterFeatureDefinition,
+    CharacterTemplateDefinition,
+    ContributionSpec,
+    ProgressionDefinition,
+    core_attribute_definitions,
+    persistent_resource_definitions,
+)
+from xiuxian_core.gameplay.combat import CombatStats, DamageTypeDefinition, RecoveryStats  # noqa: E402
+from xiuxian_core.gameplay.content import (  # noqa: E402
+    CONTENT_FOUNDATION_VERSION,
+    CombatProfileDefinition,
+    ContentAssembler,
+    ContentPackage,
+    ContentPackageManifest,
+    ContentVersion,
+    MagnitudeRegistration,
+    PackageRequirement,
+    resolve_package_order,
+)
+from xiuxian_core.gameplay.cycles import CalendarSchedule, CalendarUnit, CycleDefinition  # noqa: E402
+from xiuxian_core.gameplay.economy import CurrencyDefinition  # noqa: E402
+from xiuxian_core.gameplay.equipment import (  # noqa: E402
+    EquipmentDefinition,
+    EquipmentQualityProfile,
+    EquipmentStyleDefinition,
+)
+from xiuxian_core.gameplay.inventory import ItemAssetKind, ItemDefinition  # noqa: E402
+from xiuxian_core.gameplay.loadout import (  # noqa: E402
+    HEAD_SLOT_ID,
+    WEAPON_SLOT_ID,
+    LoadoutItemComponent,
+    QualityDefinition,
+)
+from xiuxian_core.gameplay.weapon import WeaponDefinition, WeaponQualityProfile  # noqa: E402
+from xiuxian_core.persistence import (  # noqa: E402
+    ConcurrencyConflict,
+    ContentActivationMismatch,
+    ContentActivationStore,
+    SqliteDatabase,
+)
+
+
+TIME = datetime(2026, 7, 13, 0, 30, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+
+@dataclass(frozen=True)
+class _PackageMagnitude:
+    value: float
+
+
+def _evaluate_package_magnitude(value: _PackageMagnitude, _context) -> float:
+    return value.value
+
+
+def main() -> None:
+    packages = _packages()
+    _assert_dependency_resolution(packages)
+    runtime = _assert_complete_runtime(packages)
+    _assert_runtime_is_frozen(runtime)
+    _assert_dependency_and_reference_failures(packages)
+    _assert_fingerprint_is_deterministic(packages, runtime.report.content_fingerprint)
+    _assert_persisted_activation(runtime)
+    print("content assembly tests passed")
+
+
+def _manifest(package_id: str, *dependencies: str, version=(1, 0, 0)):
+    return ContentPackageManifest(
+        package_id,
+        ContentVersion(*version),
+        tuple(PackageRequirement(value, ContentVersion(1)) for value in dependencies),
+    )
+
+
+def _core_package() -> ContentPackage:
+    attributes = tuple(core_attribute_definitions().values())
+    resources = tuple(persistent_resource_definitions().values())
+    feature = CharacterFeatureDefinition("feature.starting_body")
+    progression = ProgressionDefinition("progression.character_level", (100, 200))
+    template = CharacterTemplateDefinition(
+        "character_template.standard",
+        {
+            HEALTH_MAXIMUM: 100,
+            SPIRIT_MAXIMUM: 50,
+            COMBAT_ATTACK: 10,
+            COMBAT_DEFENSE: 0,
+            COMBAT_SPEED: 5,
+        },
+        progression_ids=frozenset({progression.id}),
+        feature_ids=frozenset({feature.id}),
+    )
+    weapon_item = ItemDefinition(
+        "item.weapon.training_blade",
+        ItemAssetKind.INSTANCE,
+        tags=TagSet.of("item.weapon"),
+        components={
+            "item_component.loadout": LoadoutItemComponent(frozenset({WEAPON_SLOT_ID}))
+        },
+    )
+    equipment_item = ItemDefinition(
+        "item.equipment.training_head",
+        ItemAssetKind.INSTANCE,
+        tags=TagSet.of("item.equipment", "item.equipment.head"),
+        components={
+            "item_component.loadout": LoadoutItemComponent(frozenset({HEAD_SLOT_ID}))
+        },
+    )
+    quality = QualityDefinition("quality.common", 0)
+    style = EquipmentStyleDefinition("style.training")
+    weapon = WeaponDefinition(
+        "weapon.training_blade",
+        weapon_item.id,
+        ContributionSpec(),
+        {
+            quality.id: WeaponQualityProfile(
+                quality.id,
+                experience_requirements=(100,),
+            )
+        },
+    )
+    equipment = EquipmentDefinition(
+        "equipment.training_head",
+        equipment_item.id,
+        HEAD_SLOT_ID,
+        style.id,
+        quality_profiles={
+            quality.id: EquipmentQualityProfile(quality.id, ContributionSpec())
+        },
+    )
+    damage_type = DamageTypeDefinition(
+        "damage.physical",
+        defense_attribute="combat.defense.physical",
+    )
+    return ContentPackage(
+        _manifest("content.core"),
+        currencies=(CurrencyDefinition("currency.spirit_stone"),),
+        qualities=(quality,),
+        attributes=attributes,
+        resources=resources,
+        character_features=(feature,),
+        progressions=(progression,),
+        character_templates=(template,),
+        items=(weapon_item, equipment_item),
+        equipment_styles=(style,),
+        weapons=(weapon,),
+        equipment=(equipment,),
+        combat_profiles=(
+            CombatProfileDefinition(
+                "combat_profile.standard",
+                CombatStats("health.current"),
+                RecoveryStats("health.current"),
+            ),
+        ),
+        damage_types=(damage_type,),
+        cycles=(
+            CycleDefinition(
+                "cycle.daily_reset",
+                CalendarSchedule("Asia/Shanghai", CalendarUnit.DAY, time(4)),
+            ),
+        ),
+        display_content_ids=frozenset(
+            {
+                "currency.spirit_stone",
+                quality.id,
+                feature.id,
+                progression.id,
+                template.id,
+                weapon_item.id,
+                equipment_item.id,
+                style.id,
+                weapon.id,
+                equipment.id,
+                damage_type.id,
+            }
+        ),
+    )
+
+
+def _mechanics_package() -> ContentPackage:
+    return ContentPackage(
+        _manifest("content.mechanics"),
+        magnitude_registrations=(
+            MagnitudeRegistration(_PackageMagnitude, _evaluate_package_magnitude),
+        ),
+    )
+
+
+def _adventure_package() -> ContentPackage:
+    material = ItemDefinition(
+        "item.material.spirit_ore",
+        ItemAssetKind.STACK,
+        tags=TagSet.of("item.material"),
+        stack_limit=99,
+    )
+    effect = EffectDefinition(
+        "effect.adventure_strike",
+        operations=(
+            DealDamage(
+                "operation.adventure_strike",
+                "damage.physical",
+                _PackageMagnitude(15),
+                can_miss=False,
+                can_critical=False,
+                can_block=False,
+            ),
+        ),
+    )
+    ability = AbilityDefinition(
+        "ability.adventure_strike",
+        effects=(EffectReference(effect.id),),
+    )
+    return ContentPackage(
+        _manifest("content.adventure", "content.core", "content.mechanics"),
+        items=(material,),
+        effects=(effect,),
+        abilities=(ability,),
+        display_content_ids=frozenset({material.id, ability.id}),
+    )
+
+
+def _skin_package(display_ids: frozenset[str]) -> ContentPackage:
+    entries = {
+        content_id: SkinEntry(content_id.replace(".", " ").title())
+        for content_id in display_ids
+    }
+    return ContentPackage(
+        _manifest("content.world_skins", "content.core", "content.adventure"),
+        skin_packs=(
+            SkinPack("skin.cultivation", 1, entries),
+            SkinPack("skin.magic", 1, entries),
+        ),
+    )
+
+
+def _packages() -> tuple[ContentPackage, ...]:
+    core = _core_package()
+    mechanics = _mechanics_package()
+    adventure = _adventure_package()
+    display_ids = core.display_content_ids | adventure.display_content_ids
+    skins = _skin_package(display_ids)
+    return core, mechanics, adventure, skins
+
+
+def _assert_dependency_resolution(packages) -> None:
+    core, mechanics, adventure, skins = packages
+    order = resolve_package_order((skins, adventure, mechanics, core))
+    assert tuple(value.manifest.id for value in order) == (
+        "content.core",
+        "content.mechanics",
+        "content.adventure",
+        "content.world_skins",
+    )
+    missing = replace(
+        adventure,
+        manifest=_manifest("content.adventure", "content.missing"),
+    )
+    try:
+        resolve_package_order((core, missing))
+        raise AssertionError("缺少依赖时必须失败")
+    except KeyError:
+        pass
+    incompatible = replace(
+        adventure,
+        manifest=ContentPackageManifest(
+            "content.adventure",
+            ContentVersion(1),
+            (PackageRequirement("content.core", ContentVersion(2)),),
+        ),
+    )
+    try:
+        resolve_package_order((core, incompatible))
+        raise AssertionError("依赖版本不满足时必须失败")
+    except ValueError:
+        pass
+    first = ContentPackage(_manifest("content.cycle_a", "content.cycle_b"))
+    second = ContentPackage(_manifest("content.cycle_b", "content.cycle_a"))
+    try:
+        resolve_package_order((first, second))
+        raise AssertionError("依赖环必须失败")
+    except ValueError:
+        pass
+
+
+def _assert_complete_runtime(packages):
+    runtime = ContentAssembler().assemble(tuple(reversed(packages)))
+    assert CONTENT_FOUNDATION_VERSION == "content.foundation.v1"
+    assert runtime.report.active_combat_profile_id == "combat_profile.standard"
+    assert runtime.report.packages[-1].id == "content.world_skins"
+    assert len(runtime.report.content_fingerprint) == 64
+    assert runtime.currencies.ids() == ("currency.spirit_stone",)
+    assert runtime.items.require("item.material.spirit_ore").stack_limit == 99
+    assert runtime.weapons.require("weapon.training_blade")
+    assert runtime.equipment.require("equipment.training_head")
+    assert runtime.skins.skin_ids() == ("skin.cultivation", "skin.magic")
+    assert runtime.skins.projector("skin.cultivation").name("ability.adventure_strike")
+    cycle = runtime.cycle_engine.current_window(
+        "cycle.daily_reset",
+        logical_time=datetime(2026, 7, 13, 3, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+    assert cycle and cycle.starts_at.day == 12 and cycle.starts_at.hour == 4
+
+    actor = RuleEntity(
+        "actor",
+        base_attributes={
+            HEALTH_MAXIMUM: 100,
+            SPIRIT_MAXIMUM: 50,
+            COMBAT_ATTACK: 10,
+            COMBAT_DEFENSE: 0,
+            COMBAT_SPEED: 5,
+        },
+        resources={"health.current": 100, "spirit.current": 50},
+        base_abilities=frozenset({"ability.adventure_strike"}),
+    )
+    target = RuleEntity(
+        "target",
+        base_attributes={
+            HEALTH_MAXIMUM: 100,
+            SPIRIT_MAXIMUM: 50,
+            COMBAT_ATTACK: 10,
+            COMBAT_DEFENSE: 0,
+            COMBAT_SPEED: 5,
+        },
+        resources={"health.current": 100, "spirit.current": 50},
+    )
+    result = runtime.ability_engine.execute(
+        AbilityUse("content-ability-use", "ability.adventure_strike"),
+        actor=actor,
+        target=target,
+        context=RuleContext(
+            "content-test",
+            "rules.v1",
+            Ruleset("ruleset.standard"),
+            TIME,
+            SeededRandomSource(17),
+        ),
+    )
+    assert result.target.resources["health.current"] == 85
+    return runtime
+
+
+def _assert_runtime_is_frozen(runtime) -> None:
+    assert runtime.items.finalized
+    assert runtime.characters.finalized
+    assert runtime.weapons.finalized
+    assert runtime.equipment.finalized
+    assert runtime.skins.frozen
+    assert runtime.effects.frozen
+    assert runtime.abilities.frozen
+    assert runtime.triggers.frozen
+    assert runtime.target_selectors.frozen
+    assert runtime.cycles.frozen
+    assert runtime.cycle_engine.handlers.frozen
+    try:
+        runtime.currencies.register(CurrencyDefinition("currency.too_late"))
+        raise AssertionError("运行期不能增加货币")
+    except RuntimeError:
+        pass
+
+
+def _assert_dependency_and_reference_failures(packages) -> None:
+    core, mechanics, adventure, skins = packages
+    undeclared = replace(
+        adventure,
+        manifest=_manifest("content.adventure", "content.core"),
+    )
+    try:
+        ContentAssembler().assemble((core, mechanics, undeclared, skins))
+        raise AssertionError("使用其他包扩展类型却未声明依赖时必须失败")
+    except ValueError as exc:
+        assert "_PackageMagnitude" in str(exc)
+
+    skin_without_dependencies = replace(
+        skins,
+        manifest=_manifest("content.world_skins"),
+    )
+    try:
+        ContentAssembler().assemble((core, mechanics, adventure, skin_without_dependencies))
+        raise AssertionError("皮肤引用其他包内容却未声明依赖时必须失败")
+    except ValueError as exc:
+        assert "未依赖" in str(exc)
+
+    duplicate = ContentPackage(
+        _manifest("content.duplicate"),
+        currencies=(CurrencyDefinition("currency.spirit_stone"),),
+    )
+    try:
+        ContentAssembler().assemble((core, mechanics, adventure, skins, duplicate))
+        raise AssertionError("跨包稳定 ID 冲突必须失败")
+    except ValueError as exc:
+        assert "稳定内容 ID 冲突" in str(exc)
+
+    bad_effect = EffectDefinition(
+        "effect.bad_reference",
+        operations=(
+            DealDamage(
+                "operation.bad_reference",
+                "damage.unknown",
+                _PackageMagnitude(1),
+            ),
+        ),
+    )
+    bad_adventure = replace(adventure, effects=(bad_effect,))
+    try:
+        ContentAssembler().assemble((core, mechanics, bad_adventure, skins))
+        raise AssertionError("跨目录未知引用必须在启动组装时失败")
+    except KeyError:
+        pass
+
+
+def _assert_fingerprint_is_deterministic(packages, expected) -> None:
+    repeated = ContentAssembler().assemble((packages[3], packages[1], packages[0], packages[2]))
+    assert repeated.report.content_fingerprint == expected
+    upgraded_core = replace(
+        packages[0],
+        manifest=replace(packages[0].manifest, version=ContentVersion(1, 0, 1)),
+    )
+    upgraded_adventure = replace(
+        packages[2],
+        manifest=ContentPackageManifest(
+            packages[2].manifest.id,
+            packages[2].manifest.version,
+            tuple(
+                PackageRequirement(
+                    item.package_id,
+                    ContentVersion(1),
+                )
+                for item in packages[2].manifest.dependencies
+            ),
+        ),
+    )
+    changed = ContentAssembler().assemble(
+        (upgraded_core, packages[1], upgraded_adventure, packages[3])
+    )
+    assert changed.report.content_fingerprint != expected
+
+
+def _assert_persisted_activation(runtime) -> None:
+    with TemporaryDirectory() as directory:
+        database = SqliteDatabase(Path(directory) / "content.db")
+        database.initialize()
+        store = ContentActivationStore(database)
+        activation = store.verify_or_initialize(runtime.report, logical_time=TIME)
+        assert activation.revision == 0
+        assert activation.fingerprint == runtime.report.content_fingerprint
+        repeated = store.verify_or_initialize(runtime.report, logical_time=TIME)
+        assert repeated == activation
+
+        changed_report = replace(runtime.report, content_fingerprint="f" * 64)
+        try:
+            store.verify_or_initialize(changed_report, logical_time=TIME)
+            raise AssertionError("内容指纹变化不能在普通启动中静默覆盖")
+        except ContentActivationMismatch:
+            pass
+        replaced = store.replace(
+            changed_report,
+            expected_revision=activation.revision,
+            expected_fingerprint=activation.fingerprint,
+            logical_time=TIME,
+        )
+        assert replaced.revision == 1
+        assert store.require() == replaced
+        try:
+            store.replace(
+                runtime.report,
+                expected_revision=0,
+                expected_fingerprint=activation.fingerprint,
+                logical_time=TIME,
+            )
+            raise AssertionError("旧内容激活 revision 不能覆盖新激活记录")
+        except ConcurrencyConflict:
+            pass
+
+
+if __name__ == "__main__":
+    main()

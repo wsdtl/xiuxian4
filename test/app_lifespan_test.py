@@ -1,0 +1,38 @@
+"""应用装载与生命周期测试。"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from fastapi.testclient import TestClient
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from main import create_app
+from launch.runtime_guard import runtime_guard
+
+
+def main() -> None:
+    # 生命周期测试必须能与本地开发服务并行，不能争抢项目真实运行锁。
+    original_lock_file = runtime_guard.lock_file
+    with TemporaryDirectory() as tmpdir:
+        runtime_guard.lock_file = Path(tmpdir) / "server.lock"
+        try:
+            with TestClient(create_app()) as client:
+                assert client.get("/docs").status_code == 200
+                paths = {getattr(route, "path", "") for route in client.app.routes}
+                assert "/qq/events" in paths
+                assert "/static" in paths
+        finally:
+            runtime_guard.lock_file = original_lock_file
+
+    print("application lifespan test passed")
+
+
+if __name__ == "__main__":
+    main()

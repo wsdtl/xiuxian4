@@ -1,0 +1,85 @@
+"""角色身份、成长和规则实体投影底座。"""
+
+CHARACTER_FOUNDATION_VERSION = "character.foundation.v1"
+
+from .contributions import (
+    AttributeGrant,
+    CharacterContribution,
+    CharacterFeatureDefinition,
+    ContributionSpec,
+    merge_contribution_specs,
+)
+from .definitions import (
+    CharacterCatalog,
+    CharacterTemplateDefinition,
+    ProgressionDefinition,
+    ProgressionMilestone,
+    core_attribute_definitions,
+    persistent_resource_definitions,
+)
+from .models import (
+    COMBAT_ATTACK,
+    COMBAT_DEFENSE,
+    COMBAT_SPEED,
+    CORE_ATTRIBUTE_IDS,
+    CharacterState,
+    CharacterStatus,
+    HEALTH_CURRENT,
+    HEALTH_MAXIMUM,
+    PERSISTENT_RESOURCE_IDS,
+    ProgressionState,
+    SPIRIT_CURRENT,
+    SPIRIT_MAXIMUM,
+)
+from .projection import CharacterProjection, CharacterProjector
+from .transactions import (
+    ChangeCharacterResource,
+    CharacterEngine,
+    CharacterExecution,
+    CharacterOperation,
+    CharacterTransaction,
+    GrantCoreAttribute,
+    GrantExperience,
+    RetireCharacter,
+    UnlockFeature,
+    UnlockProgression,
+)
+
+__all__ = [
+    "AttributeGrant",
+    "CHARACTER_FOUNDATION_VERSION",
+    "COMBAT_ATTACK",
+    "COMBAT_DEFENSE",
+    "COMBAT_SPEED",
+    "CORE_ATTRIBUTE_IDS",
+    "CharacterCatalog",
+    "CharacterContribution",
+    "CharacterFeatureDefinition",
+    "CharacterEngine",
+    "CharacterExecution",
+    "CharacterOperation",
+    "CharacterProjection",
+    "CharacterProjector",
+    "CharacterState",
+    "CharacterStatus",
+    "CharacterTemplateDefinition",
+    "CharacterTransaction",
+    "ChangeCharacterResource",
+    "ContributionSpec",
+    "HEALTH_CURRENT",
+    "HEALTH_MAXIMUM",
+    "PERSISTENT_RESOURCE_IDS",
+    "ProgressionDefinition",
+    "ProgressionMilestone",
+    "ProgressionState",
+    "GrantCoreAttribute",
+    "GrantExperience",
+    "RetireCharacter",
+    "SPIRIT_CURRENT",
+    "SPIRIT_MAXIMUM",
+    "UnlockFeature",
+    "UnlockProgression",
+    "core_attribute_definitions",
+    "persistent_resource_definitions",
+    "merge_contribution_specs",
+]
