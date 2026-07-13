@@ -1,4 +1,4 @@
-"""修仙业务组件共享的组合根、逻辑时间与身份证据适配。"""
+"""修仙4 正式组件共享的组合根、逻辑时间与身份证据适配。"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from xiuxian_core.account import (
     build_qq_identity_evidence,
 )
 from xiuxian_core.persistence import SqliteDatabase
-from xiuxian_game import GameApplication, assemble_first_world
+from src.修仙4.业务 import GameApplication, assemble_first_world
 
 
 _application: GameApplication | None = None

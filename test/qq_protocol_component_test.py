@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from components.qq_protocol_test import COMMAND, build_test_keyboard, build_test_menu, test_image_bytes
+from components.QQ协议测试 import COMMAND, build_test_keyboard, build_test_menu, test_image_bytes
 from launch.adapter.qq.diagnostics import safe_payload_summary
 from launch.adapter.qq.handler import QqEventHandler
 from launch.adapter.qq.keyboard import validate_keyboard

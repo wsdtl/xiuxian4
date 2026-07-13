@@ -9,7 +9,7 @@
 在项目根目录 `.env` 的普通模块列表中加入：
 
 ```dotenv
-ROUTER_MODULES=["components.qq_protocol_test"]
+ROUTER_MODULES=["components.QQ协议测试"]
 ```
 
 重启服务后，启动日志应出现：

@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from components.first_world import set_game_application_for_test  # noqa: E402
+from src.修仙4.组件.入世 import set_game_application_for_test  # noqa: E402
 from launch.adapter.local import LocalEventHandler  # noqa: E402
 from message import render_local_message  # noqa: E402
 from xiuxian_core.account import ExternalIdentity, IdentityEvidence  # noqa: E402
@@ -24,13 +24,13 @@ from xiuxian_core.gameplay.inventory import (  # noqa: E402
     ItemAbilityComponent,
 )
 from xiuxian_core.persistence import SqliteDatabase  # noqa: E402
-from xiuxian_game import (  # noqa: E402
+from src.修仙4.业务 import (  # noqa: E402
     XIUXIAN_GAME_VERSION,
     GameApplication,
     GameViolation,
     assemble_first_world,
 )
-from xiuxian_game.world import HERB_ABILITY_ID, HERB_ITEM_ID, WORLD_SKIN_ID  # noqa: E402
+from src.修仙4.业务.world import HERB_ABILITY_ID, HERB_ITEM_ID, WORLD_SKIN_ID  # noqa: E402
 
 
 TIME = datetime(2026, 7, 13, 3, 0, tzinfo=ZoneInfo("Asia/Shanghai"))

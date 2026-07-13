@@ -17,8 +17,8 @@ from xiuxian_core.account import ExternalIdentity, IdentityEvidence  # noqa: E40
 from xiuxian_core.gameplay import RuleContext, Ruleset, SeededRandomSource  # noqa: E402
 from xiuxian_core.gameplay.character import SPIRIT_CURRENT  # noqa: E402
 from xiuxian_core.persistence import SqliteDatabase  # noqa: E402
-from xiuxian_game import GameApplication, GameViolation, assemble_first_world  # noqa: E402
-from xiuxian_game.world import (  # noqa: E402
+from src.修仙4.业务 import GameApplication, GameViolation, assemble_first_world  # noqa: E402
+from src.修仙4.业务.world import (  # noqa: E402
     HERB_ABILITY_ID,
     HERB_ITEM_ID,
     HERB_SPIRIT_RESTORE,

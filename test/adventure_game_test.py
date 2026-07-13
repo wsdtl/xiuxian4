@@ -15,15 +15,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from components.adventure import COMMANDS as ADVENTURE_COMMANDS  # noqa: E402
-from components.game_runtime import set_game_application_for_test  # noqa: E402
+from src.修仙4.组件.探险 import COMMANDS as ADVENTURE_COMMANDS  # noqa: E402
+from src.修仙4.组件.运行时 import set_game_application_for_test  # noqa: E402
 from launch.adapter.local import LocalEventHandler  # noqa: E402
 from launch.adapter.qq.render import render_qq_message  # noqa: E402
 from message import render_local_message  # noqa: E402
 from xiuxian_core.account import ExternalIdentity, IdentityEvidence  # noqa: E402
 from xiuxian_core.gameplay import RuleContext, Ruleset, SeededRandomSource  # noqa: E402
 from xiuxian_core.persistence import SqliteDatabase  # noqa: E402
-from xiuxian_game import AdventureViolation, GameApplication, assemble_first_world  # noqa: E402
+from src.修仙4.业务 import AdventureViolation, GameApplication, assemble_first_world  # noqa: E402
 
 
 TIME = datetime(2026, 7, 13, 14, 0, tzinfo=ZoneInfo("Asia/Shanghai"))

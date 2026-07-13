@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from fastapi import APIRouter
 from launch.adapter import Depends, manager
 from launch.adapter.local import LocalCommandEvent, LocalEventHandler
 from launch.adapter.local.manager import current_event as current_local_event
@@ -13,16 +14,16 @@ from launch.adapter.qq.handler import QqEventHandler
 from message import Action, M
 from xiuxian_core.account import IdentityEvidence
 from xiuxian_core.gameplay import RuleContext, Ruleset, SeededRandomSource
-from xiuxian_game import AdventureViolation, GameViolation
-from xiuxian_game.adventure import ActivityView
-from xiuxian_game.world import (
+from src.修仙4.业务 import AdventureViolation, GameViolation
+from src.修仙4.业务.adventure import ActivityView
+from src.修仙4.业务.world import (
     EXPLORATION_ACTION_ID,
     HERB_ITEM_ID,
     RECOVERY_ACTION_ID,
     WORLD_SKIN_ID,
 )
 
-from components.game_runtime import (
+from src.修仙4.组件.运行时 import (
     game_application,
     local_identity_evidence,
     logical_time,
@@ -31,6 +32,7 @@ from components.game_runtime import (
 
 
 COMMANDS = ("探险列表", "探险", "探险状态", "结束探险", "休息", "结束休息")
+router = APIRouter()
 
 
 def _current_local_event() -> LocalCommandEvent:
@@ -264,4 +266,4 @@ def _name(content_id: str) -> str:
     return game_application().runtime.skins.projector(WORLD_SKIN_ID).name(content_id)
 
 
-__all__ = ["COMMANDS"]
+__all__ = ["COMMANDS", "router"]

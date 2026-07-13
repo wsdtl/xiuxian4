@@ -114,10 +114,11 @@ https://公网域名:端口/qq/events
 普通业务模块通过 `.env` 的模块列表加载：
 
 ```dotenv
-ROUTER_MODULES=["components.qq_protocol_test"]
+ROUTER_MODULES=["components.QQ协议测试"]
+ROUTER_CHILD_FOLDERS=["src.修仙4.组件"]
 ```
 
-需要自动加载某个目录下的所有子包时使用 `ROUTER_MODULE_GROUPS`。HTTP 路由模块使用 `ROUTER_FOLDERS`、`ROUTER_GROUPS` 或 `ROUTER_CHILD_FOLDERS`。
+`ROUTER_CHILD_FOLDERS` 会加载目录下所有带 `__init__.py` 的正式子组件，并要求每个子组件暴露自己的 `router`。命令组件当前可以使用空 `APIRouter`，以后需要网页或 API 时在本组件内扩展。`components/` 中的单个测试探针继续使用 `ROUTER_MODULES` 显式启用。
 
 ## 注册命令
 
@@ -165,13 +166,13 @@ await manager.send(reply, client_id)
 
 ## QQ 联调
 
-启用 `components.qq_protocol_test` 后，群聊发送：
+启用 `components.QQ协议测试` 后，群聊发送：
 
 ```text
 @机器人 QQ协议测试
 ```
 
-测试面板覆盖回调、即发、回填、引用、Markdown、图片和身份字段。完整操作方法见 [QQ 协议测试组件](components/qq_protocol_test/QQ协议测试说明.md)。
+测试面板覆盖回调、即发、回填、引用、Markdown、图片和身份字段。完整操作方法见 [QQ 协议测试组件](components/QQ协议测试/QQ协议测试说明.md)。
 
 ## 首个世界
 
@@ -206,10 +207,10 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 ## 说明文档
 
 - [xiuxian4 核心边界](xiuxian_core/核心边界说明.md)
-- [首个世界](xiuxian_game/首个世界说明.md)
-- [首个世界组件](components/first_world/首个世界组件说明.md)
-- [探险组件](components/adventure/探险组件说明.md)
-- [探险与恢复](xiuxian_game/adventure/探险与恢复说明.md)
+- [首个世界](src/修仙4/业务/首个世界说明.md)
+- [入世组件](src/修仙4/组件/入世/入世组件说明.md)
+- [探险组件](src/修仙4/组件/探险/探险组件说明.md)
+- [探险与恢复](src/修仙4/业务/adventure/探险与恢复说明.md)
 - [游戏设计宪章](design/游戏设计宪章.md)
 - [Gameplay 规则内核](xiuxian_core/gameplay/规则内核说明.md)
 - [战斗底座封板说明](xiuxian_core/gameplay/combat/战斗底座封板说明.md)
@@ -233,7 +234,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [应用与通信架构](launch/架构说明.md)
 - [通信驱动器接入模板](launch/adapter/驱动器模板.md)
 - [QQ 驱动器](launch/adapter/qq/QQ驱动器说明.md)
-- [QQ 协议测试组件](components/qq_protocol_test/QQ协议测试说明.md)
+- [QQ 协议测试组件](components/QQ协议测试/QQ协议测试说明.md)
 
 只有项目根目录保留入口文件 `README.md`；其他说明文档的文件名、正文、代码注释和使用说明全部使用中文。
 
@@ -244,7 +245,9 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - `xiuxian_core/gameplay/` 是规则中立地基，不能导入 `launch`、`message`、数据库或具体玩法组件。
 - `xiuxian_core/account/` 是平台协议中立的账号与归属地基，不能导入 `launch`、QQ 驱动、数据库或 Gameplay。
 - `xiuxian_core/persistence/` 可以适配领域快照，但领域包不能反向导入持久化实现。
-- `xiuxian_game/` 负责具体世界内容与玩法编排，只能向下依赖 `xiuxian_core/`。
+- `src/修仙4/业务/` 负责具体世界内容与玩法编排，只能向下依赖 `xiuxian_core/`。
+- `src/修仙4/组件/` 负责正式命令入口，只能调用业务、核心和公共通信层。
+- `components/` 只存放可删除的联调与测试业务，禁止正式玩法进入。
 - `launch/` 只负责应用运行与通信基础设施，不能导入未来修仙业务包。
 - 业务组件通过 `MessageHandler` 注册命令，通过公共 `manager` 发送统一消息对象。
 - 平台身份、原始事件、原生 payload 和发送目标只能存在于对应驱动器包内。

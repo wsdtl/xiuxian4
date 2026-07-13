@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from fastapi import APIRouter
 from launch import OnEvent
 from launch.adapter import Depends, manager
 from launch.adapter.local import LocalCommandEvent, LocalEventHandler
@@ -14,8 +15,8 @@ from launch.adapter.qq.handler import QqEventHandler
 from message import Action, M
 from xiuxian_core.account import IdentityEvidence
 from xiuxian_core.gameplay import RuleContext, Ruleset, SeededRandomSource
-from xiuxian_game import GameViolation
-from xiuxian_game.world import (
+from src.修仙4.业务 import GameViolation
+from src.修仙4.业务.world import (
     CHARACTER_TEMPLATE_ID,
     CURRENCY_ID,
     HERB_ITEM_ID,
@@ -25,7 +26,7 @@ from xiuxian_game.world import (
     TRIAL_STONE_REWARD,
     WORLD_SKIN_ID,
 )
-from components.game_runtime import (
+from src.修仙4.组件.运行时 import (
     game_application,
     local_identity_evidence,
     logical_time,
@@ -35,6 +36,9 @@ from components.game_runtime import (
 
 
 COMMANDS = ("开始修仙", "状态", "纳戒", "行动", "领取", "装备武器")
+router = APIRouter()
+
+
 @OnEvent.connect(priority=100)
 def initialize_first_world() -> None:
     game_application().initialize(logical_time=logical_time())
@@ -276,5 +280,6 @@ __all__ = [
     "COMMANDS",
     "game_application",
     "initialize_first_world",
+    "router",
     "set_game_application_for_test",
 ]
