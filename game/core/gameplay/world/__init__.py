@@ -1,0 +1,56 @@
+"""协议和具体玩法无关的世界空间与共享状态底座。"""
+
+WORLD_FOUNDATION_VERSION = "world.foundation.v1"
+
+from .engine import WorldEngine
+from .models import (
+    AddPresence,
+    AdjustWorldMeter,
+    MeterOverflowPolicy,
+    MovePresence,
+    ReleaseWorldReservation,
+    RemovePresence,
+    ReserveWorldPosition,
+    WorldCatalog,
+    WorldConnectionDefinition,
+    WorldExecution,
+    WorldLocationDefinition,
+    WorldMeterDefinition,
+    WorldPosition,
+    WorldPresence,
+    WorldReservation,
+    WorldScopeKind,
+    WorldScopeRef,
+    WorldSpaceDefinition,
+    WorldState,
+    WorldTopologyKind,
+    WorldTransaction,
+    meter_key,
+)
+
+__all__ = [
+    "WORLD_FOUNDATION_VERSION",
+    "AddPresence",
+    "AdjustWorldMeter",
+    "MeterOverflowPolicy",
+    "MovePresence",
+    "ReleaseWorldReservation",
+    "RemovePresence",
+    "ReserveWorldPosition",
+    "WorldCatalog",
+    "WorldConnectionDefinition",
+    "WorldEngine",
+    "WorldExecution",
+    "WorldLocationDefinition",
+    "WorldMeterDefinition",
+    "WorldPosition",
+    "WorldPresence",
+    "WorldReservation",
+    "WorldScopeKind",
+    "WorldScopeRef",
+    "WorldSpaceDefinition",
+    "WorldState",
+    "WorldTopologyKind",
+    "WorldTransaction",
+    "meter_key",
+]

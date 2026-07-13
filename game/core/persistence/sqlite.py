@@ -14,7 +14,7 @@ from .errors import (
 )
 
 
-PERSISTENCE_SCHEMA_VERSION = 2
+PERSISTENCE_SCHEMA_VERSION = 4
 SNAPSHOT_CODEC_VERSION = 1
 
 _REQUIRED_TABLES = frozenset(
@@ -26,6 +26,15 @@ _REQUIRED_TABLES = frozenset(
         "content_activation",
         "cycle_cursor",
         "cycle_work_item",
+        "account_record",
+        "account_identity",
+        "account_conflict",
+        "account_evidence",
+        "fact_journal",
+        "projection_checkpoint",
+        "projection_record",
+        "notification_entry",
+        "ranking_snapshot",
         "grant_campaign",
         "grant_credential",
         "grant_entitlement",
@@ -95,6 +104,87 @@ _EXPECTED_COLUMNS = {
         ("last_error", "TEXT", 0),
         ("created_at", "TEXT", 0),
         ("updated_at", "TEXT", 0),
+    ),
+    "account_record": (
+        ("account_id", "TEXT", 1),
+        ("status", "TEXT", 0),
+        ("revision", "INTEGER", 0),
+        ("created_at", "TEXT", 0),
+        ("updated_at", "TEXT", 0),
+    ),
+    "account_identity": (
+        ("provider_id", "TEXT", 1),
+        ("tenant_digest", "TEXT", 2),
+        ("subject_kind", "TEXT", 3),
+        ("scope_digest", "TEXT", 4),
+        ("identity_digest", "TEXT", 5),
+        ("account_id", "TEXT", 0),
+        ("bound_at", "TEXT", 0),
+        ("source_evidence_id", "TEXT", 0),
+    ),
+    "account_conflict": (
+        ("conflict_id", "TEXT", 1),
+        ("identity_keys_payload", "TEXT", 0),
+        ("account_ids_payload", "TEXT", 0),
+        ("source_kind", "TEXT", 0),
+        ("detected_at", "TEXT", 0),
+    ),
+    "account_evidence": (
+        ("evidence_id", "TEXT", 1),
+        ("fingerprint", "TEXT", 0),
+        ("account_id", "TEXT", 0),
+        ("conflict_id", "TEXT", 0),
+        ("transaction_id", "TEXT", 0),
+        ("receipt_payload", "TEXT", 0),
+        ("processed_at", "TEXT", 0),
+    ),
+    "fact_journal": (
+        ("fact_offset", "INTEGER", 1),
+        ("transaction_id", "TEXT", 0),
+        ("sequence", "INTEGER", 0),
+        ("event_kind", "TEXT", 0),
+        ("payload", "TEXT", 0),
+        ("occurred_at", "TEXT", 0),
+    ),
+    "projection_checkpoint": (
+        ("projector_id", "TEXT", 1),
+        ("partition_id", "TEXT", 2),
+        ("fact_offset", "INTEGER", 0),
+        ("revision", "INTEGER", 0),
+        ("updated_at", "TEXT", 0),
+    ),
+    "projection_record": (
+        ("projector_id", "TEXT", 1),
+        ("partition_id", "TEXT", 2),
+        ("record_key", "TEXT", 3),
+        ("revision", "INTEGER", 0),
+        ("payload", "TEXT", 0),
+        ("fact_offset", "INTEGER", 0),
+        ("updated_at", "TEXT", 0),
+    ),
+    "notification_entry": (
+        ("notification_id", "TEXT", 1),
+        ("recipient_id", "TEXT", 0),
+        ("kind_id", "TEXT", 0),
+        ("dedupe_key", "TEXT", 0),
+        ("priority", "INTEGER", 0),
+        ("source_fact_offset", "INTEGER", 0),
+        ("status", "TEXT", 0),
+        ("payload", "TEXT", 0),
+        ("created_at", "TEXT", 0),
+        ("expires_at", "TEXT", 0),
+        ("read_at", "TEXT", 0),
+        ("revision", "INTEGER", 0),
+    ),
+    "ranking_snapshot": (
+        ("board_id", "TEXT", 1),
+        ("scope_id", "TEXT", 2),
+        ("period_id", "TEXT", 3),
+        ("version", "INTEGER", 4),
+        ("fingerprint", "TEXT", 0),
+        ("payload", "TEXT", 0),
+        ("frozen_at", "TEXT", 0),
+        ("through_fact_offset", "INTEGER", 0),
     ),
     "grant_campaign": (
         ("campaign_id", "TEXT", 1),
@@ -235,6 +325,130 @@ CREATE TABLE cycle_work_item (
 
 CREATE INDEX cycle_work_claim_idx
 ON cycle_work_item(status, next_attempt_at, available_at, lease_until, cycle_id);
+
+CREATE TABLE account_record (
+    account_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL CHECK (status IN ('active', 'suspended', 'closed')),
+    revision INTEGER NOT NULL CHECK (revision >= 0),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE account_identity (
+    provider_id TEXT NOT NULL,
+    tenant_digest TEXT NOT NULL,
+    subject_kind TEXT NOT NULL,
+    scope_digest TEXT NOT NULL,
+    identity_digest TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    bound_at TEXT NOT NULL,
+    source_evidence_id TEXT NOT NULL,
+    PRIMARY KEY (
+        provider_id, tenant_digest, subject_kind, scope_digest, identity_digest
+    ),
+    FOREIGN KEY (account_id) REFERENCES account_record(account_id) ON DELETE RESTRICT
+) WITHOUT ROWID;
+
+CREATE INDEX account_identity_account_idx
+ON account_identity(account_id, bound_at);
+
+CREATE TABLE account_conflict (
+    conflict_id TEXT PRIMARY KEY,
+    identity_keys_payload TEXT NOT NULL,
+    account_ids_payload TEXT NOT NULL,
+    source_kind TEXT NOT NULL,
+    detected_at TEXT NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE account_evidence (
+    evidence_id TEXT PRIMARY KEY,
+    fingerprint TEXT NOT NULL,
+    account_id TEXT,
+    conflict_id TEXT,
+    transaction_id TEXT NOT NULL UNIQUE,
+    receipt_payload TEXT NOT NULL,
+    processed_at TEXT NOT NULL,
+    CHECK ((account_id IS NULL) <> (conflict_id IS NULL)),
+    FOREIGN KEY (account_id) REFERENCES account_record(account_id) ON DELETE RESTRICT,
+    FOREIGN KEY (conflict_id) REFERENCES account_conflict(conflict_id) ON DELETE RESTRICT,
+    FOREIGN KEY (transaction_id)
+        REFERENCES committed_transaction(transaction_id)
+        ON DELETE RESTRICT
+) WITHOUT ROWID;
+
+CREATE INDEX account_evidence_account_idx
+ON account_evidence(account_id, processed_at);
+
+CREATE TABLE fact_journal (
+    fact_offset INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL CHECK (sequence >= 0),
+    event_kind TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    occurred_at TEXT NOT NULL,
+    UNIQUE(transaction_id, sequence),
+    FOREIGN KEY (transaction_id)
+        REFERENCES committed_transaction(transaction_id)
+        ON DELETE RESTRICT
+);
+
+CREATE INDEX fact_journal_kind_idx
+ON fact_journal(event_kind, fact_offset);
+
+CREATE TABLE projection_checkpoint (
+    projector_id TEXT NOT NULL,
+    partition_id TEXT NOT NULL,
+    fact_offset INTEGER NOT NULL DEFAULT 0 CHECK (fact_offset >= 0),
+    revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (projector_id, partition_id)
+) WITHOUT ROWID;
+
+CREATE TABLE projection_record (
+    projector_id TEXT NOT NULL,
+    partition_id TEXT NOT NULL,
+    record_key TEXT NOT NULL,
+    revision INTEGER NOT NULL CHECK (revision >= 0),
+    payload TEXT NOT NULL,
+    fact_offset INTEGER NOT NULL CHECK (fact_offset >= 0),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (projector_id, partition_id, record_key),
+    FOREIGN KEY (projector_id, partition_id)
+        REFERENCES projection_checkpoint(projector_id, partition_id)
+        ON DELETE RESTRICT
+) WITHOUT ROWID;
+
+CREATE TABLE notification_entry (
+    notification_id TEXT PRIMARY KEY,
+    recipient_id TEXT NOT NULL,
+    kind_id TEXT NOT NULL,
+    dedupe_key TEXT NOT NULL,
+    priority INTEGER NOT NULL,
+    source_fact_offset INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('unread', 'read', 'dismissed')),
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT,
+    read_at TEXT,
+    revision INTEGER NOT NULL CHECK (revision >= 0),
+    UNIQUE(recipient_id, dedupe_key),
+    FOREIGN KEY (source_fact_offset) REFERENCES fact_journal(fact_offset) ON DELETE RESTRICT
+) WITHOUT ROWID;
+
+CREATE INDEX notification_inbox_idx
+ON notification_entry(recipient_id, status, priority DESC, created_at);
+
+CREATE TABLE ranking_snapshot (
+    board_id TEXT NOT NULL,
+    scope_id TEXT NOT NULL,
+    period_id TEXT NOT NULL,
+    version INTEGER NOT NULL CHECK (version > 0),
+    fingerprint TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    frozen_at TEXT NOT NULL,
+    through_fact_offset INTEGER NOT NULL CHECK (through_fact_offset >= 0),
+    PRIMARY KEY (board_id, scope_id, period_id, version)
+) WITHOUT ROWID;
 
 CREATE TABLE grant_campaign (
     campaign_id TEXT PRIMARY KEY,
@@ -1038,6 +1252,14 @@ class SqliteUnitOfWork:
                 """,
                 (transaction_id, sequence, event_kind, payload, created_at),
             )
+            self.connection.execute(
+                """
+                INSERT INTO fact_journal(
+                    transaction_id, sequence, event_kind, payload, occurred_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (transaction_id, sequence, event_kind, payload, created_at),
+            )
         except sqlite3.IntegrityError as exc:
             raise ConcurrencyConflict(
                 f"Outbox 事件已经存在：{transaction_id}/{sequence}"
@@ -1103,6 +1325,28 @@ def _validate_schema_shape(connection: sqlite3.Connection) -> None:
     }
     if "cycle_work_claim_idx" not in cycle_indexes:
         raise SchemaVersionError("数据库缺少周期工作项领取索引")
+    required_account_indexes = {
+        "account_identity": {"account_identity_account_idx"},
+        "account_evidence": {"account_evidence_account_idx"},
+    }
+    for table, expected_indexes in required_account_indexes.items():
+        actual_indexes = {
+            str(row[1])
+            for row in connection.execute(f"PRAGMA index_list({table})").fetchall()
+        }
+        if not expected_indexes.issubset(actual_indexes):
+            raise SchemaVersionError(f"数据库缺少账号索引：{table}")
+    required_projection_indexes = {
+        "fact_journal": {"fact_journal_kind_idx"},
+        "notification_entry": {"notification_inbox_idx"},
+    }
+    for table, expected_indexes in required_projection_indexes.items():
+        actual_indexes = {
+            str(row[1])
+            for row in connection.execute(f"PRAGMA index_list({table})").fetchall()
+        }
+        if not expected_indexes.issubset(actual_indexes):
+            raise SchemaVersionError(f"数据库缺少事实投影索引：{table}")
     required_grant_indexes = {
         "grant_campaign": {"grant_campaign_status_idx"},
         "grant_credential": {
@@ -1143,6 +1387,42 @@ def _validate_schema_shape(connection: sqlite3.Connection) -> None:
         ("cycle_id", "cycle_id"),
     }:
         raise SchemaVersionError("周期工作项游标复合外键结构不正确")
+    expected_account_foreign_keys = {
+        "account_identity": {
+            ("account_id", "account_record", "account_id"),
+        },
+        "account_evidence": {
+            ("account_id", "account_record", "account_id"),
+            ("conflict_id", "account_conflict", "conflict_id"),
+            ("transaction_id", "committed_transaction", "transaction_id"),
+        },
+    }
+    for table, expected_keys in expected_account_foreign_keys.items():
+        actual_keys = {
+            (str(row[3]), str(row[2]), str(row[4]))
+            for row in connection.execute(f"PRAGMA foreign_key_list({table})").fetchall()
+        }
+        if actual_keys != expected_keys:
+            raise SchemaVersionError(f"账号表外键结构不正确：{table}")
+    expected_projection_foreign_keys = {
+        "fact_journal": {
+            ("transaction_id", "committed_transaction", "transaction_id"),
+        },
+        "projection_record": {
+            ("projector_id", "projection_checkpoint", "projector_id"),
+            ("partition_id", "projection_checkpoint", "partition_id"),
+        },
+        "notification_entry": {
+            ("source_fact_offset", "fact_journal", "fact_offset"),
+        },
+    }
+    for table, expected_keys in expected_projection_foreign_keys.items():
+        actual_keys = {
+            (str(row[3]), str(row[2]), str(row[4]))
+            for row in connection.execute(f"PRAGMA foreign_key_list({table})").fetchall()
+        }
+        if actual_keys != expected_keys:
+            raise SchemaVersionError(f"事实投影表外键结构不正确：{table}")
     expected_grant_foreign_keys = {
         "grant_credential": {
             ("campaign_id", "grant_campaign", "campaign_id"),

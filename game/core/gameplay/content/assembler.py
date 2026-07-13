@@ -12,6 +12,10 @@ from types import MappingProxyType
 from typing import Iterable, Mapping
 
 from ..actions import ActionCatalog, ActionEngine
+from ..activities import ActivityCatalog, ActivityEngine
+from ..loot import LootCatalog, LootEngine
+from ..social import SocialCatalog, SocialEngine
+from ..world import WorldCatalog, WorldEngine
 from ..abilities import AbilityDefinition, AbilityEngine
 from ..attributes import AttributeDefinition, AttributeResolver, MagnitudeEvaluators, ResourceDefinition
 from ..character import CharacterCatalog
@@ -143,6 +147,10 @@ class ContentRuntime:
     triggers: DefinitionRegistry[TriggerDefinition]
     cycles: DefinitionRegistry[CycleDefinition]
     actions: ActionCatalog
+    activities: ActivityCatalog
+    loot_tables: LootCatalog
+    world: WorldCatalog
+    social: SocialCatalog
     damage_engine: DamageEngine
     recovery_engine: RecoveryEngine
     control_engine: ControlEngine
@@ -152,6 +160,10 @@ class ContentRuntime:
     target_selectors: TargetSelectorRegistry
     cycle_engine: CycleEngine
     action_engine: ActionEngine
+    activity_engine: ActivityEngine
+    loot_engine: LootEngine
+    world_engine: WorldEngine
+    social_engine: SocialEngine
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", MappingProxyType(dict(self.attributes)))
@@ -189,6 +201,10 @@ class ContentAssembler:
         triggers = DefinitionRegistry[TriggerDefinition]("Trigger")
         cycles = DefinitionRegistry[CycleDefinition]("Cycle")
         actions = ActionCatalog()
+        activities = ActivityCatalog()
+        loot_tables = LootCatalog()
+        world = WorldCatalog()
+        social = SocialCatalog()
         attributes: dict[StableId, AttributeDefinition] = {}
         resources: dict[StableId, ResourceDefinition] = {}
 
@@ -276,6 +292,86 @@ class ContentAssembler:
                 "action",
                 package.actions,
                 actions.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "activity",
+                package.activities,
+                activities.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "loot_table",
+                package.loot_tables,
+                loot_tables.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "world_space",
+                package.world_spaces,
+                world.spaces.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "world_location",
+                package.world_locations,
+                world.locations.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "world_connection",
+                package.world_connections,
+                world.connections.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "world_meter",
+                package.world_meters,
+                world.meters.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "organization_role",
+                package.organization_roles,
+                social.roles.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "organization_type",
+                package.organization_types,
+                social.organizations.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "social_request_type",
+                package.social_request_types,
+                social.requests.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "relation_type",
+                package.relation_types,
+                social.relations.register,
                 ownership,
                 known_displayable,
             )
@@ -513,6 +609,10 @@ class ContentAssembler:
         trigger_engine = TriggerEngine(triggers, effect_engine)
         cycle_engine = CycleEngine(cycles, cycle_handlers)
         action_engine = ActionEngine(actions)
+        activity_engine = ActivityEngine(activities)
+        loot_engine = LootEngine(loot_tables)
+        world_engine = WorldEngine(world)
+        social_engine = SocialEngine(social)
         selectors.freeze()
 
         currencies.finalize()
@@ -557,6 +657,10 @@ class ContentAssembler:
             triggers,
             cycles,
             actions,
+            activities,
+            loot_tables,
+            world,
+            social,
             damage_engine,
             recovery_engine,
             control_engine,
@@ -566,6 +670,10 @@ class ContentAssembler:
             selectors,
             cycle_engine,
             action_engine,
+            activity_engine,
+            loot_engine,
+            world_engine,
+            social_engine,
         )
 
     def _select_profile(

@@ -64,7 +64,7 @@ class CharacterFeatureDefinition:
 
 @dataclass(frozen=True)
 class CharacterContribution:
-    """装备、宗门、场景等外部系统提交的一份带来源贡献。"""
+    """装配、组织、场景等外部系统提交的一份带来源贡献。"""
 
     id: StableId
     source_kind: StableId

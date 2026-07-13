@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import Callable, Mapping
 
 from ..actions import ActionDefinition
+from ..activities import ActivityDefinition
 from ..abilities import AbilityDefinition
 from ..attributes import (
     AttributeDefinition,
@@ -43,6 +44,19 @@ from ..equipment import EquipmentDefinition, EquipmentStyleDefinition
 from ..ids import StableId, stable_id
 from ..inventory import ItemComponentType, ItemDefinition
 from ..loadout import QualityDefinition
+from ..loot import LootTableDefinition
+from ..social import (
+    OrganizationRoleDefinition,
+    OrganizationTypeDefinition,
+    RelationTypeDefinition,
+    SocialRequestDefinition,
+)
+from ..world import (
+    WorldConnectionDefinition,
+    WorldLocationDefinition,
+    WorldMeterDefinition,
+    WorldSpaceDefinition,
+)
 from ..skins import SkinPack
 from ..triggers import TriggerDefinition
 from ..weapon import WeaponDefinition
@@ -185,6 +199,16 @@ class ContentPackage:
     triggers: tuple[TriggerDefinition, ...] = ()
     cycles: tuple[CycleDefinition, ...] = ()
     actions: tuple[ActionDefinition, ...] = ()
+    activities: tuple[ActivityDefinition, ...] = ()
+    loot_tables: tuple[LootTableDefinition, ...] = ()
+    world_spaces: tuple[WorldSpaceDefinition, ...] = ()
+    world_locations: tuple[WorldLocationDefinition, ...] = ()
+    world_connections: tuple[WorldConnectionDefinition, ...] = ()
+    world_meters: tuple[WorldMeterDefinition, ...] = ()
+    organization_roles: tuple[OrganizationRoleDefinition, ...] = ()
+    organization_types: tuple[OrganizationTypeDefinition, ...] = ()
+    social_request_types: tuple[SocialRequestDefinition, ...] = ()
+    relation_types: tuple[RelationTypeDefinition, ...] = ()
     skin_packs: tuple[SkinPack, ...] = ()
     display_content_ids: frozenset[StableId] = frozenset()
     magnitude_registrations: tuple[MagnitudeRegistration, ...] = ()
@@ -221,6 +245,16 @@ class ContentPackage:
             "triggers",
             "cycles",
             "actions",
+            "activities",
+            "loot_tables",
+            "world_spaces",
+            "world_locations",
+            "world_connections",
+            "world_meters",
+            "organization_roles",
+            "organization_types",
+            "social_request_types",
+            "relation_types",
             "skin_packs",
             "magnitude_registrations",
             "condition_registrations",

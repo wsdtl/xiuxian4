@@ -15,12 +15,15 @@ if str(ROOT) not in sys.path:
 import game  # noqa: E402
 from game import core  # noqa: E402
 from game import cmd  # noqa: E402
+from game.core import account, gameplay, persistence  # noqa: E402
 
 
 def main() -> None:
     _assert_physical_layout()
     _assert_public_root()
+    _assert_layer_public_exports()
     _assert_import_boundaries()
+    _assert_core_neutrality()
     print("core architecture tests passed")
 
 
@@ -46,16 +49,24 @@ def _assert_physical_layout() -> None:
 
 
 def _assert_public_root() -> None:
-    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v1.1"
+    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v2"
     assert set(game.__all__) == {"PUBLIC_FOUNDATION_VERSION"}
     assert cmd.router is not None
-    assert core.GAME_CORE_VERSION == "game-core.v1"
+    assert core.GAME_CORE_VERSION == "game-core.v2"
     assert core.CORE_LAYERS == (
         "game.core.gameplay",
         "game.core.account",
         "game.core.persistence",
     )
     assert set(core.__all__) == {"CORE_LAYERS", "GAME_CORE_VERSION"}
+
+
+def _assert_layer_public_exports() -> None:
+    for module in (account, gameplay, persistence):
+        exports = tuple(module.__all__)
+        assert len(exports) == len(set(exports)), f"{module.__name__} 存在重复公开符号"
+        missing = tuple(name for name in exports if not hasattr(module, name))
+        assert not missing, f"{module.__name__} 缺少公开符号：{', '.join(missing)}"
 
 
 def _assert_import_boundaries() -> None:
@@ -110,6 +121,43 @@ def _assert_import_boundaries() -> None:
                 failures.append(
                     f"{path.relative_to(ROOT)} 协议测试不得依赖游戏代码 {imported}"
                 )
+    assert not failures, "\n".join(failures)
+
+
+def _assert_core_neutrality() -> None:
+    """真正核心不能倒灌产品词、模块随机源或机器当前时间。"""
+
+    product_terms = ("宗门", "仙城", "纳戒", "探险", "首领", "洞天", "修仙")
+    failures: list[str] = []
+    core = ROOT / "game" / "core"
+    for path in core.rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        relative = path.relative_to(ROOT)
+        for term in product_terms:
+            if term in source:
+                failures.append(f"{relative} 出现具体产品词 {term}")
+        tree = ast.parse(source, filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "random" and path.name != "context.py":
+                        failures.append(f"{relative} 直接导入模块随机源")
+            elif isinstance(node, ast.ImportFrom) and node.module == "random":
+                failures.append(f"{relative} 直接导入模块随机源")
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                owner = node.func.value
+                if (
+                    isinstance(owner, ast.Name)
+                    and owner.id == "datetime"
+                    and node.func.attr in {"now", "utcnow"}
+                ):
+                    failures.append(f"{relative} 直接读取机器当前时间")
+                if (
+                    isinstance(owner, ast.Name)
+                    and owner.id == "time"
+                    and node.func.attr == "time"
+                ):
+                    failures.append(f"{relative} 直接读取机器当前时间")
     assert not failures, "\n".join(failures)
 
 

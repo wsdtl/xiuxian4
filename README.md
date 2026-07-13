@@ -1,6 +1,6 @@
 # xiuxian4
 
-`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v1.1`，尚未写入新游戏的具体内容和玩家命令。
+`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v2`，尚未写入新游戏的具体内容和玩家命令。
 
 ## 当前地基
 
@@ -24,11 +24,17 @@
 - 已封板的经济账本底座 `economy.foundation.v1`
 - 已封板的统一奖励结算底座 `reward.foundation.v1`
 - 已封板的权益凭证与兑付底座 `grant.foundation.v1`
-- 已封板的持久化联合事务底座 `persistence.foundation.v2`
+- 已封板的持久化联合事务底座 `persistence.foundation.v4`
 - 已封板的内容包统一组装底座 `content.foundation.v1`
 - 已封板的时间与周期底座 `cycle.foundation.v1`
 - 异步行动槽与生命周期底座 `action.foundation.v1`
 - 已封板的铭刻底座 `inscription.foundation.v1`
+- 已封板的掉落与保底底座 `loot.foundation.v1`
+- 已封板的世界空间与区域状态底座 `world.foundation.v1`
+- 已封板的交换契约底座 `exchange.foundation.v1`
+- 已封板的活动实例底座 `activity.foundation.v1`
+- 已封板的组织与社会关系底座 `social.foundation.v1`
+- 已封板的事实投影、通知与排名底座 `projection.foundation.v1`
 - 伤害、治疗、护盾、控制、状态、干预器和复合数值公式
 - 多目标、回合时间线、目标约束、动态参战和结构化战报事实
 - 可堆叠物资、独立实例、容器、来源批次、预约托管和原子资产事务
@@ -44,6 +50,8 @@
 - 日、周、月、固定间隔和显式活动窗口，以及可重启的周期补偿工作队列
 - 主行动、委托行动和即时行动的冻结快照、到期结算、领取、取消与中断
 - 武器、装备和武器 Ability 的实例铭刻、原名投影与联合事务防重
+- 永久事实日志、可归零重建的投影检查点、通知收件箱和不可变排名快照
+- 掉落审计与保底、任意世界拓扑、交换冻结、活动参与和通用组织关系
 - QQ Markdown/按钮键盘与本地测试结果渲染器
 - 回调签名、时间窗、请求体限制、有界队列、事件去重和安全重试
 - 脱敏结构日志与真实 QQ 协议测试组件
@@ -189,6 +197,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [游戏核心边界](game/core/核心边界说明.md)
 - [后台接口占位](game/cmd/后台接口/说明.md)
 - [公共底座封板说明](design/公共底座封板说明.md)
+- [真正核心封板清单](design/真正核心封板清单.md)
 - [游戏设计宪章](design/游戏设计宪章.md)
 - [Gameplay 规则内核](game/core/gameplay/规则内核说明.md)
 - [战斗底座封板说明](game/core/gameplay/combat/战斗底座封板说明.md)
@@ -206,6 +215,12 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [时间与周期底座说明](game/core/gameplay/cycles/时间与周期底座说明.md)
 - [异步行动底座说明](game/core/gameplay/actions/异步行动底座说明.md)
 - [铭刻底座说明](game/core/gameplay/inscription/铭刻底座说明.md)
+- [掉落与保底底座说明](game/core/gameplay/loot/掉落与保底底座说明.md)
+- [世界空间与区域状态底座说明](game/core/gameplay/world/世界空间与区域状态底座说明.md)
+- [交换契约底座说明](game/core/gameplay/exchange/交换契约底座说明.md)
+- [活动实例与参与结算底座说明](game/core/gameplay/activities/活动实例与参与结算底座说明.md)
+- [组织与社会关系底座说明](game/core/gameplay/social/组织与社会关系底座说明.md)
+- [事实投影、通知与排名底座说明](game/core/gameplay/projections/事实投影通知与排名底座说明.md)
 - [战斗内核](game/core/gameplay/combat/战斗内核说明.md)
 - [战斗编排](game/core/gameplay/combat/战斗编排说明.md)
 - [高级特效机制](game/core/gameplay/combat/高级特效机制说明.md)
