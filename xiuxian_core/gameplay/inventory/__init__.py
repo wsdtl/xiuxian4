@@ -24,6 +24,13 @@ from .integration import (
     ItemAbilityUse,
     register_item_ability_component,
 )
+from .item_use import (
+    CharacterItemUse,
+    CharacterItemUseEngine,
+    CharacterItemUseExecution,
+    ItemUseReceipt,
+    item_use_fingerprint,
+)
 from .transactions import (
     ConsumeInstance,
     ConsumeStack,
@@ -45,6 +52,9 @@ from .transactions import (
 __all__ = [
     "AssetAvailability",
     "AssetReservation",
+    "CharacterItemUse",
+    "CharacterItemUseEngine",
+    "CharacterItemUseExecution",
     "ConsumeInstance",
     "ConsumeStack",
     "DestroyAsset",
@@ -69,6 +79,7 @@ __all__ = [
     "ItemDefinition",
     "ItemInstance",
     "ItemStack",
+    "ItemUseReceipt",
     "MergeStacks",
     "MoveAsset",
     "ProvenanceLot",
@@ -78,5 +89,6 @@ __all__ = [
     "SourceReceipt",
     "SplitStack",
     "SwapAssetContainers",
+    "item_use_fingerprint",
     "register_item_ability_component",
 ]

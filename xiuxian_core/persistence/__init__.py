@@ -12,6 +12,7 @@ from .cycles import (
     cycle_transaction_id,
 )
 from .inscriptions import PersistedInscriptionService
+from .item_use import PersistedItemUseService
 from .errors import (
     AggregateNotFound,
     ConcurrencyConflict,
@@ -77,6 +78,7 @@ __all__ = [
     "PersistentCycleService",
     "PersistedRewardSettlementService",
     "PersistedInscriptionService",
+    "PersistedItemUseService",
     "PersistenceError",
     "REWARD_CLAIM_AGGREGATE",
     "RewardSettlementStorageKeys",
