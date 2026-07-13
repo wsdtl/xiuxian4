@@ -94,7 +94,7 @@ def read_env_file(path: Path = ENV_FILE) -> dict[str, str]:
     支持写法：
 
         PROJECT_NAME=xiuxian
-        ROUTER_GROUPS=["game"]
+        ROUTER_GROUPS=["示例路由组"]
         zdy1=hello
 
     空行、# 注释、无等号的行会被忽略。
@@ -165,7 +165,7 @@ class Env:
 
         .env 中必须写成列表：
 
-            ROUTER_GROUPS=["game"]
+            ROUTER_GROUPS=["示例路由组"]
         """
 
         raw = self.get(name)
@@ -263,7 +263,7 @@ class RouterConfig:
     .env 中必须写成列表：
 
         ROUTER_MODULE_GROUPS=["auto"]
-        ROUTER_GROUPS=["game"]
+        ROUTER_GROUPS=["示例路由组"]
     """
 
     module_groups: List[str]

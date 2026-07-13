@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from xiuxian_core.gameplay import (  # noqa: E402
+from game.core.gameplay import (  # noqa: E402
     AssetInscriptionTarget,
     ContributionSpec,
     INSCRIPTION_DATA_KEY,
@@ -31,7 +31,7 @@ from xiuxian_core.gameplay import (  # noqa: E402
     TagSet,
     WeaponAbilityInscriptionTarget,
 )
-from xiuxian_core.gameplay.inventory import (  # noqa: E402
+from game.core.gameplay.inventory import (  # noqa: E402
     InventoryState,
     ItemAssetKind,
     ItemCatalog,
@@ -41,13 +41,13 @@ from xiuxian_core.gameplay.inventory import (  # noqa: E402
     ItemInstance,
     SourceReceipt,
 )
-from xiuxian_core.gameplay.equipment import (  # noqa: E402
+from game.core.gameplay.equipment import (  # noqa: E402
     EquipmentCatalog,
     EquipmentDefinition,
     EquipmentQualityProfile,
     EquipmentStyleDefinition,
 )
-from xiuxian_core.gameplay.loadout import (  # noqa: E402
+from game.core.gameplay.loadout import (  # noqa: E402
     HEAD_SLOT_ID,
     WEAPON_SLOT_ID,
     LoadoutItemComponent,
@@ -56,13 +56,13 @@ from xiuxian_core.gameplay.loadout import (  # noqa: E402
     register_loadout_item_component,
     standard_loadout_slot_catalog,
 )
-from xiuxian_core.gameplay.weapon import (  # noqa: E402
+from game.core.gameplay.weapon import (  # noqa: E402
     WeaponCatalog,
     WeaponDefinition,
     WeaponQualityProfile,
     WeaponState,
 )
-from xiuxian_core.persistence import (  # noqa: E402
+from game.core.persistence import (  # noqa: E402
     INVENTORY_AGGREGATE,
     WEAPON_AGGREGATE,
     PersistedInscriptionService,

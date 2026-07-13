@@ -14,14 +14,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from xiuxian_core.gameplay.rewards import (  # noqa: E402
+from game.core.gameplay.rewards import (  # noqa: E402
     CharacterFeatureReward,
     CurrencyReward,
     RewardExpectations,
     RewardSettlement,
     StackItemReward,
 )
-from xiuxian_core.persistence import (  # noqa: E402
+from game.core.persistence import (  # noqa: E402
     ConcurrencyConflict,
     CorruptPersistenceData,
     INVENTORY_AGGREGATE,

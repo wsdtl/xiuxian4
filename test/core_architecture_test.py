@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import xiuxian_core  # noqa: E402
+import game  # noqa: E402
+from game import core  # noqa: E402
+from game import cmd  # noqa: E402
 
 
 def main() -> None:
@@ -23,72 +25,65 @@ def main() -> None:
 
 
 def _assert_physical_layout() -> None:
-    core = ROOT / "xiuxian_core"
+    game = ROOT / "game"
+    core = game / "core"
+    assert (game / "__init__.py").is_file()
     assert core.is_dir()
     for name in ("gameplay", "account", "persistence"):
         assert (core / name / "__init__.py").is_file()
         assert not (ROOT / name).exists(), f"禁止保留旧顶层兼容包：{name}"
-    product = ROOT / "src" / "修仙4"
-    assert (product / "__init__.py").is_file()
-    assert (product / "业务" / "__init__.py").is_file()
-    assert (product / "组件" / "__init__.py").is_file()
-    assert not (ROOT / "xiuxian_game").exists()
-    assert (ROOT / "components" / "QQ协议测试" / "__init__.py").is_file()
-    for legacy in ("first_world", "adventure", "qq_protocol_test", "修仙4", "测试业务"):
-        assert not (ROOT / "components" / legacy).exists(), f"禁止保留旧组件目录：{legacy}"
-    for child in (product / "组件").iterdir():
-        if not child.is_dir() or not (child / "__init__.py").is_file():
-            continue
-        tree = ast.parse((child / "__init__.py").read_text(encoding="utf-8"))
-        assert any(
-            isinstance(node, (ast.Assign, ast.AnnAssign))
-            and any(
-                isinstance(target, ast.Name) and target.id == "router"
-                for target in (
-                    node.targets if isinstance(node, ast.Assign) else (node.target,)
-                )
-            )
-            for node in tree.body
-        ), f"ROUTER_CHILD_FOLDERS 子组件必须暴露 router：{child.name}"
+    assert not (ROOT / "xiuxian_core").exists(), "禁止保留旧核心目录"
+
+    commands = game / "cmd"
+    assert (commands / "__init__.py").is_file()
+    assert (commands / "后台接口" / "__init__.py").is_file()
+    assert not (game / "修仙4").exists(), "禁止保留提前建立的旧产品目录"
+
+    assert (ROOT / "组件测试" / "QQ协议测试" / "__init__.py").is_file()
+    for legacy in ("src", "components", "xiuxian_game"):
+        assert not (ROOT / legacy).exists(), f"禁止保留旧目录：{legacy}"
 
 
 def _assert_public_root() -> None:
-    assert xiuxian_core.XIUXIAN_CORE_VERSION == "xiuxian-core.v1"
-    assert xiuxian_core.CORE_LAYERS == (
-        "xiuxian_core.gameplay",
-        "xiuxian_core.account",
-        "xiuxian_core.persistence",
+    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v1"
+    assert set(game.__all__) == {"PUBLIC_FOUNDATION_VERSION"}
+    assert cmd.router is not None
+    assert core.GAME_CORE_VERSION == "game-core.v1"
+    assert core.CORE_LAYERS == (
+        "game.core.gameplay",
+        "game.core.account",
+        "game.core.persistence",
     )
-    assert set(xiuxian_core.__all__) == {"CORE_LAYERS", "XIUXIAN_CORE_VERSION"}
+    assert set(core.__all__) == {"CORE_LAYERS", "GAME_CORE_VERSION"}
 
 
 def _assert_import_boundaries() -> None:
     forbidden_by_layer = {
         "gameplay": {
-            "launch", "message", "components", "account", "persistence"
+            "launch", "message", "组件测试", "account", "persistence"
         },
         "account": {
             "launch",
             "message",
-            "components",
+            "组件测试",
             "gameplay",
             "persistence",
         },
-        "persistence": {"launch", "message", "components"},
+        "persistence": {"launch", "message", "组件测试"},
     }
     failures: list[str] = []
     for layer, forbidden in forbidden_by_layer.items():
-        folder = ROOT / "xiuxian_core" / layer
+        folder = ROOT / "game" / "core" / layer
         for path in folder.rglob("*.py"):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             for imported in _imports(tree, path):
                 root_name = imported.split(".", 1)[0]
                 core_layer = (
-                    imported.split(".", 2)[1]
-                    if imported.startswith("xiuxian_core.")
+                    imported.split(".", 3)[2]
+                    if imported.startswith("game.core.")
                     else root_name
                 )
-                if core_layer in forbidden or _is_formal_product(imported):
+                if core_layer in forbidden or _is_game_integration(imported):
                     failures.append(
                         f"{path.relative_to(ROOT)} 导入了禁止层 {imported}"
                     )
@@ -96,45 +91,33 @@ def _assert_import_boundaries() -> None:
         for path in (ROOT / folder_name).rglob("*.py"):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             if any(
-                imported == "xiuxian_core"
-                or imported.startswith("xiuxian_core.")
-                or _is_formal_product(imported)
+                imported == "game"
+                or imported.startswith("game.")
+                or (
+                    folder_name == "message"
+                    and (imported == "launch" or imported.startswith("launch."))
+                )
                 for imported in _imports(tree, path)
             ):
                 failures.append(
-                    f"{path.relative_to(ROOT)} 不得反向依赖游戏核心或正式修仙产品"
+                    f"{path.relative_to(ROOT)} 违反公共框架与游戏代码依赖边界"
                 )
-    business_root = ROOT / "src" / "修仙4" / "业务"
-    for path in business_root.rglob("*.py"):
+    for path in (ROOT / "组件测试").rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for imported in _imports(tree, path):
-            if (
-                imported.split(".", 1)[0] in {"launch", "message", "components"}
-                or imported == "src.修仙4.组件"
-                or imported.startswith("src.修仙4.组件.")
-            ):
+            if imported == "game" or imported.startswith("game."):
                 failures.append(
-                    f"{path.relative_to(ROOT)} 不得依赖命令或通信层 {imported}"
-                )
-    for path in (ROOT / "src" / "修仙4" / "组件").rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for imported in _imports(tree, path):
-            if imported == "components" or imported.startswith("components."):
-                failures.append(
-                    f"{path.relative_to(ROOT)} 不得依赖测试业务 {imported}"
-                )
-    for path in (ROOT / "components").rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for imported in _imports(tree, path):
-            if _is_formal_product(imported):
-                failures.append(
-                    f"{path.relative_to(ROOT)} 测试业务不得反向依赖正式修仙产品 {imported}"
+                    f"{path.relative_to(ROOT)} 协议测试不得依赖游戏代码 {imported}"
                 )
     assert not failures, "\n".join(failures)
 
 
-def _is_formal_product(imported: str) -> bool:
-    return imported == "src.修仙4" or imported.startswith("src.修仙4.")
+def _is_game_core(imported: str) -> bool:
+    return imported == "game.core" or imported.startswith("game.core.")
+
+
+def _is_game_integration(imported: str) -> bool:
+    return imported == "game.cmd" or imported.startswith("game.cmd.")
 
 
 def _imports(tree: ast.AST, path: Path) -> tuple[str, ...]:

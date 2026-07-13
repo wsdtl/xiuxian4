@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from xiuxian_core.gameplay import RuleContext, Ruleset, SeededRandomSource, TagSet  # noqa: E402
-from xiuxian_core.gameplay.character import (  # noqa: E402
+from game.core.gameplay import RuleContext, Ruleset, SeededRandomSource, TagSet  # noqa: E402
+from game.core.gameplay.character import (  # noqa: E402
     COMBAT_ATTACK,
     COMBAT_DEFENSE,
     COMBAT_SPEED,
@@ -27,7 +27,7 @@ from xiuxian_core.gameplay.character import (  # noqa: E402
     ContributionSpec,
     ProgressionDefinition,
 )
-from xiuxian_core.gameplay.economy import (  # noqa: E402
+from game.core.gameplay.economy import (  # noqa: E402
     CurrencyCatalog,
     CurrencyDefinition,
     IssueFunds,
@@ -36,7 +36,7 @@ from xiuxian_core.gameplay.economy import (  # noqa: E402
     LedgerEngine,
     LedgerState,
 )
-from xiuxian_core.gameplay.inventory import (  # noqa: E402
+from game.core.gameplay.inventory import (  # noqa: E402
     InventoryEngine,
     InventoryState,
     ItemAssetKind,
@@ -45,14 +45,14 @@ from xiuxian_core.gameplay.inventory import (  # noqa: E402
     ItemContainer,
     ItemDefinition,
 )
-from xiuxian_core.gameplay.loadout import (  # noqa: E402
+from game.core.gameplay.loadout import (  # noqa: E402
     WEAPON_SLOT_ID,
     LoadoutItemComponent,
     QualityCatalog,
     QualityDefinition,
     register_loadout_item_component,
 )
-from xiuxian_core.gameplay.rewards import (  # noqa: E402
+from game.core.gameplay.rewards import (  # noqa: E402
     CharacterExperienceReward,
     CharacterFeatureReward,
     CharacterProgressionReward,
@@ -71,7 +71,7 @@ from xiuxian_core.gameplay.rewards import (  # noqa: E402
     StackItemReward,
     WeaponExperienceReward,
 )
-from xiuxian_core.gameplay.weapon import (  # noqa: E402
+from game.core.gameplay.weapon import (  # noqa: E402
     WeaponCatalog,
     WeaponDefinition,
     WeaponEngine,

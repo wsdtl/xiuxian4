@@ -15,7 +15,7 @@ from launch.adapter.local import LocalEventHandler, dispatch
 from launch.adapter.local.manager import manager as local_manager
 from launch.adapter import manager as public_manager
 from launch.adapter.qq.render import render_qq_message
-from message import Action, M, RenderedMessage
+from message import Action, M, RenderedMessage, SECTION_ICONS, register_icons
 from message.renderers.markdown import render_markdown
 from message.renderers.plain_text import render_plain_text
 
@@ -25,6 +25,7 @@ def main() -> None:
     _assert_markdown_shape(message)
     _assert_qq_translation(message)
     _assert_strict_structure()
+    _assert_icon_registration()
     asyncio.run(_assert_local_translation(message))
     asyncio.run(_assert_public_manager_rejects_native_payload())
     print("cross-adapter message protocol test passed")
@@ -33,16 +34,16 @@ def main() -> None:
 def _sample_message():
     return (
         M.document()
-        .header("天易 斗法胜手 Lv49")
-        .inline_section("天机", "灵签已开", icon="system")
-        .inline_section("提醒", "灵签中奖", icon="notice")
-        .section("技能书", icon="skill")
+        .header("示例对象 Lv1")
+        .inline_section("通知", "任务已完成", icon="system")
+        .inline_section("提醒", "存在待处理操作", icon="notice")
+        .section("资源列表", icon="inventory")
         .row(("数量", 2), ("状态", "可用"))
-        .item(1, "乾坤书")
+        .item(1, "示例物品")
         .note("请谨慎操作")
         .actions(
             (
-                Action("view", "查看", "查看 乾坤书", behavior="send"),
+                Action("view", "查看", "查看 示例物品", behavior="send"),
                 Action("fill", "回填", "查看 ", behavior="fill", style="secondary"),
                 Action("callback", "回调", "测试 回调", behavior="callback"),
             )
@@ -55,13 +56,13 @@ def _assert_markdown_shape(message) -> None:
     content = render_markdown(message.document)
     assert content == "\n".join(
         [
-            "**天易 斗法胜手 Lv49**",
-            "> ✨ 天机: 灵签已开",
-            "> 📌 提醒: 灵签中奖",
+            "**示例对象 Lv1**",
+            "> ✨ 通知: 任务已完成",
+            "> 📌 提醒: 存在待处理操作",
             "> ",
-            "> 📘 技能书",
+            "> 📦 资源列表",
             "> > 数量: _2_&nbsp;|&nbsp;状态: _可用_",
-            "> > \\[1\\] 乾坤书",
+            "> > \\[1\\] 示例物品",
             "> ",
             "> 请谨慎操作",
         ]
@@ -79,7 +80,7 @@ def _assert_qq_translation(message) -> None:
     assert [button["id"] for button in buttons] == ["view", "fill", "callback"]
     assert buttons[0]["action"] == {
         "type": 2,
-        "data": "查看 乾坤书",
+        "data": "查看 示例物品",
         "permission": {"type": 2},
         "unsupport_tips": "当前客户端不支持该操作.",
         "enter": True,
@@ -106,6 +107,25 @@ def _assert_strict_structure() -> None:
         raise AssertionError("未知 icon key 必须被拒绝")
     except ValueError as exc:
         assert "未知消息图标分类" in str(exc)
+
+
+def _assert_icon_registration() -> None:
+    source = "test.message_protocol"
+    register_icons(source, {"test.custom": "🧪"})
+    register_icons(source, {"test.custom": "🧪"})
+    assert SECTION_ICONS["test.custom"] == "🧪"
+
+    try:
+        register_icons("test.conflict", {"test.custom": "🔬"})
+        raise AssertionError("不同来源不得覆盖已有图标分类")
+    except ValueError as exc:
+        assert "已由" in str(exc)
+
+    try:
+        register_icons(source, {"非法 key": "🧪"})
+        raise AssertionError("图标 key 必须是稳定语义标识")
+    except ValueError as exc:
+        assert "key 不合法" in str(exc)
 
 
 async def _assert_local_translation(message) -> None:

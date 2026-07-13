@@ -5,6 +5,7 @@ from .builder import M as M
 from .builder import rich as rich
 from .icons import SECTION_ICONS as SECTION_ICONS
 from .icons import icon_for as icon_for
+from .icons import register_icons as register_icons
 from .render import coerce_message as coerce_message
 from .render import render_local_message as render_local_message
 from .schema import Action as Action

@@ -10,9 +10,9 @@ htmlcov/
 venv/
 
 # 本地运行数据库及 SQLite 辅助文件。
-data/*.db
-data/*.db-wal
-data/*.db-shm
+game/database/*.db
+game/database/*.db-wal
+game/database/*.db-shm
 
 # 私钥和证书容器禁止进入版本库；公开证书链可以显式保留。
 certs/*.key

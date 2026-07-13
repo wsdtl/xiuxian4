@@ -101,7 +101,7 @@ Webhook 请求体上限为 1 MiB，且 `Content-Type` 必须是 `application/jso
 @机器人 QQ协议测试
 ```
 
-测试面板覆盖回调、即发、回填、引用、Markdown、图片和身份上下文。操作方法见 `components/QQ协议测试/QQ协议测试说明.md`。
+测试面板覆盖回调、即发、回填、引用、Markdown、图片和身份上下文。操作方法见 `组件测试/QQ协议测试/QQ协议测试说明.md`。
 
 ## 测试
 

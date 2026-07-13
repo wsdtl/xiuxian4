@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from xiuxian_core.gameplay import (  # noqa: E402
+from game.core.gameplay import (  # noqa: E402
     ActionCatalog,
     ActionDefinition,
     ActionEngine,
@@ -31,7 +31,7 @@ from xiuxian_core.gameplay import (  # noqa: E402
     SeededRandomSource,
     StartAction,
 )
-from xiuxian_core.persistence import (  # noqa: E402
+from game.core.persistence import (  # noqa: E402
     ACTION_AGGREGATE,
     SnapshotRepository,
     SqliteDatabase,

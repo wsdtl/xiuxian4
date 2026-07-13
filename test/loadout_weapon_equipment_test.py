@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from xiuxian_core.gameplay import (  # noqa: E402
+from game.core.gameplay import (  # noqa: E402
     AttributeDefinition,
     AttributeResolver,
     ModifierLayer,
@@ -21,7 +21,7 @@ from xiuxian_core.gameplay import (  # noqa: E402
     SeededRandomSource,
     TagSet,
 )
-from xiuxian_core.gameplay.character import (  # noqa: E402
+from game.core.gameplay.character import (  # noqa: E402
     COMBAT_ATTACK,
     COMBAT_DEFENSE,
     COMBAT_SPEED,
@@ -37,7 +37,7 @@ from xiuxian_core.gameplay.character import (  # noqa: E402
     core_attribute_definitions,
     persistent_resource_definitions,
 )
-from xiuxian_core.gameplay.equipment import (  # noqa: E402
+from game.core.gameplay.equipment import (  # noqa: E402
     EQUIPMENT_FOUNDATION_VERSION,
     EquipmentCatalog,
     EquipmentContributionProvider,
@@ -46,7 +46,7 @@ from xiuxian_core.gameplay.equipment import (  # noqa: E402
     EquipmentState,
     EquipmentStyleDefinition,
 )
-from xiuxian_core.gameplay.inventory import (  # noqa: E402
+from game.core.gameplay.inventory import (  # noqa: E402
     GrantInstance,
     InventoryEngine,
     InventoryState,
@@ -58,7 +58,7 @@ from xiuxian_core.gameplay.inventory import (  # noqa: E402
     ItemDefinition,
     SourceReceipt,
 )
-from xiuxian_core.gameplay.loadout import (  # noqa: E402
+from game.core.gameplay.loadout import (  # noqa: E402
     BODY_SLOT_ID,
     HEAD_SLOT_ID,
     LOADOUT_FOUNDATION_VERSION,
@@ -74,7 +74,7 @@ from xiuxian_core.gameplay.loadout import (  # noqa: E402
     register_loadout_item_component,
     standard_loadout_slot_catalog,
 )
-from xiuxian_core.gameplay.weapon import (  # noqa: E402
+from game.core.gameplay.weapon import (  # noqa: E402
     WEAPON_FOUNDATION_VERSION,
     WeaponCatalog,
     WeaponContributionProvider,

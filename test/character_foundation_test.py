@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from xiuxian_core.gameplay import (  # noqa: E402
+from game.core.gameplay import (  # noqa: E402
     AttributeDefinition,
     AttributeResolver,
     ModifierLayer,
@@ -22,7 +22,7 @@ from xiuxian_core.gameplay import (  # noqa: E402
     SeededRandomSource,
     TagSet,
 )
-from xiuxian_core.gameplay.character import (  # noqa: E402
+from game.core.gameplay.character import (  # noqa: E402
     CHARACTER_FOUNDATION_VERSION,
     COMBAT_ATTACK,
     COMBAT_DEFENSE,

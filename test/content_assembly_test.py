@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from xiuxian_core.gameplay import (  # noqa: E402
+from game.core.gameplay import (  # noqa: E402
     AbilityDefinition,
     AbilityUse,
     DealDamage,
@@ -28,7 +28,7 @@ from xiuxian_core.gameplay import (  # noqa: E402
     SkinPack,
     TagSet,
 )
-from xiuxian_core.gameplay.character import (  # noqa: E402
+from game.core.gameplay.character import (  # noqa: E402
     COMBAT_ATTACK,
     COMBAT_DEFENSE,
     COMBAT_SPEED,
@@ -41,8 +41,8 @@ from xiuxian_core.gameplay.character import (  # noqa: E402
     core_attribute_definitions,
     persistent_resource_definitions,
 )
-from xiuxian_core.gameplay.combat import CombatStats, DamageTypeDefinition, RecoveryStats  # noqa: E402
-from xiuxian_core.gameplay.content import (  # noqa: E402
+from game.core.gameplay.combat import CombatStats, DamageTypeDefinition, RecoveryStats  # noqa: E402
+from game.core.gameplay.content import (  # noqa: E402
     CONTENT_FOUNDATION_VERSION,
     CombatProfileDefinition,
     ContentAssembler,
@@ -53,22 +53,22 @@ from xiuxian_core.gameplay.content import (  # noqa: E402
     PackageRequirement,
     resolve_package_order,
 )
-from xiuxian_core.gameplay.cycles import CalendarSchedule, CalendarUnit, CycleDefinition  # noqa: E402
-from xiuxian_core.gameplay.economy import CurrencyDefinition  # noqa: E402
-from xiuxian_core.gameplay.equipment import (  # noqa: E402
+from game.core.gameplay.cycles import CalendarSchedule, CalendarUnit, CycleDefinition  # noqa: E402
+from game.core.gameplay.economy import CurrencyDefinition  # noqa: E402
+from game.core.gameplay.equipment import (  # noqa: E402
     EquipmentDefinition,
     EquipmentQualityProfile,
     EquipmentStyleDefinition,
 )
-from xiuxian_core.gameplay.inventory import ItemAssetKind, ItemDefinition  # noqa: E402
-from xiuxian_core.gameplay.loadout import (  # noqa: E402
+from game.core.gameplay.inventory import ItemAssetKind, ItemDefinition  # noqa: E402
+from game.core.gameplay.loadout import (  # noqa: E402
     HEAD_SLOT_ID,
     WEAPON_SLOT_ID,
     LoadoutItemComponent,
     QualityDefinition,
 )
-from xiuxian_core.gameplay.weapon import WeaponDefinition, WeaponQualityProfile  # noqa: E402
-from xiuxian_core.persistence import (  # noqa: E402
+from game.core.gameplay.weapon import WeaponDefinition, WeaponQualityProfile  # noqa: E402
+from game.core.persistence import (  # noqa: E402
     ConcurrencyConflict,
     ContentActivationMismatch,
     ContentActivationStore,

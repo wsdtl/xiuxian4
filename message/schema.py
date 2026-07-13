@@ -67,7 +67,7 @@ class HeaderBlock:
 
 @dataclass(frozen=True)
 class InlineBlock:
-    """标题与内容位于同一行的短信息，例如天机和提醒。"""
+    """标题与内容位于同一行的短信息，例如通知和状态。"""
 
     title: RichText
     content: RichText
