@@ -10,6 +10,7 @@ from typing import Mapping, Protocol
 
 from ..character import CharacterState
 from ..economy import LedgerState
+from ..equipment import EquipmentState
 from ..events import RuleEvent
 from ..ids import StableId, stable_id
 from ..inventory import InventoryState
@@ -108,6 +109,44 @@ class CharacterProgressionReward:
 class WeaponExperienceReward:
     asset_id: str
     amount: int
+
+
+@dataclass(frozen=True)
+class GeneratedEquipmentReward:
+    state: EquipmentState
+    item_definition_id: StableId
+    container_id: str
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "item_definition_id",
+            stable_id(self.item_definition_id, field="item id"),
+        )
+        if not self.container_id.strip():
+            raise ValueError("生成装备奖励缺少容器 id")
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+
+
+@dataclass(frozen=True)
+class GeneratedWeaponReward:
+    state: WeaponState
+    item_definition_id: StableId
+    container_id: str
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "item_definition_id",
+            stable_id(self.item_definition_id, field="item id"),
+        )
+        if not self.container_id.strip():
+            raise ValueError("生成武器奖励缺少容器 id")
+        if self.state.revision != 0:
+            raise ValueError("新生成武器必须从 revision 0 开始")
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
 
 
 @dataclass(frozen=True)
@@ -281,6 +320,8 @@ __all__ = [
     "CharacterProgressionReward",
     "CurrencyReward",
     "DuplicateUnlockPolicy",
+    "GeneratedEquipmentReward",
+    "GeneratedWeaponReward",
     "InstanceItemReward",
     "RewardClaimRecord",
     "RewardClaimState",

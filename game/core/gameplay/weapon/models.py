@@ -10,6 +10,7 @@ from ..attributes import ModifierLayer
 from ..character import AttributeGrant, ContributionSpec
 from ..ids import StableId, stable_id
 from ..inventory import ItemAssetKind, ItemCatalog
+from ..itemization import ItemRollState, ItemizationEngine, ItemizationKind
 from ..loadout import (
     LOADOUT_ITEM_COMPONENT_ID,
     WEAPON_SLOT_ID,
@@ -74,6 +75,7 @@ class WeaponDefinition:
     item_definition_id: StableId
     base_contribution: ContributionSpec
     quality_profiles: Mapping[StableId, WeaponQualityProfile]
+    generation_profile_id: StableId | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "id", stable_id(self.id, field="weapon id"))
@@ -89,6 +91,12 @@ class WeaponDefinition:
             if stable_id(key, field="quality id") != profile.quality_id:
                 raise ValueError("武器品质档案映射键与 quality_id 不一致")
         object.__setattr__(self, "quality_profiles", MappingProxyType(profiles))
+        if self.generation_profile_id is not None:
+            object.__setattr__(
+                self,
+                "generation_profile_id",
+                stable_id(self.generation_profile_id, field="generation profile id"),
+            )
 
 
 @dataclass(frozen=True)
@@ -100,6 +108,7 @@ class WeaponState:
     experience: int = 0
     total_experience: int = 0
     revision: int = 0
+    roll: ItemRollState | None = None
 
     def __post_init__(self) -> None:
         if not self.asset_id.strip():
@@ -119,9 +128,15 @@ class WeaponState:
 
 
 class WeaponCatalog:
-    def __init__(self, qualities: QualityCatalog, items: ItemCatalog) -> None:
+    def __init__(
+        self,
+        qualities: QualityCatalog,
+        items: ItemCatalog,
+        itemization: ItemizationEngine | None = None,
+    ) -> None:
         self.qualities = qualities
         self.items = items
+        self.itemization = itemization
         self.definitions = DefinitionRegistry[WeaponDefinition]("Weapon")
         self._finalized = False
 
@@ -157,6 +172,22 @@ class WeaponCatalog:
             component = item.component(LOADOUT_ITEM_COMPONENT_ID, LoadoutItemComponent)
             if component.allowed_slot_ids != frozenset({WEAPON_SLOT_ID}):
                 raise ValueError(f"武器 {definition.id} 只能进入唯一武器槽")
+            if definition.generation_profile_id is not None:
+                if self.itemization is None:
+                    raise ValueError(f"生成型武器 {definition.id} 缺少物品化引擎")
+                generation = self.itemization.catalog.require_profile(
+                    definition.generation_profile_id
+                )
+                if generation.kind is not ItemizationKind.WEAPON:
+                    raise ValueError(f"武器 {definition.id} 引用了非武器生成策略")
+                unknown_qualities = {
+                    band.quality_id for band in generation.quality_bands
+                } - set(definition.quality_profiles)
+                if unknown_qualities:
+                    raise KeyError(
+                        f"武器 {definition.id} 的生成策略产出未配置品质："
+                        + ", ".join(sorted(unknown_qualities))
+                    )
         self.definitions.freeze()
         self._finalized = True
 
@@ -170,13 +201,26 @@ class WeaponCatalog:
         asset_id: str,
         definition_id: StableId,
         quality_id: StableId,
+        roll: ItemRollState | None = None,
     ) -> WeaponState:
         if not self._finalized:
             self.finalize()
         definition = self.require(definition_id)
         if quality_id not in definition.quality_profiles:
             raise KeyError(f"武器 {definition.id} 不支持品质：{quality_id}")
-        return WeaponState(asset_id, definition.id, quality_id)
+        if definition.generation_profile_id is None:
+            if roll is not None:
+                raise ValueError(f"固定武器 {definition.id} 不能携带随机属性")
+        else:
+            if roll is None:
+                raise ValueError(f"生成型武器 {definition.id} 必须携带随机属性")
+            if roll.profile_id != definition.generation_profile_id:
+                raise ValueError("武器随机属性策略与定义不一致")
+            if roll.quality_id != quality_id:
+                raise ValueError("武器随机属性品质与实例品质不一致")
+            assert self.itemization is not None
+            self.itemization.validate_roll(roll)
+        return WeaponState(asset_id, definition.id, quality_id, roll=roll)
 
 
 def weapon_level_contribution(

@@ -62,6 +62,7 @@ from ..gameplay.economy import (
     LedgerPosting,
     LedgerState,
 )
+from ..gameplay.equipment import EquipmentState
 from ..gameplay.events import RuleEvent
 from ..gameplay.exchange import (
     CancelExchange,
@@ -99,12 +100,23 @@ from ..gameplay.inscription import (
     WeaponAbilityInscriptionTarget,
 )
 from ..gameplay.loadout import (
+    ActivateLoadoutPreset,
+    DeleteLoadoutPreset,
     EquipAsset,
     LoadoutExecution,
     LoadoutSlotKind,
+    LoadoutPreset,
     LoadoutState,
     LoadoutTransaction,
+    SaveLoadoutPreset,
     UnequipSlot,
+)
+from ..gameplay.itemization import (
+    GenerationDecision,
+    GenerationReceipt,
+    ItemRollState,
+    ItemizationKind,
+    RolledProperty,
 )
 from ..gameplay.loot import (
     LootAward,
@@ -162,6 +174,7 @@ from ..gameplay.social import (
 )
 from ..gameplay.tags import Tag, TagSet
 from ..gameplay.weapon import WeaponState
+from ..gameplay.valuation import ValueVector
 from ..gameplay.world import (
     AddPresence,
     AdjustWorldMeter,
@@ -270,8 +283,12 @@ def gameplay_snapshot_codec(
         ("inscription.preference", InscriptionPreference),
         ("inscription.receipt", InscriptionReceipt),
         ("loadout.slot_kind", LoadoutSlotKind),
+        ("loadout.preset", LoadoutPreset),
         ("loadout.equip", EquipAsset),
         ("loadout.unequip", UnequipSlot),
+        ("loadout.save_preset", SaveLoadoutPreset),
+        ("loadout.delete_preset", DeleteLoadoutPreset),
+        ("loadout.activate_preset", ActivateLoadoutPreset),
         ("loadout.transaction", LoadoutTransaction),
         ("loadout.state", LoadoutState),
         ("loadout.execution", LoadoutExecution),
@@ -313,6 +330,13 @@ def gameplay_snapshot_codec(
         ("character.progression_state", ProgressionState),
         ("character.state", CharacterState),
         ("weapon.state", WeaponState),
+        ("equipment.state", EquipmentState),
+        ("valuation.value_vector", ValueVector),
+        ("itemization.kind", ItemizationKind),
+        ("itemization.rolled_property", RolledProperty),
+        ("itemization.generation_decision", GenerationDecision),
+        ("itemization.generation_receipt", GenerationReceipt),
+        ("itemization.roll_state", ItemRollState),
         ("reward.disposition", RewardDisposition),
         ("reward.line", RewardLine),
         ("reward.receipt", RewardReceipt),

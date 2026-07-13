@@ -343,6 +343,14 @@ class PersistedRewardSettlementService:
                 current.weapons[asset_id],
                 logical_time,
             )
+        for asset_id in sorted(set(current.weapons) - set(previous.weapons)):
+            self.snapshots.insert(
+                uow,
+                WEAPON_AGGREGATE,
+                asset_id,
+                current.weapons[asset_id],
+                logical_time,
+            )
         self._update_if_changed(
             uow,
             REWARD_CLAIM_AGGREGATE,

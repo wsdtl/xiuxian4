@@ -20,6 +20,7 @@ from game.core.gameplay import (  # noqa: E402
     DealDamage,
     EffectDefinition,
     EffectReference,
+    ModifierLayer,
     RuleContext,
     RuleEntity,
     Ruleset,
@@ -61,6 +62,15 @@ from game.core.gameplay.equipment import (  # noqa: E402
     EquipmentStyleDefinition,
 )
 from game.core.gameplay.inventory import ItemAssetKind, ItemDefinition  # noqa: E402
+from game.core.gameplay.itemization import (  # noqa: E402
+    GenerationProfileDefinition,
+    ItemGenerationCommand,
+    ItemizationKind,
+    PropertyDefinition,
+    PropertyParameterDefinition,
+    PropertyTierDefinition,
+    QualityValueBand,
+)
 from game.core.gameplay.loadout import (  # noqa: E402
     HEAD_SLOT_ID,
     WEAPON_SLOT_ID,
@@ -68,11 +78,17 @@ from game.core.gameplay.loadout import (  # noqa: E402
     QualityDefinition,
 )
 from game.core.gameplay.weapon import WeaponDefinition, WeaponQualityProfile  # noqa: E402
+from game.core.gameplay.valuation import (  # noqa: E402
+    AttributeValuationDefinition,
+    ValueAxis,
+    ValueCurvePoint,
+)
 from game.core.persistence import (  # noqa: E402
     ConcurrencyConflict,
     ContentActivationMismatch,
     ContentActivationStore,
     SqliteDatabase,
+    gameplay_snapshot_codec,
 )
 
 
@@ -86,6 +102,16 @@ class _PackageMagnitude:
 
 def _evaluate_package_magnitude(value: _PackageMagnitude, _context) -> float:
     return value.value
+
+
+def _context(seed: int) -> RuleContext:
+    return RuleContext(
+        f"content-test-{seed}",
+        "rules.content_test",
+        Ruleset("ruleset.content_test"),
+        TIME,
+        SeededRandomSource(seed),
+    )
 
 
 def main() -> None:
@@ -141,6 +167,50 @@ def _core_package() -> ContentPackage:
         },
     )
     quality = QualityDefinition("quality.common", 0)
+    attack_value = AttributeValuationDefinition(
+        COMBAT_ATTACK,
+        ModifierLayer.LOCAL_FLAT,
+        ValueAxis.OFFENSE,
+        (ValueCurvePoint(0, 0), ValueCurvePoint(20, 20)),
+    )
+    attack_property = PropertyDefinition(
+        "property.attack_roll",
+        1,
+        (
+            PropertyTierDefinition(
+                1,
+                1,
+                parameters=(
+                    PropertyParameterDefinition(
+                        "parameter.attack",
+                        COMBAT_ATTACK,
+                        ModifierLayer.LOCAL_FLAT,
+                        5,
+                        10,
+                    ),
+                ),
+            ),
+        ),
+    )
+    quality_bands = (QualityValueBand(quality.id, 0, None),)
+    weapon_generation = GenerationProfileDefinition(
+        "generation.training_weapon",
+        ItemizationKind.WEAPON,
+        frozenset({attack_property.id}),
+        1,
+        1,
+        quality_bands,
+        core_property_ids=frozenset({attack_property.id}),
+        enforce_compatibility=True,
+    )
+    equipment_generation = GenerationProfileDefinition(
+        "generation.training_equipment",
+        ItemizationKind.EQUIPMENT,
+        frozenset({attack_property.id}),
+        1,
+        1,
+        quality_bands,
+    )
     style = EquipmentStyleDefinition("style.training")
     weapon = WeaponDefinition(
         "weapon.training_blade",
@@ -152,6 +222,7 @@ def _core_package() -> ContentPackage:
                 experience_requirements=(100,),
             )
         },
+        generation_profile_id=weapon_generation.id,
     )
     equipment = EquipmentDefinition(
         "equipment.training_head",
@@ -161,6 +232,7 @@ def _core_package() -> ContentPackage:
         quality_profiles={
             quality.id: EquipmentQualityProfile(quality.id, ContributionSpec())
         },
+        generation_profile_id=equipment_generation.id,
     )
     damage_type = DamageTypeDefinition(
         "damage.physical",
@@ -177,6 +249,9 @@ def _core_package() -> ContentPackage:
         character_templates=(template,),
         items=(weapon_item, equipment_item),
         equipment_styles=(style,),
+        attribute_valuations=(attack_value,),
+        random_properties=(attack_property,),
+        generation_profiles=(weapon_generation, equipment_generation),
         weapons=(weapon,),
         equipment=(equipment,),
         combat_profiles=(
@@ -326,6 +401,39 @@ def _assert_complete_runtime(packages):
     assert runtime.items.require("item.material.spirit_ore").stack_limit == 99
     assert runtime.weapons.require("weapon.training_blade")
     assert runtime.equipment.require("equipment.training_head")
+    weapon_roll = runtime.itemization_engine.generate(
+        ItemGenerationCommand(
+            "generate-training-weapon",
+            "generation.training_weapon",
+            runtime.report.content_fingerprint,
+        ),
+        context=_context(88),
+    ).roll
+    weapon_state = runtime.weapons.create_state(
+        asset_id="generated-training-weapon",
+        definition_id="weapon.training_blade",
+        quality_id=weapon_roll.quality_id,
+        roll=weapon_roll,
+    )
+    assert weapon_state.roll == weapon_roll
+    equipment_roll = runtime.itemization_engine.generate(
+        ItemGenerationCommand(
+            "generate-training-equipment",
+            "generation.training_equipment",
+            runtime.report.content_fingerprint,
+        ),
+        context=_context(89),
+    ).roll
+    equipment_state = runtime.equipment.create_state(
+        asset_id="generated-training-head",
+        definition_id="equipment.training_head",
+        quality_id=equipment_roll.quality_id,
+        roll=equipment_roll,
+    )
+    assert equipment_state.roll == equipment_roll
+    codec = gameplay_snapshot_codec()
+    assert codec.loads(codec.dumps(weapon_state), type(weapon_state)) == weapon_state
+    assert codec.loads(codec.dumps(equipment_state), type(equipment_state)) == equipment_state
     assert runtime.skins.skin_ids() == ("skin.cultivation", "skin.magic")
     assert runtime.skins.projector("skin.cultivation").name("ability.adventure_strike")
     cycle = runtime.cycle_engine.current_window(

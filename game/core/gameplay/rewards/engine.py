@@ -221,6 +221,17 @@ class RewardSettlementEngine:
         events: list[RuleEvent] = []
         transaction_ids: list[str] = []
 
+        for asset_id, state in plan.generated_weapons.items():
+            if asset_id in weapons:
+                return RuleOutcome.failed(
+                    RuleFailure(
+                        "reward.weapon_exists",
+                        "生成武器资产 id 已经存在",
+                        {"asset_id": asset_id},
+                    )
+                )
+            weapons[asset_id] = state
+
         if plan.inventory_operations:
             transaction_id = f"{settlement.id}:inventory"
             outcome = self.inventory.execute(
@@ -347,6 +358,11 @@ class RewardSettlementEngine:
             set(plan.weapon_experience),
             expectations.weapon_revisions,
         )
+        if set(plan.generated_weapons) & set(snapshot.weapons):
+            RewardSettlementEngine._fail(
+                "reward.weapon_exists",
+                "生成武器资产 id 已经存在",
+            )
         for character_id in plan.character_operations:
             actual = snapshot.characters[character_id].revision
             expected = expectations.character_revisions[character_id]

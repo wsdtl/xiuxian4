@@ -117,6 +117,7 @@ class WeaponEngine:
                 experience,
                 total,
                 state.revision + 1,
+                state.roll,
             )
             return RuleOutcome.success(
                 WeaponExecution(transaction.id, result, tuple(events))
@@ -178,8 +179,26 @@ class WeaponContributionProvider:
                 definition.base_contribution,
                 profile.contribution,
                 weapon_level_contribution(profile, state.level),
+                self._random_contribution(definition.generation_profile_id, state),
             ),
         )
+
+    def _random_contribution(
+        self,
+        generation_profile_id: StableId | None,
+        state: WeaponState,
+    ):
+        if generation_profile_id is None:
+            if state.roll is not None:
+                raise ValueError("固定武器实例不能携带随机属性")
+            return merge_contribution_specs()
+        if state.roll is None or state.roll.profile_id != generation_profile_id:
+            raise ValueError("生成型武器实例缺少有效随机属性")
+        if state.roll.quality_id != state.quality_id:
+            raise ValueError("生成型武器实例品质与随机属性不一致")
+        if self.catalog.itemization is None:
+            raise RuntimeError("生成型武器目录缺少物品化引擎")
+        return self.catalog.itemization.validate_roll(state.roll)
 
 
 __all__ = [

@@ -178,29 +178,49 @@ def register_loadout_item_component(registry: ItemComponentRegistry) -> None:
 
 
 @dataclass(frozen=True)
+class LoadoutPreset:
+    """一套可原子激活的七槽资产快照。"""
+
+    id: StableId
+    slots: Mapping[StableId, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "id", stable_id(self.id, field="loadout preset id"))
+        object.__setattr__(self, "slots", _validated_slots(self.slots))
+
+
+@dataclass(frozen=True)
 class LoadoutState:
     """角色当前激活的一把武器和最多六件装备。"""
 
     character_id: str
     slots: Mapping[StableId, str] = field(default_factory=dict)
     revision: int = 0
+    presets: Mapping[StableId, LoadoutPreset] = field(default_factory=dict)
+    active_preset_id: StableId | None = None
 
     def __post_init__(self) -> None:
         if not self.character_id.strip():
             raise ValueError("LoadoutState 缺少 character_id")
-        slots: dict[StableId, str] = {}
-        for key, asset_id in self.slots.items():
-            slot_id = stable_id(key, field="loadout slot id")
-            if slot_id not in STANDARD_LOADOUT_SLOT_IDS:
-                raise ValueError(f"未知标准装配槽：{slot_id}")
-            if not str(asset_id).strip():
-                raise ValueError(f"装配槽 {slot_id} 缺少资产 id")
-            slots[slot_id] = str(asset_id)
-        if len(set(slots.values())) != len(slots):
-            raise ValueError("同一个物品资产不能同时占用多个装配槽")
+        slots = _validated_slots(self.slots)
         if self.revision < 0:
             raise ValueError("LoadoutState.revision 不能小于 0")
+        presets: dict[StableId, LoadoutPreset] = {}
+        for key, preset in self.presets.items():
+            preset_id = stable_id(key, field="loadout preset id")
+            if preset_id != preset.id:
+                raise ValueError("配装映射键与预设 id 不一致")
+            presets[preset_id] = preset
+        active = self.active_preset_id
+        if active is not None:
+            active = stable_id(active, field="loadout preset id")
+            if active not in presets:
+                raise ValueError("当前激活配装不存在")
+            if dict(presets[active].slots) != dict(slots):
+                raise ValueError("当前槽位与激活配装不一致")
         object.__setattr__(self, "slots", MappingProxyType(slots))
+        object.__setattr__(self, "presets", MappingProxyType(presets))
+        object.__setattr__(self, "active_preset_id", active)
 
     @property
     def weapon_asset_id(self) -> str | None:
@@ -215,6 +235,20 @@ class LoadoutState:
         )
 
 
+def _validated_slots(values: Mapping[StableId, str]) -> Mapping[StableId, str]:
+    slots: dict[StableId, str] = {}
+    for key, asset_id in values.items():
+        slot_id = stable_id(key, field="loadout slot id")
+        if slot_id not in STANDARD_LOADOUT_SLOT_IDS:
+            raise ValueError(f"未知标准装配槽：{slot_id}")
+        if not str(asset_id).strip():
+            raise ValueError(f"装配槽 {slot_id} 缺少资产 id")
+        slots[slot_id] = str(asset_id)
+    if len(set(slots.values())) != len(slots):
+        raise ValueError("同一个物品资产不能同时占用多个装配槽")
+    return MappingProxyType(slots)
+
+
 __all__ = [
     "ACCESSORY_SLOT_ID",
     "BODY_SLOT_ID",
@@ -224,6 +258,7 @@ __all__ = [
     "HEAD_SLOT_ID",
     "LOADOUT_ITEM_COMPONENT_ID",
     "LoadoutItemComponent",
+    "LoadoutPreset",
     "LoadoutSlotCatalog",
     "LoadoutSlotDefinition",
     "LoadoutSlotKind",

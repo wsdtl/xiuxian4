@@ -15,6 +15,7 @@ from .models import (
     WAIST_SLOT_ID,
     WEAPON_SLOT_ID,
     LoadoutItemComponent,
+    LoadoutPreset,
     LoadoutSlotCatalog,
     LoadoutSlotDefinition,
     LoadoutSlotKind,
@@ -26,17 +27,22 @@ from .models import (
 )
 from .projection import LoadoutContributionAssembler
 from .transactions import (
+    ActivateLoadoutPreset,
+    DeleteLoadoutPreset,
     EquipAsset,
     LoadoutEngine,
     LoadoutExecution,
     LoadoutOperation,
     LoadoutTransaction,
+    SaveLoadoutPreset,
     UnequipSlot,
 )
 
 __all__ = [
     "ACCESSORY_SLOT_ID",
+    "ActivateLoadoutPreset",
     "BODY_SLOT_ID",
+    "DeleteLoadoutPreset",
     "EQUIPMENT_SLOT_IDS",
     "EquipAsset",
     "FEET_SLOT_ID",
@@ -49,6 +55,7 @@ __all__ = [
     "LoadoutItemComponent",
     "LoadoutContributionAssembler",
     "LoadoutOperation",
+    "LoadoutPreset",
     "LoadoutSlotCatalog",
     "LoadoutSlotDefinition",
     "LoadoutSlotKind",
@@ -58,6 +65,7 @@ __all__ = [
     "QualityDefinition",
     "STANDARD_LOADOUT_SLOT_IDS",
     "STANDARD_LOADOUT_SLOT_ORDER",
+    "SaveLoadoutPreset",
     "UnequipSlot",
     "WAIST_SLOT_ID",
     "WEAPON_SLOT_ID",

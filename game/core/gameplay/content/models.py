@@ -40,9 +40,14 @@ from ..effects import (
     EffectOperationContext,
     RuleReferences,
 )
-from ..equipment import EquipmentDefinition, EquipmentStyleDefinition
+from ..equipment import (
+    EquipmentDefinition,
+    EquipmentSetDefinition,
+    EquipmentStyleDefinition,
+)
 from ..ids import StableId, stable_id
 from ..inventory import ItemComponentType, ItemDefinition
+from ..itemization import GenerationProfileDefinition, PropertyDefinition
 from ..loadout import QualityDefinition
 from ..loot import LootTableDefinition
 from ..social import (
@@ -59,6 +64,11 @@ from ..world import (
 )
 from ..skins import SkinPack
 from ..triggers import TriggerDefinition
+from ..valuation import (
+    AttributeValuationDefinition,
+    ReferenceValuationDefinition,
+    SynergyValuationDefinition,
+)
 from ..weapon import WeaponDefinition
 
 
@@ -187,8 +197,14 @@ class ContentPackage:
     character_templates: tuple[CharacterTemplateDefinition, ...] = ()
     items: tuple[ItemDefinition, ...] = ()
     equipment_styles: tuple[EquipmentStyleDefinition, ...] = ()
+    equipment_sets: tuple[EquipmentSetDefinition, ...] = ()
     weapons: tuple[WeaponDefinition, ...] = ()
     equipment: tuple[EquipmentDefinition, ...] = ()
+    attribute_valuations: tuple[AttributeValuationDefinition, ...] = ()
+    reference_valuations: tuple[ReferenceValuationDefinition, ...] = ()
+    synergy_valuations: tuple[SynergyValuationDefinition, ...] = ()
+    random_properties: tuple[PropertyDefinition, ...] = ()
+    generation_profiles: tuple[GenerationProfileDefinition, ...] = ()
     combat_profiles: tuple[CombatProfileDefinition, ...] = ()
     damage_types: tuple[DamageTypeDefinition, ...] = ()
     controls: tuple[ControlDefinition, ...] = ()
@@ -233,8 +249,14 @@ class ContentPackage:
             "character_templates",
             "items",
             "equipment_styles",
+            "equipment_sets",
             "weapons",
             "equipment",
+            "attribute_valuations",
+            "reference_valuations",
+            "synergy_valuations",
+            "random_properties",
+            "generation_profiles",
             "combat_profiles",
             "damage_types",
             "controls",

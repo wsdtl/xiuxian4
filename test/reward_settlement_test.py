@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 import sys
+from tempfile import TemporaryDirectory
 from zoneinfo import ZoneInfo
 
 
@@ -58,6 +59,7 @@ from game.core.gameplay.rewards import (  # noqa: E402
     CharacterProgressionReward,
     CurrencyReward,
     DuplicateUnlockPolicy,
+    GeneratedWeaponReward,
     InstanceItemReward,
     REWARD_FOUNDATION_VERSION,
     RewardDisposition,
@@ -76,6 +78,12 @@ from game.core.gameplay.weapon import (  # noqa: E402
     WeaponDefinition,
     WeaponEngine,
     WeaponQualityProfile,
+    WeaponState,
+)
+from game.core.persistence import (  # noqa: E402
+    PersistedRewardSettlementService,
+    RewardSettlementStorageKeys,
+    SqliteDatabase,
 )
 
 
@@ -89,6 +97,7 @@ def main() -> None:
     _assert_late_failure_rolls_back_every_domain(environment)
     _assert_revision_and_duplicate_policies(environment)
     _assert_custom_reward_planner(environment)
+    _assert_generated_weapon_is_persisted_atomically(environment)
     print("reward settlement tests passed")
 
 
@@ -234,6 +243,70 @@ def _environment() -> dict[str, object]:
         "engine": settlement_engine,
         "snapshot": snapshot,
     }
+
+
+def _assert_generated_weapon_is_persisted_atomically(environment: dict[str, object]) -> None:
+    engine = environment["engine"]
+    snapshot = environment["snapshot"]
+    assert isinstance(engine, RewardSettlementEngine)
+    assert isinstance(snapshot, RewardSettlementSnapshot)
+    generated = WeaponState(
+        "weapon-generated",
+        "weapon.training_blade",
+        "quality.common",
+    )
+    settlement = RewardSettlement(
+        "reward-generated-weapon",
+        "account-a",
+        "account-a",
+        "source.test_reward",
+        "generated-weapon-test",
+        (
+            GeneratedWeaponReward(
+                generated,
+                "item.weapon.training_blade",
+                "bag-a",
+            ),
+        ),
+        RewardExpectations(
+            claim_revision=snapshot.claims.revision,
+            inventory_revision=snapshot.inventory.revision,
+        ),
+    )
+    with TemporaryDirectory() as directory:
+        database = SqliteDatabase(Path(directory) / "generated-weapon.db")
+        database.initialize()
+        service = PersistedRewardSettlementService(database, engine)
+        initial_keys = RewardSettlementStorageKeys(
+            "inventory-a",
+            "ledger-a",
+            tuple(snapshot.characters),
+            tuple(snapshot.weapons),
+        )
+        service.initialize_snapshot(initial_keys, snapshot, logical_time=TIME)
+        completed = service.settle(
+            settlement,
+            initial_keys,
+            context=_context(950),
+        ).unwrap()
+        assert "weapon-generated" in completed.snapshot.weapons
+        assert "weapon-generated" in completed.snapshot.inventory.instances
+
+        expanded_keys = RewardSettlementStorageKeys(
+            "inventory-a",
+            "ledger-a",
+            tuple(snapshot.characters),
+            (*tuple(snapshot.weapons), "weapon-generated"),
+        )
+        restarted = PersistedRewardSettlementService(database, engine)
+        loaded = restarted.load_snapshot(expanded_keys, claim_scope_id="account-a")
+        assert loaded.weapons["weapon-generated"] == generated
+        replay = restarted.settle(
+            settlement,
+            expanded_keys,
+            context=_context(951),
+        ).unwrap()
+        assert replay.replayed
 
 
 def _complete_settlement(snapshot: RewardSettlementSnapshot) -> RewardSettlement:

@@ -1,6 +1,6 @@
 # xiuxian4
 
-`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v2`，尚未写入新游戏的具体内容和玩家命令。
+`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v3`，尚未写入新游戏的具体内容和玩家命令。
 
 ## 当前地基
 
@@ -20,6 +20,8 @@
 - 已封板的原子装配底座 `loadout.foundation.v1`
 - 已封板的武器底座 `weapon.foundation.v1`
 - 已封板的装备底座 `equipment.foundation.v1`
+- 已封板的价值评估底座 `valuation.foundation.v1`
+- 已封板的随机物品化底座 `itemization.foundation.v1`
 - 已封板的账号与归属底座 `account.foundation.v1`
 - 已封板的经济账本底座 `economy.foundation.v1`
 - 已封板的统一奖励结算底座 `reward.foundation.v1`
@@ -42,7 +44,10 @@
 - 五项角色核心值、显式成长曲线、永久特征和开放来源贡献
 - 角色、装备、组织与场景贡献到 `RuleEntity` 的统一投影
 - 一个武器槽、六个装备槽及与库存共同回滚的装卸事务
-- 武器品质、显式等级表和经验成长；装备槽位、流派与品质
+- 武器品质、显式等级表、经验成长和受约束随机属性
+- 开放随机装备、分段套装能力、生成后品质和不可变生成凭据
+- 单件内在价值、整套价值、边际价值和多维价值向量
+- 多套配装保存与背包满载时的原子一键切换
 - QQ 多身份到稳定内部账号的自动归并、冲突保护和防重放
 - SQLite 结构版本、CAS 聚合快照、数据库事务防重和 Outbox
 - 货币、物品、角色与武器奖励的跨领域数据库联合提交
@@ -206,6 +211,8 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [装配底座说明](game/core/gameplay/loadout/装配底座说明.md)
 - [武器底座说明](game/core/gameplay/weapon/武器底座说明.md)
 - [装备底座说明](game/core/gameplay/equipment/装备底座说明.md)
+- [价值评估底座说明](game/core/gameplay/valuation/价值评估底座说明.md)
+- [随机物品化底座说明](game/core/gameplay/itemization/随机物品化底座说明.md)
 - [账号与归属底座说明](game/core/account/账号与归属底座说明.md)
 - [经济账本底座说明](game/core/gameplay/economy/经济账本底座说明.md)
 - [统一奖励结算底座说明](game/core/gameplay/rewards/统一奖励结算底座说明.md)

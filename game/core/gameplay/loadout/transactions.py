@@ -21,6 +21,7 @@ from ..inventory import (
 from .models import (
     LOADOUT_ITEM_COMPONENT_ID,
     LoadoutItemComponent,
+    LoadoutPreset,
     LoadoutSlotCatalog,
     LoadoutState,
 )
@@ -47,6 +48,30 @@ class UnequipSlot:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "slot_id", stable_id(self.slot_id, field="loadout slot id"))
+
+
+@dataclass(frozen=True)
+class SaveLoadoutPreset:
+    preset_id: StableId
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "preset_id", stable_id(self.preset_id, field="loadout preset id"))
+
+
+@dataclass(frozen=True)
+class DeleteLoadoutPreset:
+    preset_id: StableId
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "preset_id", stable_id(self.preset_id, field="loadout preset id"))
+
+
+@dataclass(frozen=True)
+class ActivateLoadoutPreset:
+    preset_id: StableId
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "preset_id", stable_id(self.preset_id, field="loadout preset id"))
 
 
 @dataclass(frozen=True)
@@ -128,6 +153,8 @@ class LoadoutEngine:
             self._validate_containers(transaction, loadout, inventory_state)
             self._validate_loadout(loadout, inventory_state, transaction.equipped_container_id)
             slots = dict(loadout.slots)
+            presets = dict(loadout.presets)
+            active_preset_id = loadout.active_preset_id
             locations = {
                 asset.id: asset.container_id
                 for asset in (*inventory_state.stacks.values(), *inventory_state.instances.values())
@@ -146,6 +173,7 @@ class LoadoutEngine:
                         inventory_state,
                         transaction,
                     )
+                    active_preset_id = None
                 elif isinstance(operation, UnequipSlot):
                     self._unequip(
                         operation,
@@ -156,29 +184,84 @@ class LoadoutEngine:
                         inventory_state,
                         transaction,
                     )
+                    active_preset_id = None
+                elif isinstance(operation, SaveLoadoutPreset):
+                    presets[operation.preset_id] = LoadoutPreset(operation.preset_id, slots)
+                    active_preset_id = operation.preset_id
+                    event_specs.append(
+                        (
+                            "loadout.preset.saved",
+                            operation.preset_id,
+                            {"preset_id": operation.preset_id, "asset_count": len(slots)},
+                        )
+                    )
+                elif isinstance(operation, DeleteLoadoutPreset):
+                    if operation.preset_id not in presets:
+                        self._fail("loadout.preset_unknown", "找不到指定配装")
+                    del presets[operation.preset_id]
+                    if active_preset_id == operation.preset_id:
+                        active_preset_id = None
+                    event_specs.append(
+                        (
+                            "loadout.preset.deleted",
+                            operation.preset_id,
+                            {"preset_id": operation.preset_id},
+                        )
+                    )
+                elif isinstance(operation, ActivateLoadoutPreset):
+                    try:
+                        preset = presets[operation.preset_id]
+                    except KeyError:
+                        self._fail("loadout.preset_unknown", "找不到指定配装")
+                    self._activate_preset(
+                        preset,
+                        slots,
+                        locations,
+                        inventory_operations,
+                        loadout,
+                        inventory_state,
+                        transaction,
+                    )
+                    slots = dict(preset.slots)
+                    active_preset_id = operation.preset_id
+                    event_specs.append(
+                        (
+                            "loadout.preset.activated",
+                            operation.preset_id,
+                            {"preset_id": operation.preset_id, "asset_count": len(slots)},
+                        )
+                    )
                 else:
                     raise TypeError(f"未知装配操作：{type(operation).__name__}")
-            inventory_outcome = self.inventory.execute(
-                InventoryTransaction(
-                    f"{transaction.id}:inventory",
-                    transaction.actor_id,
-                    "inventory.loadout_change",
-                    tuple(inventory_operations),
-                ),
-                state=inventory_state,
-                context=context,
-            )
-            if inventory_outcome.failure:
-                raise RuleViolation(
-                    inventory_outcome.failure.code,
-                    inventory_outcome.failure.message,
-                    inventory_outcome.failure.details,
+            if inventory_operations:
+                inventory_outcome = self.inventory.execute(
+                    InventoryTransaction(
+                        f"{transaction.id}:inventory",
+                        transaction.actor_id,
+                        "inventory.loadout_change",
+                        tuple(inventory_operations),
+                    ),
+                    state=inventory_state,
+                    context=context,
                 )
-            assert inventory_outcome.value is not None
+                if inventory_outcome.failure:
+                    raise RuleViolation(
+                        inventory_outcome.failure.code,
+                        inventory_outcome.failure.message,
+                        inventory_outcome.failure.details,
+                    )
+                assert inventory_outcome.value is not None
+                next_inventory = inventory_outcome.value.state
+                inventory_events = inventory_outcome.value.events
+            else:
+                next_inventory = inventory_state
+                inventory_events = ()
             next_loadout = LoadoutState(
                 loadout.character_id,
                 slots,
                 loadout.revision + 1,
+                presets,
+                active_preset_id,
             )
             events = tuple(
                 RuleEvent.from_context(
@@ -195,13 +278,60 @@ class LoadoutEngine:
                 LoadoutExecution(
                     transaction.id,
                     next_loadout,
-                    inventory_outcome.value.state,
-                    (*inventory_outcome.value.events, *events),
+                    next_inventory,
+                    (*inventory_events, *events),
                 )
             )
         except RuleViolation as exc:
             context.random.restore(checkpoint)
             return RuleOutcome.failed(exc.failure)
+
+    def _activate_preset(
+        self,
+        preset: LoadoutPreset,
+        current_slots: dict[StableId, str],
+        locations: dict[str, str],
+        inventory_operations: list[object],
+        loadout: LoadoutState,
+        inventory_state: InventoryState,
+        transaction: LoadoutTransaction,
+    ) -> None:
+        current_assets = set(current_slots.values())
+        target_assets = set(preset.slots.values())
+        for slot_id, asset_id in preset.slots.items():
+            slot = self.slots.require(slot_id)
+            instance = self._require_instance(asset_id, inventory_state)
+            if inventory_state.owner_of(asset_id) != loadout.character_id:
+                self._fail("loadout.owner_mismatch", "配装引用了不属于当前角色的物品")
+            component = self._component(instance)
+            definition = self.items.require(instance.definition_id)
+            if slot.id not in component.allowed_slot_ids or not definition.tags.allows(
+                required=slot.required_item_tags,
+                blocked=slot.blocked_item_tags,
+            ):
+                self._fail("loadout.slot_rejected", "配装中的物品不符合槽位约束")
+            expected_container = (
+                transaction.equipped_container_id
+                if asset_id in current_assets
+                else transaction.inventory_container_id
+            )
+            if locations.get(asset_id) != expected_container:
+                self._fail("loadout.preset_asset_unavailable", "配装中的物品不在可切换位置")
+        outgoing = sorted(current_assets - target_assets)
+        incoming = sorted(target_assets - current_assets)
+        paired = min(len(outgoing), len(incoming))
+        for index in range(paired):
+            inventory_operations.append(
+                SwapAssetContainers(incoming[index], outgoing[index])
+            )
+            locations[outgoing[index]] = transaction.inventory_container_id
+            locations[incoming[index]] = transaction.equipped_container_id
+        for asset_id in outgoing[paired:]:
+            inventory_operations.append(MoveAsset(asset_id, transaction.inventory_container_id))
+            locations[asset_id] = transaction.inventory_container_id
+        for asset_id in incoming[paired:]:
+            inventory_operations.append(MoveAsset(asset_id, transaction.equipped_container_id))
+            locations[asset_id] = transaction.equipped_container_id
 
     def _equip(
         self,
@@ -389,10 +519,13 @@ class LoadoutEngine:
 
 
 __all__ = [
+    "ActivateLoadoutPreset",
+    "DeleteLoadoutPreset",
     "EquipAsset",
     "LoadoutEngine",
     "LoadoutExecution",
     "LoadoutOperation",
     "LoadoutTransaction",
+    "SaveLoadoutPreset",
     "UnequipSlot",
 ]

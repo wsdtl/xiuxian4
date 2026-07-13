@@ -43,6 +43,8 @@ from game.core.gameplay.equipment import (  # noqa: E402
     EquipmentContributionProvider,
     EquipmentDefinition,
     EquipmentQualityProfile,
+    EquipmentSetBonus,
+    EquipmentSetDefinition,
     EquipmentState,
     EquipmentStyleDefinition,
 )
@@ -63,14 +65,17 @@ from game.core.gameplay.loadout import (  # noqa: E402
     HEAD_SLOT_ID,
     LOADOUT_FOUNDATION_VERSION,
     WEAPON_SLOT_ID,
+    ActivateLoadoutPreset,
     EquipAsset,
     LoadoutContributionAssembler,
     LoadoutEngine,
     LoadoutItemComponent,
+    LoadoutPreset,
     LoadoutState,
     LoadoutTransaction,
     QualityCatalog,
     QualityDefinition,
+    SaveLoadoutPreset,
     register_loadout_item_component,
     standard_loadout_slot_catalog,
 )
@@ -97,6 +102,8 @@ def main() -> None:
     _assert_weapon_growth_and_contributions(env)
     _assert_equipment_has_no_growth_axis(env)
     _assert_only_equipped_assets_are_projected(env)
+    _assert_multi_loadout_switch_is_atomic(env)
+    _assert_set_bonuses_are_separate(env)
     print("loadout weapon equipment tests passed")
 
 
@@ -150,6 +157,18 @@ def _environment() -> dict[str, object]:
             components={
                 "item_component.loadout": LoadoutItemComponent(
                     frozenset({HEAD_SLOT_ID})
+                )
+            },
+        )
+    )
+    items.register(
+        ItemDefinition(
+            "item.equipment.combo_body",
+            ItemAssetKind.INSTANCE,
+            tags=TagSet.of("item.equipment", "item.equipment.body"),
+            components={
+                "item_component.loadout": LoadoutItemComponent(
+                    frozenset({BODY_SLOT_ID})
                 )
             },
         )
@@ -211,6 +230,17 @@ def _environment() -> dict[str, object]:
     equipment.register_style(
         EquipmentStyleDefinition("style.sustain", TagSet.of("equipment.style.sustain"))
     )
+    equipment.register_set(
+        EquipmentSetDefinition(
+            "equipment_set.combo",
+            (
+                EquipmentSetBonus(
+                    2,
+                    ContributionSpec(tags=TagSet.of("equipment.set.combo.active")),
+                ),
+            ),
+        )
+    )
     equipment.register(
         EquipmentDefinition(
             "equipment.combo_head",
@@ -243,6 +273,26 @@ def _environment() -> dict[str, object]:
                     ),
                 ),
             },
+            set_id="equipment_set.combo",
+        )
+    )
+    equipment.register(
+        EquipmentDefinition(
+            "equipment.combo_body",
+            "item.equipment.combo_body",
+            BODY_SLOT_ID,
+            "style.combo",
+            quality_profiles={
+                "quality.common": EquipmentQualityProfile(
+                    "quality.common",
+                    ContributionSpec(),
+                ),
+                "quality.rare": EquipmentQualityProfile(
+                    "quality.rare",
+                    ContributionSpec(),
+                ),
+            },
+            set_id="equipment_set.combo",
         )
     )
     equipment.register(
@@ -419,6 +469,95 @@ def _assert_foundation_shapes(env: dict[str, object]) -> None:
     assert EQUIPMENT_FOUNDATION_VERSION == "equipment.foundation.v1"
     slots = env["slots"]
     assert len(slots.definitions.ids()) == 7  # type: ignore[union-attr]
+
+
+def _assert_multi_loadout_switch_is_atomic(env: dict[str, object]) -> None:
+    engine, loadout, inventory = _prepared_loadout(env)
+    saved_a = engine.execute(
+        _loadout_transaction(loadout, "save-preset-a", SaveLoadoutPreset("loadout_preset.a")),
+        loadout=loadout,
+        inventory_state=inventory,
+        context=_context(70),
+    ).unwrap()
+    assert saved_a.inventory is inventory
+    changed = engine.execute(
+        _loadout_transaction(
+            saved_a.loadout,
+            "build-preset-b",
+            EquipAsset(WEAPON_SLOT_ID, "weapon-new"),
+            EquipAsset(HEAD_SLOT_ID, "head-new"),
+        ),
+        loadout=saved_a.loadout,
+        inventory_state=inventory,
+        context=_context(72),
+    ).unwrap()
+    assert changed.loadout.active_preset_id is None
+    saved_b = engine.execute(
+        _loadout_transaction(
+            changed.loadout,
+            "save-preset-b",
+            SaveLoadoutPreset("loadout_preset.b"),
+        ),
+        loadout=changed.loadout,
+        inventory_state=changed.inventory,
+        context=_context(71),
+    ).unwrap()
+    assert saved_b.loadout.presets["loadout_preset.a"].slots[WEAPON_SLOT_ID] == "weapon-old"
+    assert saved_b.loadout.presets["loadout_preset.b"].slots[WEAPON_SLOT_ID] == "weapon-new"
+
+    restored = engine.execute(
+        _loadout_transaction(
+            saved_b.loadout,
+            "activate-preset-a",
+            ActivateLoadoutPreset("loadout_preset.a"),
+        ),
+        loadout=saved_b.loadout,
+        inventory_state=saved_b.inventory,
+        context=_context(73),
+    ).unwrap()
+    assert restored.loadout.weapon_asset_id == "weapon-old"
+    assert restored.loadout.slots[HEAD_SLOT_ID] == "head-old"
+    assert restored.inventory.instances["weapon-old"].container_id == "equipped"
+    assert restored.inventory.instances["weapon-new"].container_id == "bag"
+
+    bad_presets = dict(restored.loadout.presets)
+    bad_presets["loadout_preset.bad"] = LoadoutPreset(
+        "loadout_preset.bad",
+        {HEAD_SLOT_ID: "missing-head"},
+    )
+    corrupted_target = LoadoutState(
+        restored.loadout.character_id,
+        restored.loadout.slots,
+        restored.loadout.revision,
+        bad_presets,
+        restored.loadout.active_preset_id,
+    )
+    rejected = engine.execute(
+        _loadout_transaction(
+            corrupted_target,
+            "activate-missing-preset-asset",
+            ActivateLoadoutPreset("loadout_preset.bad"),
+        ),
+        loadout=corrupted_target,
+        inventory_state=restored.inventory,
+        context=_context(74),
+    )
+    assert rejected.failure and rejected.failure.code == "loadout.instance_unknown"
+    assert corrupted_target.slots == restored.loadout.slots
+    assert restored.inventory.instances["weapon-old"].container_id == "equipped"
+
+
+def _assert_set_bonuses_are_separate(env: dict[str, object]) -> None:
+    equipment = env["equipment"]
+    assert isinstance(equipment, EquipmentCatalog)
+    provider = EquipmentContributionProvider(equipment)
+    head = EquipmentState("set-head", "equipment.combo_head", "quality.common")
+    body = EquipmentState("set-body", "equipment.combo_body", "quality.common")
+    assert provider.set_contributions((head,)) == ()
+    bonuses = provider.set_contributions((head, body))
+    assert len(bonuses) == 1
+    assert bonuses[0].contribution.tags.has("equipment.set.combo.active")
+    assert not provider.contribution(head).contribution.tags.has("equipment.set.combo.active")
 
 
 def _assert_atomic_equip_and_full_container_replace(env: dict[str, object]) -> None:

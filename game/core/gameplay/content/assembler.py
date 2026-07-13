@@ -46,6 +46,7 @@ from ..inventory import (
     ItemComponentRegistry,
     register_item_ability_component,
 )
+from ..itemization import ItemizationCatalog, ItemizationEngine, RolledProperty
 from ..loadout import (
     QualityCatalog,
     register_loadout_item_component,
@@ -54,7 +55,8 @@ from ..loadout import (
 from ..registry import DefinitionRegistry
 from ..skins import SkinCatalog
 from ..triggers import TriggerDefinition, TriggerEngine
-from ..weapon import WeaponCatalog
+from ..valuation import ReferenceValueKind, ValuationCatalog, ValuationEngine
+from ..weapon import WeaponCatalog, weapon_level_contribution
 from .models import CombatProfileDefinition, ContentPackage, ContentVersion
 
 
@@ -134,6 +136,8 @@ class ContentRuntime:
     characters: CharacterCatalog
     weapons: WeaponCatalog
     equipment: EquipmentCatalog
+    valuation_engine: ValuationEngine
+    itemization_engine: ItemizationEngine
     skins: SkinCatalog
     combat_profiles: DefinitionRegistry[CombatProfileDefinition]
     attributes: Mapping[StableId, AttributeDefinition]
@@ -207,6 +211,8 @@ class ContentAssembler:
         social = SocialCatalog()
         attributes: dict[StableId, AttributeDefinition] = {}
         resources: dict[StableId, ResourceDefinition] = {}
+        valuations = ValuationCatalog()
+        itemization_catalog = ItemizationCatalog()
 
         magnitudes = MagnitudeEvaluators.with_defaults()
         condition_handlers = ConditionHandlers.with_defaults()
@@ -495,15 +501,84 @@ class ContentAssembler:
                 ownership,
                 known_displayable,
             )
+            self._register_many(
+                package,
+                "attribute_valuation",
+                package.attribute_valuations,
+                valuations.register_attribute,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "reference_valuation",
+                package.reference_valuations,
+                valuations.register_reference,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "synergy_valuation",
+                package.synergy_valuations,
+                valuations.register_synergy,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "random_property",
+                package.random_properties,
+                itemization_catalog.register_property,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "generation_profile",
+                package.generation_profiles,
+                itemization_catalog.register_profile,
+                ownership,
+                known_displayable,
+            )
 
-        weapons = WeaponCatalog(qualities, items)
-        equipment = EquipmentCatalog(qualities, slots, items)
+        valuations.finalize()
+        valuation_engine = ValuationEngine(valuations)
+        itemization_catalog.finalize()
+        itemization_engine = ItemizationEngine(itemization_catalog, valuation_engine)
+        self._validate_valuation_references(
+            valuations,
+            attributes,
+            abilities,
+            triggers,
+            interceptors,
+            constraints,
+        )
+        quality_ids = set(qualities.definitions.ids())
+        for profile in itemization_catalog.profiles.values():
+            unknown = {band.quality_id for band in profile.quality_bands} - quality_ids
+            if unknown:
+                raise KeyError(
+                    f"生成策略 {profile.id} 引用了未知品质：{', '.join(sorted(unknown))}"
+                )
+        self._validate_itemization_values(itemization_engine)
+
+        weapons = WeaponCatalog(qualities, items, itemization_engine)
+        equipment = EquipmentCatalog(qualities, slots, items, itemization_engine)
         for package in ordered:
             self._register_many(
                 package,
                 "equipment_style",
                 package.equipment_styles,
                 equipment.register_style,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "equipment_set",
+                package.equipment_sets,
+                equipment.register_set,
                 ownership,
                 known_displayable,
             )
@@ -523,6 +598,8 @@ class ContentAssembler:
                 ownership,
                 known_displayable,
             )
+
+        self._validate_gear_values(weapons, equipment, valuation_engine)
 
         for package in ordered:
             for registration in package.interceptor_handler_registrations:
@@ -644,6 +721,8 @@ class ContentAssembler:
             characters,
             weapons,
             equipment,
+            valuation_engine,
+            itemization_engine,
             skins,
             profiles,
             attributes,
@@ -675,6 +754,67 @@ class ContentAssembler:
             world_engine,
             social_engine,
         )
+
+    @staticmethod
+    def _validate_itemization_values(itemization: ItemizationEngine) -> None:
+        """所有可随机出的档位在内容启动期完成严格估值检查。"""
+
+        for definition in itemization.catalog.properties.values():
+            for tier in definition.tiers:
+                for boundary in ("minimum", "maximum"):
+                    values = {
+                        parameter.id: getattr(parameter, boundary)
+                        for parameter in tier.parameters
+                    }
+                    contribution = itemization.resolve(
+                        (RolledProperty(definition.id, tier.tier, values),)
+                    )
+                    itemization.valuation.evaluate(contribution, strict=True)
+
+    @staticmethod
+    def _validate_valuation_references(
+        valuations,
+        attributes,
+        abilities,
+        triggers,
+        interceptors,
+        constraints,
+    ) -> None:
+        for definition in valuations.attributes.values():
+            if definition.attribute_id not in attributes:
+                raise KeyError(f"属性价值引用了未知属性：{definition.attribute_id}")
+        known = {
+            ReferenceValueKind.ABILITY: set(abilities.ids()),
+            ReferenceValueKind.TRIGGER: set(triggers.ids()),
+            ReferenceValueKind.INTERCEPTOR: set(interceptors.ids()),
+            ReferenceValueKind.TARGET_CONSTRAINT: set(constraints.ids()),
+        }
+        for definition in valuations.references.values():
+            if definition.kind is ReferenceValueKind.TAG:
+                continue
+            if definition.reference_id not in known[definition.kind]:
+                raise KeyError(
+                    f"机制价值引用了未知 {definition.kind.value}：{definition.reference_id}"
+                )
+
+    @staticmethod
+    def _validate_gear_values(weapons, equipment, valuation) -> None:
+        for definition in weapons.definitions:
+            valuation.evaluate(definition.base_contribution, strict=True)
+            for profile in definition.quality_profiles.values():
+                valuation.evaluate(profile.contribution, strict=True)
+                for level in range(1, profile.maximum_level + 1):
+                    valuation.evaluate(
+                        weapon_level_contribution(profile, level),
+                        strict=True,
+                    )
+        for definition in equipment.definitions:
+            valuation.evaluate(definition.base_contribution, strict=True)
+            for profile in definition.quality_profiles.values():
+                valuation.evaluate(profile.contribution, strict=True)
+        for definition in equipment.sets:
+            for bonus in definition.bonuses:
+                valuation.evaluate(bonus.contribution, strict=True)
 
     def _select_profile(
         self,

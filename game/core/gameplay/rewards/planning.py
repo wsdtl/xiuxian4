@@ -10,6 +10,7 @@ from typing import Callable, Mapping
 from ..character import GrantExperience, UnlockFeature, UnlockProgression
 from ..economy import IssueFunds, LedgerOperation
 from ..errors import RuleViolation
+from ..equipment import equipment_state_data
 from ..inventory import (
     GrantInstance,
     GrantStack,
@@ -23,6 +24,8 @@ from .models import (
     CharacterProgressionReward,
     CurrencyReward,
     DuplicateUnlockPolicy,
+    GeneratedEquipmentReward,
+    GeneratedWeaponReward,
     InstanceItemReward,
     RewardDisposition,
     RewardLine,
@@ -39,6 +42,7 @@ class RewardPlan:
     ledger_operations: tuple[LedgerOperation, ...]
     character_operations: Mapping[str, tuple[object, ...]]
     weapon_experience: Mapping[str, int]
+    generated_weapons: Mapping[str, WeaponState]
     lines: tuple[RewardLine, ...]
 
     def __post_init__(self) -> None:
@@ -48,6 +52,7 @@ class RewardPlan:
             MappingProxyType(dict(self.character_operations)),
         )
         object.__setattr__(self, "weapon_experience", MappingProxyType(dict(self.weapon_experience)))
+        object.__setattr__(self, "generated_weapons", MappingProxyType(dict(self.generated_weapons)))
 
 
 @dataclass
@@ -61,6 +66,7 @@ class RewardPlanBuilder:
     ledger_operations: list[LedgerOperation] = field(default_factory=list)
     character_operations: dict[str, list[object]] = field(default_factory=dict)
     weapon_experience: dict[str, int] = field(default_factory=dict)
+    generated_weapons: dict[str, WeaponState] = field(default_factory=dict)
     lines: list[RewardLine] = field(default_factory=list)
     planned_features: set[tuple[str, str]] = field(default_factory=set)
     planned_progressions: set[tuple[str, str]] = field(default_factory=set)
@@ -81,6 +87,18 @@ class RewardPlanBuilder:
     def add_weapon_experience(self, asset_id: str, amount: int, line: RewardLine) -> None:
         self.require_weapon(asset_id)
         self.weapon_experience[asset_id] = self.weapon_experience.get(asset_id, 0) + amount
+        self.lines.append(line)
+
+    def add_generated_weapon(
+        self,
+        operation: InventoryOperation,
+        state: WeaponState,
+        line: RewardLine,
+    ) -> None:
+        if state.asset_id in self.snapshot.weapons or state.asset_id in self.generated_weapons:
+            self.fail("reward.weapon_exists", "生成武器资产 id 已经存在")
+        self.inventory_operations.append(operation)
+        self.generated_weapons[state.asset_id] = state
         self.lines.append(line)
 
     def skip(self, line: RewardLine) -> None:
@@ -126,6 +144,7 @@ class RewardPlanBuilder:
                 for key, value in self.character_operations.items()
             },
             self.weapon_experience,
+            self.generated_weapons,
             tuple(sorted(self.lines, key=lambda value: value.index)),
         )
 
@@ -154,6 +173,8 @@ class RewardPlannerRegistry:
         registry.register(CharacterFeatureReward, _plan_character_feature)
         registry.register(CharacterProgressionReward, _plan_character_progression)
         registry.register(WeaponExperienceReward, _plan_weapon_experience)
+        registry.register(GeneratedEquipmentReward, _plan_generated_equipment)
+        registry.register(GeneratedWeaponReward, _plan_generated_weapon)
         return registry
 
     @property
@@ -233,6 +254,40 @@ def _plan_instance_item(reward: InstanceItemReward, index: int, builder: RewardP
             reward.data,
         ),
         _line(index, "reward.item_instance", reward.container_id, reward.definition_id, 1),
+    )
+
+
+def _plan_generated_equipment(
+    reward: GeneratedEquipmentReward,
+    index: int,
+    builder: RewardPlanBuilder,
+) -> None:
+    builder.add_inventory(
+        GrantInstance(
+            reward.state.asset_id,
+            reward.item_definition_id,
+            reward.container_id,
+            builder.source_receipt(index, reward.metadata),
+            equipment_state_data(reward.state),
+        ),
+        _line(index, "reward.generated_equipment", reward.container_id, reward.state.definition_id, 1),
+    )
+
+
+def _plan_generated_weapon(
+    reward: GeneratedWeaponReward,
+    index: int,
+    builder: RewardPlanBuilder,
+) -> None:
+    builder.add_generated_weapon(
+        GrantInstance(
+            reward.state.asset_id,
+            reward.item_definition_id,
+            reward.container_id,
+            builder.source_receipt(index, reward.metadata),
+        ),
+        reward.state,
+        _line(index, "reward.generated_weapon", reward.container_id, reward.state.definition_id, 1),
     )
 
 
