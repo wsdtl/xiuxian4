@@ -34,7 +34,7 @@ from .ownership import (
     require_account_owner,
 )
 from .qq_bridge import (
-    QQ_COMPAT_ACTOR_KIND,
+    QQ_ACTOR_KIND,
     QQ_GROUP_MEMBER_KIND,
     QQ_PROVIDER_ID,
     QQ_USER_KIND,
@@ -47,7 +47,7 @@ __all__ = [
     "BUSINESS_PRINCIPAL",
     "CHARACTER_PRINCIPAL",
     "PRINCIPAL_KINDS",
-    "QQ_COMPAT_ACTOR_KIND",
+    "QQ_ACTOR_KIND",
     "QQ_GROUP_MEMBER_KIND",
     "QQ_PROVIDER_ID",
     "QQ_USER_KIND",

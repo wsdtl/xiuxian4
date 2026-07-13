@@ -53,6 +53,7 @@ class SequenceIds:
 
 def main() -> None:
     _assert_group_and_private_resolve_same_account()
+    _assert_actor_only_group_bridges_private()
     _assert_new_group_alias_is_added()
     _assert_identity_conflict_never_overwrites()
     _assert_evidence_and_transaction_replay()
@@ -110,9 +111,10 @@ def _assert_group_and_private_resolve_same_account() -> None:
     )
     assert first.resolved and first.created and first.account
     assert first.account.id == "account-1"
-    assert len(first.directory.identities_for(first.account.id)) == 2
+    assert len(first.directory.identities_for(first.account.id)) == 3
     assert [event.kind for event in first.events] == [
         "account.created",
+        "account.identity.bound",
         "account.identity.bound",
         "account.identity.bound",
     ]
@@ -125,7 +127,29 @@ def _assert_group_and_private_resolve_same_account() -> None:
     )
     assert private.account and private.account.id == first.account.id
     assert not private.created
-    assert not private.events
+    assert [event.kind for event in private.events] == ["account.identity.bound"]
+    assert len(private.directory.accounts) == 1
+
+
+def _assert_actor_only_group_bridges_private() -> None:
+    engine = _engine()
+    group = build_qq_identity_evidence(
+        bot_app_id="bot-app-1",
+        event_id="member-only-group",
+        logical_time=TIME,
+        conversation_type="group",
+        actor_openid="SAME-OPENID",
+        member_openid="SAME-OPENID",
+        group_openid="G1",
+    )
+    first = engine.resolve_identity(group, state=AccountDirectoryState())
+    assert first.account and len(first.directory.accounts) == 1
+    private = engine.resolve_identity(
+        _private_evidence("same-private", user="SAME-OPENID"),
+        state=first.directory,
+    )
+    assert private.account and private.account.id == first.account.id
+    assert len(private.directory.accounts) == 1
 
 
 def _assert_new_group_alias_is_added() -> None:
@@ -141,9 +165,12 @@ def _assert_new_group_alias_is_added() -> None:
     assert second.account and second.account.id == "account-1"
     assert second.account.revision == 1
     identities = second.directory.identities_for("account-1")
-    assert len(identities) == 3
+    assert len(identities) == 5
     assert {identity.scope_id for identity in identities} == {"", "G1", "G2"}
-    assert [event.kind for event in second.events] == ["account.identity.bound"]
+    assert [event.kind for event in second.events] == [
+        "account.identity.bound",
+        "account.identity.bound",
+    ]
 
 
 def _assert_identity_conflict_never_overwrites() -> None:
@@ -254,19 +281,31 @@ def _assert_status_and_unbind_boundaries() -> None:
         ),
         state=suspended.directory,
     )
-    assert len(unbound.directory.identities_for(account.id)) == 1
-    last_identity = unbound.directory.identities_for(account.id)[0]
+    assert len(unbound.directory.identities_for(account.id)) == 2
+    removable_identity = unbound.directory.identities_for(account.id)[0]
+    reduced = engine.unbind_identity(
+        UnbindIdentityTransaction(
+            "unbind-alias",
+            account.id,
+            unbound.account.revision,
+            removable_identity,
+            "identity-cleanup",
+            TIME,
+        ),
+        state=unbound.directory,
+    )
+    last_identity = reduced.directory.identities_for(account.id)[0]
     try:
         engine.unbind_identity(
             UnbindIdentityTransaction(
                 "unbind-last",
                 account.id,
-                unbound.account.revision,
+                reduced.account.revision,
                 last_identity,
                 "invalid-test",
                 TIME,
             ),
-            state=unbound.directory,
+            state=reduced.directory,
         )
         raise AssertionError("不能解绑账号最后一个登录身份")
     except AccountViolation as exc:
@@ -298,14 +337,14 @@ def _assert_scope_tenant_and_compat_boundaries() -> None:
     except ValueError:
         pass
 
-    compat = build_qq_identity_evidence(
+    actor_only = build_qq_identity_evidence(
         bot_app_id="bot-app-1",
         event_id="compat-only",
         logical_time=TIME,
         conversation_type="private",
         actor_openid="legacy-actor",
     )
-    assert compat.primary.subject_kind == "identity.qq_actor_compat"
+    assert actor_only.primary.subject_kind == "identity.qq_actor"
 
 
 def _assert_character_ownership_uses_account_id() -> None:

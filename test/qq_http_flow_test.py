@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -27,11 +28,17 @@ def main() -> None:
     old_secret = config.custom.get("QQ_BOT_SECRET")
     old_required = config.custom.get("QQ_EVENT_SIGNATURE_REQUIRED")
     original_lock_file = runtime_guard.lock_file
+    original_database = config.database
     config.custom["QQ_BOT_SECRET"] = secret
     config.custom["QQ_EVENT_SIGNATURE_REQUIRED"] = "true"
 
     with TemporaryDirectory() as tmpdir:
         runtime_guard.lock_file = Path(tmpdir) / "server.lock"
+        object.__setattr__(
+            config,
+            "database",
+            replace(config.database, path=Path(tmpdir) / "http-flow.db"),
+        )
         try:
             with TestClient(create_app()) as http:
                 body = json.dumps(
@@ -69,6 +76,7 @@ def main() -> None:
                 ).status_code == 413
         finally:
             runtime_guard.lock_file = original_lock_file
+            object.__setattr__(config, "database", original_database)
             _restore_custom("QQ_BOT_SECRET", old_secret)
             _restore_custom("QQ_EVENT_SIGNATURE_REQUIRED", old_required)
 

@@ -11,6 +11,7 @@ import re
 from types import MappingProxyType
 from typing import Iterable, Mapping
 
+from ..actions import ActionCatalog, ActionEngine
 from ..abilities import AbilityDefinition, AbilityEngine
 from ..attributes import AttributeDefinition, AttributeResolver, MagnitudeEvaluators, ResourceDefinition
 from ..character import CharacterCatalog
@@ -141,6 +142,7 @@ class ContentRuntime:
     abilities: DefinitionRegistry[AbilityDefinition]
     triggers: DefinitionRegistry[TriggerDefinition]
     cycles: DefinitionRegistry[CycleDefinition]
+    actions: ActionCatalog
     damage_engine: DamageEngine
     recovery_engine: RecoveryEngine
     control_engine: ControlEngine
@@ -149,6 +151,7 @@ class ContentRuntime:
     trigger_engine: TriggerEngine
     target_selectors: TargetSelectorRegistry
     cycle_engine: CycleEngine
+    action_engine: ActionEngine
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", MappingProxyType(dict(self.attributes)))
@@ -185,6 +188,7 @@ class ContentAssembler:
         abilities = DefinitionRegistry[AbilityDefinition]("Ability")
         triggers = DefinitionRegistry[TriggerDefinition]("Trigger")
         cycles = DefinitionRegistry[CycleDefinition]("Cycle")
+        actions = ActionCatalog()
         attributes: dict[StableId, AttributeDefinition] = {}
         resources: dict[StableId, ResourceDefinition] = {}
 
@@ -264,6 +268,14 @@ class ContentAssembler:
                 "cycle",
                 package.cycles,
                 cycles.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "action",
+                package.actions,
+                actions.register,
                 ownership,
                 known_displayable,
             )
@@ -500,6 +512,7 @@ class ContentAssembler:
         )
         trigger_engine = TriggerEngine(triggers, effect_engine)
         cycle_engine = CycleEngine(cycles, cycle_handlers)
+        action_engine = ActionEngine(actions)
         selectors.freeze()
 
         currencies.finalize()
@@ -543,6 +556,7 @@ class ContentAssembler:
             abilities,
             triggers,
             cycles,
+            actions,
             damage_engine,
             recovery_engine,
             control_engine,
@@ -551,6 +565,7 @@ class ContentAssembler:
             trigger_engine,
             selectors,
             cycle_engine,
+            action_engine,
         )
 
     def _select_profile(

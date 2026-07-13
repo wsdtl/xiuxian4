@@ -10,7 +10,7 @@ from .models import ExternalIdentity, IdentityEvidence
 QQ_PROVIDER_ID = "platform.qq"
 QQ_USER_KIND = "identity.qq_user"
 QQ_GROUP_MEMBER_KIND = "identity.qq_group_member"
-QQ_COMPAT_ACTOR_KIND = "identity.qq_actor_compat"
+QQ_ACTOR_KIND = "identity.qq_actor"
 
 
 def build_qq_identity_evidence(
@@ -24,7 +24,7 @@ def build_qq_identity_evidence(
     member_openid: str = "",
     group_openid: str = "",
 ) -> IdentityEvidence:
-    """同一 QQ 签名事件提供 user/member 时，把两者作为一组可靠别名。"""
+    """把签名事件中的原始身份和跨会话行为人身份组成可靠证据。"""
 
     tenant = str(bot_app_id or "").strip()
     if not tenant:
@@ -37,6 +37,11 @@ def build_qq_identity_evidence(
     member = str(member_openid or "").strip()
     group = str(group_openid or "").strip()
     actor = str(actor_openid or "").strip()
+    if conversation == "group" and member and actor and actor != member:
+        raise ValueError("QQ 群事件 actor_openid 与 member_openid 不一致")
+    if conversation != "group" and user and actor and actor != user:
+        raise ValueError("QQ 私聊事件 actor_openid 与 user_openid 不一致")
+    actor = actor or (member if conversation == "group" else user)
     identities: list[ExternalIdentity] = []
     if user:
         identities.append(
@@ -54,18 +59,18 @@ def build_qq_identity_evidence(
                 member,
             )
         )
-    if not identities:
-        if not actor:
-            raise ValueError("QQ 身份凭据没有可用的 openid")
+    if actor:
         identities.append(
             ExternalIdentity(
                 QQ_PROVIDER_ID,
                 tenant,
-                QQ_COMPAT_ACTOR_KIND,
-                group if conversation == "group" else "",
+                QQ_ACTOR_KIND,
+                "",
                 actor,
             )
         )
+    if not identities:
+        raise ValueError("QQ 身份凭据没有可用的 openid")
     if conversation == "group" and member:
         primary = next(
             identity for identity in identities if identity.subject_kind == QQ_GROUP_MEMBER_KIND
@@ -85,7 +90,7 @@ def build_qq_identity_evidence(
 
 
 __all__ = [
-    "QQ_COMPAT_ACTOR_KIND",
+    "QQ_ACTOR_KIND",
     "QQ_GROUP_MEMBER_KIND",
     "QQ_PROVIDER_ID",
     "QQ_USER_KIND",

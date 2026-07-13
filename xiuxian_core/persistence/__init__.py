@@ -27,6 +27,7 @@ from .rewards import (
     RewardSettlementStorageKeys,
 )
 from .snapshots import (
+    ACTION_AGGREGATE,
     CHARACTER_AGGREGATE,
     INVENTORY_AGGREGATE,
     INSCRIPTION_PREFERENCE_AGGREGATE,
@@ -50,6 +51,7 @@ from .sqlite import (
 )
 
 __all__ = [
+    "ACTION_AGGREGATE",
     "AggregateNotFound",
     "AggregateSnapshotRow",
     "CHARACTER_AGGREGATE",

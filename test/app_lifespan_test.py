@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -14,14 +15,21 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from main import create_app
+from launch.config import config
 from launch.runtime_guard import runtime_guard
 
 
 def main() -> None:
     # 生命周期测试必须能与本地开发服务并行，不能争抢项目真实运行锁。
     original_lock_file = runtime_guard.lock_file
+    original_database = config.database
     with TemporaryDirectory() as tmpdir:
         runtime_guard.lock_file = Path(tmpdir) / "server.lock"
+        object.__setattr__(
+            config,
+            "database",
+            replace(config.database, path=Path(tmpdir) / "app.db"),
+        )
         try:
             with TestClient(create_app()) as client:
                 assert client.get("/docs").status_code == 200
@@ -30,6 +38,7 @@ def main() -> None:
                 assert "/static" in paths
         finally:
             runtime_guard.lock_file = original_lock_file
+            object.__setattr__(config, "database", original_database)
 
     print("application lifespan test passed")
 

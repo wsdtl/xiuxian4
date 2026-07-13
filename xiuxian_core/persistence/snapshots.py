@@ -3,8 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TypeVar
+from typing import Iterable, TypeVar
 
+from ..gameplay.actions import (
+    ActionRecord,
+    ActionResult,
+    ActionSlotKind,
+    ActionSnapshot,
+    ActionState,
+    ActionStatus,
+)
 from ..gameplay.character import CharacterState, CharacterStatus, ProgressionState
 from ..gameplay.economy import (
     AppliedLedgerTransaction,
@@ -57,15 +65,26 @@ CHARACTER_AGGREGATE = "snapshot.character"
 WEAPON_AGGREGATE = "snapshot.weapon"
 REWARD_CLAIM_AGGREGATE = "snapshot.reward_claim"
 INSCRIPTION_PREFERENCE_AGGREGATE = "snapshot.inscription_preference"
+ACTION_AGGREGATE = "snapshot.action"
 
 StateT = TypeVar("StateT")
 
 
-def gameplay_snapshot_codec() -> StructuredJsonCodec:
+def gameplay_snapshot_codec(
+    extra_registrations: Iterable[tuple[str, type[object]]] = (),
+) -> StructuredJsonCodec:
+    """创建核心快照 codec，并允许组合根在冻结前追加业务聚合类型。"""
+
     codec = StructuredJsonCodec()
     registrations = (
         ("gameplay.tag", Tag),
         ("gameplay.tag_set", TagSet),
+        ("action.slot_kind", ActionSlotKind),
+        ("action.status", ActionStatus),
+        ("action.snapshot", ActionSnapshot),
+        ("action.result", ActionResult),
+        ("action.record", ActionRecord),
+        ("action.state", ActionState),
         ("inventory.asset_kind", ItemAssetKind),
         ("inventory.reservation_mode", ReservationMode),
         ("inventory.source_receipt", SourceReceipt),
@@ -101,6 +120,8 @@ def gameplay_snapshot_codec() -> StructuredJsonCodec:
         ("rule.event", RuleEvent),
     )
     for type_id, value_type in registrations:
+        codec.register(type_id, value_type)
+    for type_id, value_type in extra_registrations:
         codec.register(type_id, value_type)
     codec.freeze()
     return codec
@@ -201,6 +222,7 @@ def _require_aware(value: datetime) -> None:
 
 
 __all__ = [
+    "ACTION_AGGREGATE",
     "CHARACTER_AGGREGATE",
     "INVENTORY_AGGREGATE",
     "INSCRIPTION_PREFERENCE_AGGREGATE",

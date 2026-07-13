@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Callable, Mapping
 
+from ..actions import ActionDefinition
 from ..abilities import AbilityDefinition
 from ..attributes import (
     AttributeDefinition,
@@ -183,6 +184,7 @@ class ContentPackage:
     abilities: tuple[AbilityDefinition, ...] = ()
     triggers: tuple[TriggerDefinition, ...] = ()
     cycles: tuple[CycleDefinition, ...] = ()
+    actions: tuple[ActionDefinition, ...] = ()
     skin_packs: tuple[SkinPack, ...] = ()
     display_content_ids: frozenset[StableId] = frozenset()
     magnitude_registrations: tuple[MagnitudeRegistration, ...] = ()
@@ -218,6 +220,7 @@ class ContentPackage:
             "abilities",
             "triggers",
             "cycles",
+            "actions",
             "skin_packs",
             "magnitude_registrations",
             "condition_registrations",

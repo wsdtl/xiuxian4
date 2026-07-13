@@ -1,5 +1,25 @@
 """协议、存储和具体玩法无关的 Gameplay 规则内核。"""
 
+from .actions import (
+    ACTION_FOUNDATION_VERSION,
+    ActionCatalog,
+    ActionDefinition,
+    ActionEngine,
+    ActionExecution,
+    ActionOperation,
+    ActionRecord,
+    ActionResult,
+    ActionSlotKind,
+    ActionSnapshot,
+    ActionState,
+    ActionStatus,
+    ActionTransaction,
+    CancelAction,
+    ClaimAction,
+    CompleteAction,
+    InterruptAction,
+    StartAction,
+)
 from .abilities import (
     AbilityDefinition,
     AbilityEngine,
@@ -390,6 +410,24 @@ from .content import (
 
 
 __all__ = [
+    "ACTION_FOUNDATION_VERSION",
+    "ActionCatalog",
+    "ActionDefinition",
+    "ActionEngine",
+    "ActionExecution",
+    "ActionOperation",
+    "ActionRecord",
+    "ActionResult",
+    "ActionSlotKind",
+    "ActionSnapshot",
+    "ActionState",
+    "ActionStatus",
+    "ActionTransaction",
+    "CancelAction",
+    "ClaimAction",
+    "CompleteAction",
+    "InterruptAction",
+    "StartAction",
     "AbilityDefinition",
     "AbilityEngine",
     "AbilityEventProcessor",

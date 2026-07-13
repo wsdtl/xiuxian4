@@ -28,6 +28,7 @@ def _assert_physical_layout() -> None:
     for name in ("gameplay", "account", "persistence"):
         assert (core / name / "__init__.py").is_file()
         assert not (ROOT / name).exists(), f"禁止保留旧顶层兼容包：{name}"
+    assert (ROOT / "xiuxian_game" / "__init__.py").is_file()
 
 
 def _assert_public_root() -> None:
@@ -42,15 +43,18 @@ def _assert_public_root() -> None:
 
 def _assert_import_boundaries() -> None:
     forbidden_by_layer = {
-        "gameplay": {"launch", "message", "components", "account", "persistence"},
+        "gameplay": {
+            "launch", "message", "components", "account", "persistence", "xiuxian_game"
+        },
         "account": {
             "launch",
             "message",
             "components",
             "gameplay",
             "persistence",
+            "xiuxian_game",
         },
-        "persistence": {"launch", "message", "components"},
+        "persistence": {"launch", "message", "components", "xiuxian_game"},
     }
     failures: list[str] = []
     for layer, forbidden in forbidden_by_layer.items():
@@ -72,11 +76,21 @@ def _assert_import_boundaries() -> None:
         for path in (ROOT / folder_name).rglob("*.py"):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             if any(
-                imported == "xiuxian_core" or imported.startswith("xiuxian_core.")
+                imported == "xiuxian_core"
+                or imported.startswith("xiuxian_core.")
+                or imported == "xiuxian_game"
+                or imported.startswith("xiuxian_game.")
                 for imported in _imports(tree, path)
             ):
                 failures.append(
                     f"{path.relative_to(ROOT)} 不得反向依赖 xiuxian_core"
+                )
+    for path in (ROOT / "xiuxian_game").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for imported in _imports(tree, path):
+            if imported.split(".", 1)[0] in {"launch", "message", "components"}:
+                failures.append(
+                    f"{path.relative_to(ROOT)} 不得依赖命令或通信层 {imported}"
                 )
     assert not failures, "\n".join(failures)
 

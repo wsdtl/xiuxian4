@@ -26,6 +26,7 @@
 - 已封板的持久化联合事务底座 `persistence.foundation.v1`
 - 已封板的内容包统一组装底座 `content.foundation.v1`
 - 已封板的时间与周期底座 `cycle.foundation.v1`
+- 异步行动槽与生命周期底座 `action.foundation.v1`
 - 已封板的铭刻底座 `inscription.foundation.v1`
 - 伤害、治疗、护盾、控制、状态、干预器和复合数值公式
 - 多目标、回合时间线、目标约束、动态参战和结构化战报事实
@@ -40,10 +41,12 @@
 - 货币、物品、角色与武器奖励的跨领域数据库联合提交
 - 版本化内容包、依赖拓扑、隐藏引用审计、统一冻结和运行内容指纹
 - 日、周、月、固定间隔和显式活动窗口，以及可重启的周期补偿工作队列
+- 主行动、委托行动和即时行动的冻结快照、到期结算、领取、取消与中断
 - 武器、装备和武器 Ability 的实例铭刻、原名投影与联合事务防重
 - QQ Markdown/按钮键盘与本地测试结果渲染器
 - 回调签名、时间窗、请求体限制、有界队列、事件去重和安全重试
 - 脱敏结构日志与真实 QQ 协议测试组件
+- 首个可玩闭环：入世、状态、山门试炼、奖励、纳戒和装备青竹剑
 
 ## 环境要求
 
@@ -168,6 +171,16 @@ await manager.send(reply, client_id)
 
 测试面板覆盖回调、即发、回填、引用、Markdown、图片和身份字段。完整操作方法见 [QQ 协议测试组件](components/qq_protocol_test/QQ协议测试说明.md)。
 
+## 首个世界
+
+群聊或私聊发送：
+
+```text
+开始修仙
+```
+
+随后可以使用 `状态`、`行动`、`领取`、`纳戒` 和 `装备武器` 完成第一个持久化玩法闭环。
+
 ## 运行测试
 
 ```powershell
@@ -180,6 +193,8 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 ## 说明文档
 
 - [xiuxian4 核心边界](xiuxian_core/核心边界说明.md)
+- [首个世界](xiuxian_game/首个世界说明.md)
+- [首个世界组件](components/first_world/首个世界组件说明.md)
 - [游戏设计宪章](design/游戏设计宪章.md)
 - [Gameplay 规则内核](xiuxian_core/gameplay/规则内核说明.md)
 - [战斗底座封板说明](xiuxian_core/gameplay/combat/战斗底座封板说明.md)
@@ -194,6 +209,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [持久化联合事务底座说明](xiuxian_core/persistence/持久化联合事务底座说明.md)
 - [内容包统一组装底座说明](xiuxian_core/gameplay/content/内容包统一组装底座说明.md)
 - [时间与周期底座说明](xiuxian_core/gameplay/cycles/时间与周期底座说明.md)
+- [异步行动底座说明](xiuxian_core/gameplay/actions/异步行动底座说明.md)
 - [铭刻底座说明](xiuxian_core/gameplay/inscription/铭刻底座说明.md)
 - [战斗内核](xiuxian_core/gameplay/combat/战斗内核说明.md)
 - [战斗编排](xiuxian_core/gameplay/combat/战斗编排说明.md)
@@ -213,6 +229,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - `xiuxian_core/gameplay/` 是规则中立地基，不能导入 `launch`、`message`、数据库或具体玩法组件。
 - `xiuxian_core/account/` 是平台协议中立的账号与归属地基，不能导入 `launch`、QQ 驱动、数据库或 Gameplay。
 - `xiuxian_core/persistence/` 可以适配领域快照，但领域包不能反向导入持久化实现。
+- `xiuxian_game/` 负责具体世界内容与玩法编排，只能向下依赖 `xiuxian_core/`。
 - `launch/` 只负责应用运行与通信基础设施，不能导入未来修仙业务包。
 - 业务组件通过 `MessageHandler` 注册命令，通过公共 `manager` 发送统一消息对象。
 - 平台身份、原始事件、原生 payload 和发送目标只能存在于对应驱动器包内。
