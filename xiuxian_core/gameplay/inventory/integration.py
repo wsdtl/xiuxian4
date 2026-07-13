@@ -166,6 +166,13 @@ class InventoryAbilityExecutor:
                 assert inventory_outcome.value is not None
                 next_inventory = inventory_outcome.value.state
                 inventory_events = inventory_outcome.value.events
+            else:
+                self._authorize_non_consuming_use(
+                    asset.id,
+                    use.reservation_id,
+                    inventory_state,
+                    context,
+                )
 
             originally_owned = component.ability_id in actor.base_abilities
             authorized_actor = actor
@@ -229,6 +236,34 @@ class InventoryAbilityExecutor:
                 raise KeyError(
                     f"物品 {definition.id} 引用了未知 Ability：{component.ability_id}"
                 )
+
+    @staticmethod
+    def _authorize_non_consuming_use(
+        asset_id: str,
+        reservation_id: str | None,
+        inventory: InventoryState,
+        context: RuleContext,
+    ) -> None:
+        reservations = tuple(
+            value
+            for value in inventory.reservations_for(asset_id)
+            if not value.expired_at(context.logical_time)
+        )
+        if reservation_id is None:
+            if reservations:
+                raise RuleViolation(
+                    "inventory.asset_reserved",
+                    "物品已被其他业务占用",
+                    {"asset_id": asset_id},
+                )
+            return
+        reservation = inventory.reservations.get(reservation_id)
+        if reservation is None or reservation.expired_at(context.logical_time):
+            raise RuleViolation("inventory.reservation_unknown", "找不到有效的指定预约")
+        if reservation.asset_id != asset_id:
+            raise RuleViolation("inventory.reservation_mismatch", "预约不属于指定资产")
+        if any(value.id != reservation_id for value in reservations):
+            raise RuleViolation("inventory.reservation_conflict", "物品还被其他业务占用")
 
 
 __all__ = [

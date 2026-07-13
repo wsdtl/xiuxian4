@@ -19,6 +19,10 @@ from launch.adapter.local import LocalEventHandler  # noqa: E402
 from message import render_local_message  # noqa: E402
 from xiuxian_core.account import ExternalIdentity, IdentityEvidence  # noqa: E402
 from xiuxian_core.gameplay import RuleContext, Ruleset, SeededRandomSource  # noqa: E402
+from xiuxian_core.gameplay.inventory import (  # noqa: E402
+    ITEM_ABILITY_COMPONENT_ID,
+    ItemAbilityComponent,
+)
 from xiuxian_core.persistence import SqliteDatabase  # noqa: E402
 from xiuxian_game import (  # noqa: E402
     XIUXIAN_GAME_VERSION,
@@ -26,7 +30,7 @@ from xiuxian_game import (  # noqa: E402
     GameViolation,
     assemble_first_world,
 )
-from xiuxian_game.world import WORLD_SKIN_ID  # noqa: E402
+from xiuxian_game.world import HERB_ABILITY_ID, HERB_ITEM_ID, WORLD_SKIN_ID  # noqa: E402
 
 
 TIME = datetime(2026, 7, 13, 3, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
@@ -48,6 +52,12 @@ def _assert_world_content() -> None:
     projector = runtime.skins.projector(WORLD_SKIN_ID)
     assert projector.name("item.weapon.green_bamboo_sword") == "青竹剑"
     assert projector.name("item.material.clear_dew_herb") == "清露草"
+    herb_component = runtime.items.require(HERB_ITEM_ID).component(
+        ITEM_ABILITY_COMPONENT_ID,
+        ItemAbilityComponent,
+    )
+    assert herb_component.ability_id == HERB_ABILITY_ID
+    assert runtime.abilities.require(HERB_ABILITY_ID)
     assert runtime.cycles.require("cycle.first_world_day")
     assert runtime.actions.require("action.mountain_gate_trial")
     exploration = runtime.actions.require("action.exploration.mist_bamboo_grove")

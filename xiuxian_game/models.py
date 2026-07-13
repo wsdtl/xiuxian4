@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from types import MappingProxyType
+from typing import Mapping
 
 
 @dataclass(frozen=True)
@@ -93,12 +95,68 @@ class EquipResultView:
     replayed: bool = False
 
 
+@dataclass(frozen=True)
+class UsableItemView:
+    definition_id: str
+    ability_id: str
+    quantity: int
+    available_quantity: int
+    asset_count: int
+
+    def __post_init__(self) -> None:
+        if not self.definition_id.strip() or not self.ability_id.strip():
+            raise ValueError("UsableItemView 缺少稳定内容 ID")
+        if min(self.quantity, self.available_quantity, self.asset_count) < 0:
+            raise ValueError("UsableItemView 数量不能小于 0")
+        if self.available_quantity > self.quantity:
+            raise ValueError("UsableItemView 可用数量不能大于总数量")
+
+
+@dataclass(frozen=True)
+class ItemUseResultView:
+    transaction_id: str
+    item_definition_id: str
+    ability_id: str
+    actor_character_id: str
+    target_character_id: str
+    consumed_quantity: int
+    resource_changes: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
+    replayed: bool = False
+
+    def __post_init__(self) -> None:
+        values = (
+            self.transaction_id,
+            self.item_definition_id,
+            self.ability_id,
+            self.actor_character_id,
+            self.target_character_id,
+        )
+        if any(not value.strip() for value in values):
+            raise ValueError("ItemUseResultView 缺少必要稳定 ID")
+        if self.consumed_quantity < 0:
+            raise ValueError("ItemUseResultView.consumed_quantity 不能小于 0")
+        object.__setattr__(
+            self,
+            "resource_changes",
+            MappingProxyType(
+                {
+                    character_id: MappingProxyType(
+                        {resource_id: float(delta) for resource_id, delta in changes.items()}
+                    )
+                    for character_id, changes in self.resource_changes.items()
+                }
+            ),
+        )
+
+
 __all__ = [
     "ClaimResultView",
     "EntryResult",
     "EquipResultView",
+    "ItemUseResultView",
     "PendingTrial",
     "PlayerProfileState",
     "PlayerStatusView",
     "TrialResultView",
+    "UsableItemView",
 ]

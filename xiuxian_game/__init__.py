@@ -7,10 +7,12 @@ from .models import (
     ClaimResultView,
     EntryResult,
     EquipResultView,
+    ItemUseResultView,
     PendingTrial,
     PlayerProfileState,
     PlayerStatusView,
     TrialResultView,
+    UsableItemView,
 )
 from .service import GameApplication, GameViolation, game_snapshot_repository
 from .world import (
@@ -27,12 +29,14 @@ __all__ = [
     "AdventureViolation",
     "EntryResult",
     "EquipResultView",
+    "ItemUseResultView",
     "GameApplication",
     "GameViolation",
     "PendingTrial",
     "PlayerProfileState",
     "PlayerStatusView",
     "TrialResultView",
+    "UsableItemView",
     "WORLD_PACKAGE_ID",
     "WORLD_SKIN_ID",
     "assemble_first_world",

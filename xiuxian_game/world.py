@@ -10,11 +10,16 @@ from xiuxian_core.gameplay import (
     ActionSlotKind,
     CalendarSchedule,
     CalendarUnit,
+    ChangeResource,
+    Comparison,
+    ConditionSubject,
     CycleDefinition,
     DealDamage,
     EffectDefinition,
     EffectReference,
+    EffectTarget,
     FixedMagnitude,
+    ResourceRatioCondition,
     SkinEntry,
     SkinPack,
     TagSet,
@@ -24,6 +29,7 @@ from xiuxian_core.gameplay.character import (
     COMBAT_DEFENSE,
     COMBAT_SPEED,
     HEALTH_MAXIMUM,
+    SPIRIT_CURRENT,
     SPIRIT_MAXIMUM,
     CharacterTemplateDefinition,
     ContributionSpec,
@@ -51,7 +57,11 @@ from xiuxian_core.gameplay.equipment import (
     EquipmentQualityProfile,
     EquipmentStyleDefinition,
 )
-from xiuxian_core.gameplay.inventory import ItemAssetKind, ItemDefinition
+from xiuxian_core.gameplay.inventory import (
+    ItemAbilityComponent,
+    ItemAssetKind,
+    ItemDefinition,
+)
 from xiuxian_core.gameplay.loadout import (
     ACCESSORY_SLOT_ID,
     BODY_SLOT_ID,
@@ -88,6 +98,9 @@ EXPLORATION_OUTCOME_ID = "action_outcome.exploration_victory"
 RECOVERY_ACTION_ID = "action.recovery.breathing"
 RECOVERY_OUTCOME_ID = "action_outcome.recovery_completed"
 HERB_ITEM_ID = "item.material.clear_dew_herb"
+HERB_ABILITY_ID = "ability.use_clear_dew_herb"
+HERB_EFFECT_ID = "effect.clear_dew_herb_restore_spirit"
+HERB_SPIRIT_RESTORE = 10
 DAILY_CYCLE_ID = "cycle.first_world_day"
 TRIAL_STONE_REWARD = 25
 TRIAL_EXPERIENCE_REWARD = 20
@@ -142,8 +155,11 @@ def _core_package() -> ContentPackage:
     herb = ItemDefinition(
         HERB_ITEM_ID,
         ItemAssetKind.STACK,
-        tags=TagSet.of("item.material", "item.herb"),
+        tags=TagSet.of("item.material", "item.herb", "item.consumable"),
         stack_limit=99,
+        components={
+            "item_component.use_ability": ItemAbilityComponent(HERB_ABILITY_ID),
+        },
     )
     weapon = WeaponDefinition(
         STARTER_WEAPON_ID,
@@ -194,7 +210,7 @@ def _core_package() -> ContentPackage:
         "damage.physical",
         defense_attribute=COMBAT_DEFENSE,
     )
-    effect = EffectDefinition(
+    trial_effect = EffectDefinition(
         TRIAL_EFFECT_ID,
         operations=(
             DealDamage(
@@ -207,9 +223,33 @@ def _core_package() -> ContentPackage:
             ),
         ),
     )
-    ability = AbilityDefinition(
+    trial_ability = AbilityDefinition(
         TRIAL_ABILITY_ID,
-        effects=(EffectReference(effect.id),),
+        effects=(EffectReference(trial_effect.id),),
+    )
+    herb_effect = EffectDefinition(
+        HERB_EFFECT_ID,
+        operations=(
+            ChangeResource(
+                "operation.clear_dew_herb_restore_spirit",
+                SPIRIT_CURRENT,
+                FixedMagnitude(HERB_SPIRIT_RESTORE),
+            ),
+        ),
+    )
+    herb_ability = AbilityDefinition(
+        HERB_ABILITY_ID,
+        target_conditions=(
+            ResourceRatioCondition(
+                "condition.clear_dew_herb_target_missing_spirit",
+                ConditionSubject.TARGET,
+                SPIRIT_CURRENT,
+                SPIRIT_MAXIMUM,
+                Comparison.LESS,
+                1.0,
+            ),
+        ),
+        effects=(EffectReference(herb_effect.id, EffectTarget.TARGET),),
     )
     trial_action = ActionDefinition(
         TRIAL_ACTION_ID,
@@ -249,7 +289,8 @@ def _core_package() -> ContentPackage:
             HERB_ITEM_ID,
             style.id,
             damage_type.id,
-            ability.id,
+            trial_ability.id,
+            herb_ability.id,
             DAILY_CYCLE_ID,
             TRIAL_ACTION_ID,
             EXPLORATION_ACTION_ID,
@@ -258,7 +299,7 @@ def _core_package() -> ContentPackage:
         }
     )
     return ContentPackage(
-        ContentPackageManifest(WORLD_PACKAGE_ID, ContentVersion(1, 1, 0)),
+        ContentPackageManifest(WORLD_PACKAGE_ID, ContentVersion(1, 2, 0)),
         currencies=(CurrencyDefinition(CURRENCY_ID),),
         qualities=(quality,),
         attributes=tuple(core_attribute_definitions().values()),
@@ -277,8 +318,8 @@ def _core_package() -> ContentPackage:
             ),
         ),
         damage_types=(damage_type,),
-        effects=(effect,),
-        abilities=(ability,),
+        effects=(trial_effect, herb_effect),
+        abilities=(trial_ability, herb_ability),
         cycles=(
             CycleDefinition(
                 DAILY_CYCLE_ID,
@@ -299,6 +340,7 @@ def _skin_package(display_ids: frozenset[str]) -> ContentPackage:
         STARTER_WEAPON_ITEM_ID: "青竹剑",
         STARTER_WEAPON_ID: "青竹剑",
         HERB_ITEM_ID: "清露草",
+        HERB_ABILITY_ID: "服用清露草",
         "style.wandering": "云游",
         "damage.physical": "劲力",
         TRIAL_EFFECT_ID: "叩山一击",
@@ -323,8 +365,8 @@ def _skin_package(display_ids: frozenset[str]) -> ContentPackage:
     return ContentPackage(
         ContentPackageManifest(
             "content.first_world_skin",
-            ContentVersion(1, 1, 0),
-            (PackageRequirement(WORLD_PACKAGE_ID, ContentVersion(1, 1, 0)),),
+            ContentVersion(1, 2, 0),
+            (PackageRequirement(WORLD_PACKAGE_ID, ContentVersion(1, 2, 0)),),
         ),
         skin_packs=(SkinPack(WORLD_SKIN_ID, 1, entries),),
     )
@@ -336,7 +378,10 @@ __all__ = [
     "DAILY_CYCLE_ID",
     "EXPLORATION_ACTION_ID",
     "EXPLORATION_OUTCOME_ID",
+    "HERB_ABILITY_ID",
+    "HERB_EFFECT_ID",
     "HERB_ITEM_ID",
+    "HERB_SPIRIT_RESTORE",
     "PROGRESSION_ID",
     "QUALITY_ID",
     "RECOVERY_ACTION_ID",

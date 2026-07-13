@@ -25,6 +25,8 @@ from xiuxian_core.gameplay import (
     ActionTransaction,
     ClaimAction,
     CompleteAction,
+    AttributeResolver,
+    GameplayExecutor,
     RuleContext,
     RuleEntity,
     StartAction,
@@ -38,6 +40,7 @@ from xiuxian_core.gameplay.character import (
     SPIRIT_CURRENT,
     SPIRIT_MAXIMUM,
     CharacterEngine,
+    CharacterProjector,
     CharacterState,
 )
 from xiuxian_core.gameplay.content import ContentRuntime
@@ -49,10 +52,17 @@ from xiuxian_core.gameplay.economy import (
 )
 from xiuxian_core.gameplay.inscription import InscriptionPreference
 from xiuxian_core.gameplay.inventory import (
+    ITEM_ABILITY_COMPONENT_ID,
+    CharacterItemUse,
+    CharacterItemUseEngine,
+    InventoryAbilityExecutor,
     InventoryEngine,
     InventoryState,
+    ItemAbilityComponent,
     ItemContainer,
     ItemInstance,
+    ItemStack,
+    ItemUseReceipt,
     SourceReceipt,
 )
 from xiuxian_core.gameplay.loadout import (
@@ -83,6 +93,7 @@ from xiuxian_core.persistence import (
     WEAPON_AGGREGATE,
     ConcurrencyConflict,
     ContentActivationStore,
+    PersistedItemUseService,
     PersistedRewardSettlementService,
     RewardSettlementStorageKeys,
     SnapshotRepository,
@@ -94,10 +105,12 @@ from .models import (
     ClaimResultView,
     EntryResult,
     EquipResultView,
+    ItemUseResultView,
     PendingTrial,
     PlayerProfileState,
     PlayerStatusView,
     TrialResultView,
+    UsableItemView,
 )
 from .aggregates import (
     ACCOUNT_DIRECTORY_AGGREGATE,
@@ -177,6 +190,29 @@ class GameApplication:
             standard_loadout_slot_catalog(),
             runtime.items,
             self.inventory_engine,
+        )
+        self.character_projector = CharacterProjector(
+            runtime.characters,
+            AttributeResolver(runtime.attributes),
+            runtime.resources,
+            ability_ids=frozenset(runtime.abilities.ids()),
+            trigger_ids=frozenset(runtime.triggers.ids()),
+            interceptor_ids=frozenset(runtime.interceptors.ids()),
+            target_constraint_ids=frozenset(runtime.target_constraints.ids()),
+        )
+        self.item_use_engine = CharacterItemUseEngine(
+            InventoryAbilityExecutor(
+                runtime.items,
+                self.inventory_engine,
+                GameplayExecutor(runtime.ability_engine, runtime.trigger_engine),
+            ),
+            self.character_engine,
+            self.character_projector,
+        )
+        self.item_uses = PersistedItemUseService(
+            database,
+            self.item_use_engine,
+            self.snapshots,
         )
         self.adventure = AdventureService(
             database,
@@ -276,6 +312,101 @@ class GameApplication:
             loadout.weapon_asset_id,
             _pending_trial(actions),
         )
+
+    def usable_items(
+        self,
+        account_id: str,
+        *,
+        logical_time: datetime,
+    ) -> tuple[UsableItemView, ...]:
+        _aware(logical_time)
+        with self.database.unit_of_work(write=False) as uow:
+            profile = self._profile(uow, account_id)
+            inventory = self.snapshots.require(
+                uow,
+                INVENTORY_AGGREGATE,
+                profile.inventory_id,
+                InventoryState,
+            )
+        return _usable_item_views(
+            inventory,
+            owner_id=profile.character_id,
+            runtime=self.runtime,
+            logical_time=logical_time,
+        )
+
+    def use_item(
+        self,
+        account_id: str,
+        item_definition_id: str,
+        *,
+        context: RuleContext,
+        target_account_id: str | None = None,
+    ) -> ItemUseResultView:
+        if target_account_id is not None and target_account_id != account_id:
+            raise GameViolation(
+                "game.item_target_forbidden",
+                "当前物品使用入口只允许以自己为目标",
+            )
+        try:
+            definition = self.runtime.items.require(item_definition_id)
+            component = definition.component(
+                ITEM_ABILITY_COMPONENT_ID,
+                ItemAbilityComponent,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GameViolation("game.item_not_usable", "该物品当前不能主动使用") from exc
+
+        with self.database.unit_of_work(write=False) as uow:
+            profile = self._profile(uow, account_id)
+        transaction_id = f"item-use:{context.trace_id}"
+        committed = self.item_uses.committed_receipt(
+            transaction_id,
+            actor_id=profile.character_id,
+        )
+        if committed is not None:
+            if (
+                committed.item_definition_id != definition.id
+                or committed.ability_id != component.ability_id
+                or committed.target_id != profile.character_id
+            ):
+                raise GameViolation(
+                    "game.item_request_mismatch",
+                    "同一请求 ID 对应了不同的物品使用内容",
+                )
+            return _item_use_result(committed)
+
+        with self.database.unit_of_work(write=False) as uow:
+            inventory = self.snapshots.require(
+                uow,
+                INVENTORY_AGGREGATE,
+                profile.inventory_id,
+                InventoryState,
+            )
+        asset_id = _select_usable_asset(
+            inventory,
+            owner_id=profile.character_id,
+            definition_id=str(definition.id),
+            consume_quantity=component.consume_quantity,
+            logical_time=context.logical_time,
+        )
+        if asset_id is None:
+            raise GameViolation("game.item_unavailable", "纳戒中没有可用的该物品")
+        outcome = self.item_uses.use(
+            CharacterItemUse(
+                transaction_id,
+                profile.character_id,
+                profile.character_id,
+                asset_id,
+                AbilityUse(f"{transaction_id}:ability", component.ability_id),
+            ),
+            inventory_id=profile.inventory_id,
+            context=context,
+        )
+        if outcome.failure:
+            raise GameViolation(outcome.failure.code, outcome.failure.message)
+        assert outcome.value is not None
+        return _item_use_result(outcome.value)
 
     def begin_trial(
         self,
@@ -682,6 +813,112 @@ def _stack_quantity(inventory: InventoryState, definition_id: str) -> int:
         stack.quantity
         for stack in inventory.stacks.values()
         if stack.definition_id == definition_id
+    )
+
+
+def _usable_item_views(
+    inventory: InventoryState,
+    *,
+    owner_id: str,
+    runtime: ContentRuntime,
+    logical_time: datetime,
+) -> tuple[UsableItemView, ...]:
+    grouped: dict[str, dict[str, int | str]] = {}
+    for asset in (*inventory.stacks.values(), *inventory.instances.values()):
+        if inventory.owner_of(asset.id) != owner_id:
+            continue
+        definition = runtime.items.require(asset.definition_id)
+        component = definition.components.get(ITEM_ABILITY_COMPONENT_ID)
+        if not isinstance(component, ItemAbilityComponent):
+            continue
+        quantity = asset.quantity if isinstance(asset, ItemStack) else 1
+        reserved = _active_reserved_quantity(inventory, asset.id, logical_time)
+        available = quantity - reserved
+        if component.consume_quantity == 0 and reserved:
+            available = 0
+        key = str(definition.id)
+        current = grouped.setdefault(
+            key,
+            {
+                "ability_id": str(component.ability_id),
+                "quantity": 0,
+                "available_quantity": 0,
+                "asset_count": 0,
+            },
+        )
+        current["quantity"] = int(current["quantity"]) + quantity
+        current["available_quantity"] = int(current["available_quantity"]) + available
+        current["asset_count"] = int(current["asset_count"]) + 1
+    return tuple(
+        UsableItemView(
+            definition_id,
+            str(values["ability_id"]),
+            int(values["quantity"]),
+            int(values["available_quantity"]),
+            int(values["asset_count"]),
+        )
+        for definition_id, values in sorted(grouped.items())
+    )
+
+
+def _select_usable_asset(
+    inventory: InventoryState,
+    *,
+    owner_id: str,
+    definition_id: str,
+    consume_quantity: int,
+    logical_time: datetime,
+) -> str | None:
+    candidates = []
+    for asset in (*inventory.stacks.values(), *inventory.instances.values()):
+        if asset.definition_id != definition_id or inventory.owner_of(asset.id) != owner_id:
+            continue
+        quantity = asset.quantity if isinstance(asset, ItemStack) else 1
+        reserved = _active_reserved_quantity(inventory, asset.id, logical_time)
+        available = quantity - reserved
+        if consume_quantity == 0:
+            allowed = reserved == 0
+        else:
+            allowed = available >= consume_quantity
+        if allowed:
+            candidates.append(asset)
+    if not candidates:
+        return None
+    candidates.sort(key=_asset_source_key)
+    return candidates[0].id
+
+
+def _active_reserved_quantity(
+    inventory: InventoryState,
+    asset_id: str,
+    logical_time: datetime,
+) -> int:
+    return sum(
+        reservation.quantity
+        for reservation in inventory.reservations_for(asset_id)
+        if not reservation.expired_at(logical_time)
+    )
+
+
+def _asset_source_key(asset: ItemStack | ItemInstance) -> tuple[datetime, str]:
+    logical_time = (
+        asset.lots[0].receipt.logical_time
+        if isinstance(asset, ItemStack)
+        else asset.receipt.logical_time
+    )
+    return logical_time, asset.id
+
+
+def _item_use_result(receipt: ItemUseReceipt) -> ItemUseResultView:
+    return ItemUseResultView(
+        receipt.transaction_id,
+        str(receipt.item_definition_id),
+        str(receipt.ability_id),
+        receipt.actor_id,
+        receipt.target_id,
+        receipt.consumed_quantity,
+        receipt.resource_changes,
+        receipt.replayed,
     )
 
 

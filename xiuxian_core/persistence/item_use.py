@@ -15,7 +15,7 @@ from ..gameplay.inventory import (
 )
 from ..gameplay.character import CharacterState
 from ..gameplay.inventory import InventoryState
-from .errors import TransactionMismatch
+from .errors import CorruptPersistenceData, TransactionMismatch
 from .snapshots import CHARACTER_AGGREGATE, INVENTORY_AGGREGATE, SnapshotRepository
 from .sqlite import SqliteDatabase
 
@@ -32,6 +32,32 @@ class PersistedItemUseService:
         self.database = database
         self.engine = engine
         self.snapshots = snapshots or SnapshotRepository()
+
+    def committed_receipt(
+        self,
+        transaction_id: str,
+        *,
+        actor_id: str,
+    ) -> ItemUseReceipt | None:
+        """在资产选择前读取已提交回执，供上层安全重放已消耗物品。"""
+
+        if not transaction_id.strip() or not actor_id.strip():
+            raise ValueError("transaction_id 和 actor_id 不能为空")
+        with self.database.unit_of_work(write=False) as uow:
+            committed = uow.load_transaction(transaction_id)
+            if committed is None:
+                return None
+            if committed.scope_id != actor_id:
+                raise TransactionMismatch(
+                    f"物品使用事务作用域不匹配：{transaction_id}"
+                )
+            receipt = self.snapshots.codec.loads(
+                committed.receipt_payload,
+                ItemUseReceipt,
+            )
+            if receipt.transaction_id != transaction_id or receipt.actor_id != actor_id:
+                raise CorruptPersistenceData("物品使用事务表与回执身份不一致")
+            return replace(receipt, replayed=True)
 
     def use(
         self,
@@ -59,6 +85,16 @@ class PersistedItemUseService:
                         committed.receipt_payload,
                         ItemUseReceipt,
                     )
+                    if (
+                        receipt.transaction_id != command.id
+                        or receipt.actor_id != command.actor_id
+                        or receipt.target_id != command.target_id
+                        or receipt.asset_id != command.asset_id
+                        or receipt.ability_id != command.ability_use.ability_id
+                    ):
+                        raise CorruptPersistenceData(
+                            "物品使用事务表、请求与回执身份不一致"
+                        )
                     return RuleOutcome.success(replace(receipt, replayed=True))
 
                 inventory = self.snapshots.require(

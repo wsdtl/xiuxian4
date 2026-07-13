@@ -296,6 +296,9 @@ def _assert_persisted_item_use(path: Path) -> None:
     assert inventory.stacks["healing-stack"].quantity == 2
     assert actor.resources[HEALTH_CURRENT] == 70 and actor.revision == 1
     assert target.resources[HEALTH_CURRENT] == 40 and target.revision == 0
+    committed = service.committed_receipt(self_use.id, actor_id="character-a")
+    assert committed and committed.replayed and committed == replace(result.value, replayed=True)
+    assert service.committed_receipt("missing-item-use", actor_id="character-a") is None
     outbox_count = _outbox_count(path)
 
     restarted = PersistedItemUseService(database, service.engine, snapshots)

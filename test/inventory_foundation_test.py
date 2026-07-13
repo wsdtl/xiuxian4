@@ -124,6 +124,19 @@ def _catalog(*, with_ability: bool = False) -> ItemCatalog:
                 },
             )
         )
+        catalog.register(
+            ItemDefinition(
+                "item.reusable_charm",
+                ItemAssetKind.INSTANCE,
+                tags=TagSet.of("item.usable"),
+                components={
+                    "item_component.use_ability": ItemAbilityComponent(
+                        "ability.use_healing_pill",
+                        consume_quantity=0,
+                    )
+                },
+            )
+        )
     return catalog
 
 
@@ -505,6 +518,53 @@ def _assert_item_ability_atomicity() -> None:
     kinds = [event.kind for event in success.value.events]
     assert kinds[0] == "inventory.item.consumed"
     assert kinds[-1] == "inventory.item.used"
+
+    with_charm = _execute(
+        inventory,
+        success.value.inventory,
+        "grant-reusable-charm",
+        GrantInstance(
+            "reusable-charm",
+            "item.reusable_charm",
+            "bag-a",
+            _receipt("receipt-reusable-charm", "crafting-1"),
+        ),
+    ).state
+    reserved = _execute(
+        inventory,
+        with_charm,
+        "reserve-reusable-charm",
+        ReserveAsset(
+            "reservation-reusable-charm",
+            "reusable-charm",
+            ReservationMode.LOCKED,
+            "business.test_lock",
+            "lock-1",
+        ),
+    ).state
+    reusable_use = ItemAbilityUse(
+        "use-reusable-charm",
+        "reusable-charm",
+        AbilityUse("ability-use-reusable-charm", "ability.use_healing_pill"),
+    )
+    blocked = executor.execute(
+        reusable_use,
+        inventory_state=reserved,
+        actor=ready,
+        target=ready,
+        context=_context(seed=103),
+    )
+    assert blocked.failure and blocked.failure.code == "inventory.asset_reserved"
+    authorized = executor.execute(
+        replace(reusable_use, reservation_id="reservation-reusable-charm"),
+        inventory_state=reserved,
+        actor=ready,
+        target=ready,
+        context=_context(seed=104),
+    )
+    assert authorized.ok and authorized.value, authorized.failure
+    assert "reusable-charm" in authorized.value.inventory.instances
+    assert authorized.value.inventory.revision == reserved.revision
 
 
 if __name__ == "__main__":
