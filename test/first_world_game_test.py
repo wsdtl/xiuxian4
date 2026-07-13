@@ -50,6 +50,9 @@ def _assert_world_content() -> None:
     assert projector.name("item.material.clear_dew_herb") == "清露草"
     assert runtime.cycles.require("cycle.first_world_day")
     assert runtime.actions.require("action.mountain_gate_trial")
+    exploration = runtime.actions.require("action.exploration.mist_bamboo_grove")
+    assert exploration.metadata["system"] == "exploration"
+    assert runtime.actions.require("action.recovery.breathing").metadata["system"] == "recovery"
 
 
 def _context(trace: str, seed: int) -> RuleContext:

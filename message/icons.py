@@ -38,6 +38,7 @@ SECTION_ICONS: dict[str, str] = {
     "voucher": "🎟️",
     "combat": "⚔️",
     "explore": "🥾",
+    "recovery": "🌿",
     "duel": "⚔️",
     "robbery": "🗡️",
     "boss": "👑",

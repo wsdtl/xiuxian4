@@ -99,6 +99,18 @@ from .models import (
     PlayerStatusView,
     TrialResultView,
 )
+from .aggregates import (
+    ACCOUNT_DIRECTORY_AGGREGATE,
+    LOADOUT_AGGREGATE,
+    PLAYER_PROFILE_AGGREGATE,
+)
+from .storage_keys import (
+    equipped_container_id,
+    inventory_container_id,
+    issuer_id,
+    wallet_id,
+)
+from .adventure import AdventureService
 from .world import (
     CHARACTER_TEMPLATE_ID,
     CURRENCY_ID,
@@ -115,11 +127,6 @@ from .world import (
     TRIAL_OUTCOME_ID,
     TRIAL_STONE_REWARD,
 )
-
-
-ACCOUNT_DIRECTORY_AGGREGATE = "game.account_directory"
-PLAYER_PROFILE_AGGREGATE = "game.player_profile"
-LOADOUT_AGGREGATE = "game.loadout"
 
 
 class GameViolation(Exception):
@@ -170,6 +177,13 @@ class GameApplication:
             standard_loadout_slot_catalog(),
             runtime.items,
             self.inventory_engine,
+        )
+        self.adventure = AdventureService(
+            database,
+            runtime,
+            self.snapshots,
+            self.character_engine,
+            self.rewards,
         )
 
     def initialize(self, *, logical_time: datetime) -> None:
@@ -246,7 +260,7 @@ class GameApplication:
                 uow, ACTION_AGGREGATE, account_id, ActionState
             )
         progression = character.progressions[PROGRESSION_ID]
-        wallet = ledger.accounts[_wallet_id(account_id)]
+        wallet = ledger.accounts[wallet_id(account_id)]
         return PlayerStatusView(
             account_id,
             character.id,
@@ -388,8 +402,8 @@ class GameApplication:
                 profile.claim_scope_id,
                 RewardClaimState,
             )
-        issuer_id = _issuer_id()
-        wallet_id = _wallet_id(account_id)
+        issuer_account_id = issuer_id()
+        wallet_account_id = wallet_id(account_id)
         settlement = RewardSettlement(
             pending.reward_settlement_id,
             account_id,
@@ -397,7 +411,7 @@ class GameApplication:
             "source.mountain_gate_trial",
             pending.id,
             (
-                CurrencyReward(issuer_id, wallet_id, TRIAL_STONE_REWARD),
+                CurrencyReward(issuer_account_id, wallet_account_id, TRIAL_STONE_REWARD),
                 CharacterExperienceReward(
                     profile.character_id,
                     PROGRESSION_ID,
@@ -406,7 +420,7 @@ class GameApplication:
                 StackItemReward(
                     f"herb:{pending.id}",
                     HERB_ITEM_ID,
-                    _inventory_container_id(profile.character_id),
+                    inventory_container_id(profile.character_id),
                     TRIAL_HERB_REWARD,
                 ),
             ),
@@ -414,8 +428,8 @@ class GameApplication:
                 claims.revision,
                 inventory_revision=inventory.revision,
                 ledger_account_revisions={
-                    issuer_id: ledger.accounts[issuer_id].revision,
-                    wallet_id: ledger.accounts[wallet_id].revision,
+                    issuer_account_id: ledger.accounts[issuer_account_id].revision,
+                    wallet_account_id: ledger.accounts[wallet_account_id].revision,
                 },
                 character_revisions={profile.character_id: character.revision},
             ),
@@ -463,8 +477,8 @@ class GameApplication:
                     f"equip:{account_id}:{profile.starter_weapon_asset_id}:{loadout.revision}",
                     profile.character_id,
                     loadout.revision,
-                    _inventory_container_id(profile.character_id),
-                    _equipped_container_id(profile.character_id),
+                    inventory_container_id(profile.character_id),
+                    equipped_container_id(profile.character_id),
                     (EquipAsset(WEAPON_SLOT_ID, profile.starter_weapon_asset_id),),
                 ),
                 loadout=loadout,
@@ -538,13 +552,13 @@ class GameApplication:
             created_at=logical_time,
         )
         inventory_container = ItemContainer(
-            _inventory_container_id(character_id),
+            inventory_container_id(character_id),
             "container.inventory",
             character_id,
             maximum_assets=80,
         )
         equipped_container = ItemContainer(
-            _equipped_container_id(character_id),
+            equipped_container_id(character_id),
             "container.equipped",
             character_id,
             maximum_assets=7,
@@ -572,14 +586,14 @@ class GameApplication:
             quality_id=QUALITY_ID,
         )
         issuer = LedgerAccount(
-            _issuer_id(),
+            issuer_id(),
             "owner.system",
             "system.first_world",
             CURRENCY_ID,
             LedgerAccountKind.ISSUER,
         )
         wallet = LedgerAccount(
-            _wallet_id(account_id),
+            wallet_id(account_id),
             "owner.account",
             account_id,
             CURRENCY_ID,
@@ -661,22 +675,6 @@ class GameApplication:
 def _account_id(identity: ExternalIdentity) -> str:
     raw = "|".join(identity.key).encode("utf-8")
     return f"account-{sha256(raw).hexdigest()[:24]}"
-
-
-def _inventory_container_id(character_id: str) -> str:
-    return f"container:{character_id}:inventory"
-
-
-def _equipped_container_id(character_id: str) -> str:
-    return f"container:{character_id}:equipped"
-
-
-def _issuer_id() -> str:
-    return f"ledger:issuer:{CURRENCY_ID}"
-
-
-def _wallet_id(account_id: str) -> str:
-    return f"ledger:wallet:{account_id}:{CURRENCY_ID}"
 
 
 def _stack_quantity(inventory: InventoryState, definition_id: str) -> int:

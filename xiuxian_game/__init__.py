@@ -2,6 +2,7 @@
 
 XIUXIAN_GAME_VERSION = "xiuxian-game.v1"
 
+from .adventure import AdventureService, AdventureViolation
 from .models import (
     ClaimResultView,
     EntryResult,
@@ -22,6 +23,8 @@ from .world import (
 __all__ = [
     "XIUXIAN_GAME_VERSION",
     "ClaimResultView",
+    "AdventureService",
+    "AdventureViolation",
     "EntryResult",
     "EquipResultView",
     "GameApplication",

@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from threading import Lock
-from zoneinfo import ZoneInfo
 
-from launch import OnEvent, config
+from launch import OnEvent
 from launch.adapter import Depends, manager
 from launch.adapter.local import LocalCommandEvent, LocalEventHandler
 from launch.adapter.local.manager import current_event as current_local_event
@@ -14,14 +12,9 @@ from launch.adapter.qq.depends import current_qq_event
 from launch.adapter.qq.event import QqMessageEvent
 from launch.adapter.qq.handler import QqEventHandler
 from message import Action, M
-from xiuxian_core.account import (
-    ExternalIdentity,
-    IdentityEvidence,
-    build_qq_identity_evidence,
-)
+from xiuxian_core.account import IdentityEvidence
 from xiuxian_core.gameplay import RuleContext, Ruleset, SeededRandomSource
-from xiuxian_core.persistence import SqliteDatabase
-from xiuxian_game import GameApplication, GameViolation, assemble_first_world
+from xiuxian_game import GameViolation
 from xiuxian_game.world import (
     CHARACTER_TEMPLATE_ID,
     CURRENCY_ID,
@@ -32,38 +25,19 @@ from xiuxian_game.world import (
     TRIAL_STONE_REWARD,
     WORLD_SKIN_ID,
 )
+from components.game_runtime import (
+    game_application,
+    local_identity_evidence,
+    logical_time,
+    qq_identity_evidence,
+    set_game_application_for_test,
+)
 
 
 COMMANDS = ("开始修仙", "状态", "纳戒", "行动", "领取", "装备武器")
-_application: GameApplication | None = None
-_application_lock = Lock()
-
-
-def game_application() -> GameApplication:
-    global _application
-    if _application is None:
-        with _application_lock:
-            if _application is None:
-                _application = GameApplication(
-                    SqliteDatabase(
-                        config.database.path,
-                        busy_timeout_ms=config.database.busy_timeout_ms,
-                    ),
-                    assemble_first_world(),
-                )
-    return _application
-
-
-def set_game_application_for_test(application: GameApplication | None) -> None:
-    """测试使用临时数据库替换组件组合根。"""
-
-    global _application
-    _application = application
-
-
 @OnEvent.connect(priority=100)
 def initialize_first_world() -> None:
-    game_application().initialize(logical_time=_logical_time())
+    game_application().initialize(logical_time=logical_time())
 
 
 def _current_local_event() -> LocalCommandEvent:
@@ -79,17 +53,8 @@ async def qq_first_world_command(
     cmd: str,
     qq_event: QqMessageEvent = Depends(current_qq_event),
 ) -> None:
-    now = _logical_time()
-    evidence = build_qq_identity_evidence(
-        bot_app_id=config.raw.get("QQ_BOT_APP_ID", ""),
-        event_id=qq_event.event_id or qq_event.message_id,
-        logical_time=now,
-        conversation_type="group" if qq_event.is_group else "private",
-        actor_openid=qq_event.actor_openid,
-        user_openid=qq_event.user_openid,
-        member_openid=qq_event.member_openid,
-        group_openid=qq_event.group_openid,
-    )
+    now = logical_time()
+    evidence = qq_identity_evidence(qq_event, now)
     await _dispatch(cmd, client_id, evidence, now)
 
 
@@ -99,21 +64,8 @@ async def local_first_world_command(
     cmd: str,
     local_event: LocalCommandEvent = Depends(_current_local_event),
 ) -> None:
-    now = _logical_time()
-    identity = ExternalIdentity(
-        "platform.local",
-        "xiuxian4.local",
-        "identity.local_user",
-        "",
-        client_id,
-    )
-    evidence = IdentityEvidence(
-        f"local:{local_event.event_id}",
-        identity,
-        (),
-        "identity.local_event",
-        now,
-    )
+    now = logical_time()
+    evidence = local_identity_evidence(local_event, client_id, now)
     await _dispatch(cmd, client_id, evidence, now)
 
 
@@ -314,10 +266,6 @@ def _rule_context(
         logical_time,
         SeededRandomSource(seed),
     )
-
-
-def _logical_time() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 def _name(content_id: str) -> str:

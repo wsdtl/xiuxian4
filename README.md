@@ -47,6 +47,7 @@
 - 回调签名、时间窗、请求体限制、有界队列、事件去重和安全重试
 - 脱敏结构日志与真实 QQ 协议测试组件
 - 首个可玩闭环：入世、状态、山门试炼、奖励、纳戒和装备青竹剑
+- 首个正式异步玩法：雾竹林探险消耗精神、到期结算与吐纳恢复
 
 ## 环境要求
 
@@ -181,6 +182,17 @@ await manager.send(reply, client_id)
 
 随后可以使用 `状态`、`行动`、`领取`、`纳戒` 和 `装备武器` 完成第一个持久化玩法闭环。
 
+正式探险与恢复命令：
+
+```text
+探险列表
+探险 雾竹林
+探险状态
+结束探险
+休息
+结束休息
+```
+
 ## 运行测试
 
 ```powershell
@@ -195,6 +207,8 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [xiuxian4 核心边界](xiuxian_core/核心边界说明.md)
 - [首个世界](xiuxian_game/首个世界说明.md)
 - [首个世界组件](components/first_world/首个世界组件说明.md)
+- [探险组件](components/adventure/探险组件说明.md)
+- [探险与恢复](xiuxian_game/adventure/探险与恢复说明.md)
 - [游戏设计宪章](design/游戏设计宪章.md)
 - [Gameplay 规则内核](xiuxian_core/gameplay/规则内核说明.md)
 - [战斗底座封板说明](xiuxian_core/gameplay/combat/战斗底座封板说明.md)

@@ -39,6 +39,7 @@ class ActionDefinition:
     cancellable: bool = True
     interruptible: bool = True
     tags: TagSet = EMPTY_TAGS
+    metadata: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "id", stable_id(self.id, field="action id"))
@@ -47,6 +48,7 @@ class ActionDefinition:
             raise ValueError("ActionDefinition.duration 不能小于 0")
         if self.slot_kind is ActionSlotKind.INSTANT and self.duration != timedelta(0):
             raise ValueError("即时行动的 duration 必须为 0")
+        object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
 
 
 class ActionCatalog:

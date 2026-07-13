@@ -83,6 +83,10 @@ TRIAL_EFFECT_ID = "effect.mountain_gate_strike"
 TRIAL_ENEMY_ID = "enemy.mountain_gate_puppet"
 TRIAL_ACTION_ID = "action.mountain_gate_trial"
 TRIAL_OUTCOME_ID = "action_outcome.mountain_gate_victory"
+EXPLORATION_ACTION_ID = "action.exploration.mist_bamboo_grove"
+EXPLORATION_OUTCOME_ID = "action_outcome.exploration_victory"
+RECOVERY_ACTION_ID = "action.recovery.breathing"
+RECOVERY_OUTCOME_ID = "action_outcome.recovery_completed"
 HERB_ITEM_ID = "item.material.clear_dew_herb"
 DAILY_CYCLE_ID = "cycle.first_world_day"
 TRIAL_STONE_REWARD = 25
@@ -212,6 +216,29 @@ def _core_package() -> ContentPackage:
         ActionSlotKind.MAIN,
         timedelta(0),
     )
+    exploration_action = ActionDefinition(
+        EXPLORATION_ACTION_ID,
+        ActionSlotKind.MAIN,
+        timedelta(minutes=1),
+        tags=TagSet.of("action.exploration"),
+        metadata={
+            "system": "exploration",
+            "spirit_cost": 10,
+            "enemy_id": "enemy.mist_bamboo_shadow",
+            "enemy_health": 12,
+            "stone_reward": 18,
+            "experience_reward": 15,
+            "herb_reward": 1,
+        },
+    )
+    recovery_action = ActionDefinition(
+        RECOVERY_ACTION_ID,
+        ActionSlotKind.MAIN,
+        timedelta(minutes=1),
+        cancellable=False,
+        tags=TagSet.of("action.recovery"),
+        metadata={"system": "recovery"},
+    )
     display_ids = frozenset(
         {
             CURRENCY_ID,
@@ -225,11 +252,13 @@ def _core_package() -> ContentPackage:
             ability.id,
             DAILY_CYCLE_ID,
             TRIAL_ACTION_ID,
+            EXPLORATION_ACTION_ID,
+            RECOVERY_ACTION_ID,
             *(item.id for item in equipment_items),
         }
     )
     return ContentPackage(
-        ContentPackageManifest(WORLD_PACKAGE_ID, ContentVersion(1, 0, 0)),
+        ContentPackageManifest(WORLD_PACKAGE_ID, ContentVersion(1, 1, 0)),
         currencies=(CurrencyDefinition(CURRENCY_ID),),
         qualities=(quality,),
         attributes=tuple(core_attribute_definitions().values()),
@@ -256,7 +285,7 @@ def _core_package() -> ContentPackage:
                 CalendarSchedule("Asia/Shanghai", CalendarUnit.DAY, time(4)),
             ),
         ),
-        actions=(trial_action,),
+        actions=(trial_action, exploration_action, recovery_action),
         display_content_ids=display_ids,
     )
 
@@ -276,6 +305,8 @@ def _skin_package(display_ids: frozenset[str]) -> ContentPackage:
         TRIAL_ABILITY_ID: "叩山一击",
         DAILY_CYCLE_ID: "山中一日",
         TRIAL_ACTION_ID: "山门试炼",
+        EXPLORATION_ACTION_ID: "雾竹林",
+        RECOVERY_ACTION_ID: "吐纳调息",
     }
     equipment_names = {
         "head": "云游巾",
@@ -292,8 +323,8 @@ def _skin_package(display_ids: frozenset[str]) -> ContentPackage:
     return ContentPackage(
         ContentPackageManifest(
             "content.first_world_skin",
-            ContentVersion(1, 0, 0),
-            (PackageRequirement(WORLD_PACKAGE_ID, ContentVersion(1, 0, 0)),),
+            ContentVersion(1, 1, 0),
+            (PackageRequirement(WORLD_PACKAGE_ID, ContentVersion(1, 1, 0)),),
         ),
         skin_packs=(SkinPack(WORLD_SKIN_ID, 1, entries),),
     )
@@ -303,9 +334,13 @@ __all__ = [
     "CHARACTER_TEMPLATE_ID",
     "CURRENCY_ID",
     "DAILY_CYCLE_ID",
+    "EXPLORATION_ACTION_ID",
+    "EXPLORATION_OUTCOME_ID",
     "HERB_ITEM_ID",
     "PROGRESSION_ID",
     "QUALITY_ID",
+    "RECOVERY_ACTION_ID",
+    "RECOVERY_OUTCOME_ID",
     "STARTER_WEAPON_ID",
     "STARTER_WEAPON_ITEM_ID",
     "TRIAL_ABILITY_ID",
