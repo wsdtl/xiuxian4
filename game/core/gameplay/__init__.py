@@ -1,5 +1,6 @@
 """协议、存储和具体玩法无关的 Gameplay 规则内核。"""
 
+from .grants import GRANT_FOUNDATION_VERSION
 from .actions import (
     ACTION_FOUNDATION_VERSION,
     ActionCatalog,
@@ -415,6 +416,7 @@ from .content import (
 
 
 __all__ = [
+    "GRANT_FOUNDATION_VERSION",
     "ACTION_FOUNDATION_VERSION",
     "ActionCatalog",
     "ActionDefinition",

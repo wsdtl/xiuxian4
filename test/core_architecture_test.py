@@ -32,6 +32,7 @@ def _assert_physical_layout() -> None:
     for name in ("gameplay", "account", "persistence"):
         assert (core / name / "__init__.py").is_file()
         assert not (ROOT / name).exists(), f"禁止保留旧顶层兼容包：{name}"
+    assert (core / "gameplay" / "grants" / "__init__.py").is_file()
     assert not (ROOT / "xiuxian_core").exists(), "禁止保留旧核心目录"
 
     commands = game / "cmd"
@@ -45,7 +46,7 @@ def _assert_physical_layout() -> None:
 
 
 def _assert_public_root() -> None:
-    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v1"
+    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v1.1"
     assert set(game.__all__) == {"PUBLIC_FOUNDATION_VERSION"}
     assert cmd.router is not None
     assert core.GAME_CORE_VERSION == "game-core.v1"

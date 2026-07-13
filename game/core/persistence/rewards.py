@@ -31,7 +31,7 @@ from .snapshots import (
     WEAPON_AGGREGATE,
     SnapshotRepository,
 )
-from .sqlite import OutboxEventRow, SqliteDatabase
+from .sqlite import OutboxEventRow, SqliteDatabase, SqliteUnitOfWork
 
 
 @dataclass(frozen=True)
@@ -153,72 +153,97 @@ class PersistedRewardSettlementService:
         checkpoint = context.random.checkpoint()
         try:
             with self.database.unit_of_work() as uow:
-                snapshot = self._load_snapshot(uow, keys, settlement.claim_scope_id)
-                fingerprint = reward_fingerprint(settlement)
-                committed = uow.load_transaction(settlement.id)
-                if committed is not None:
-                    if (
-                        committed.fingerprint != fingerprint
-                        or committed.scope_id != settlement.claim_scope_id
-                    ):
-                        raise TransactionMismatch(
-                            f"同一奖励事务 ID 对应不同内容：{settlement.id}"
-                        )
-                    outcome = self.engine.settle(
-                        settlement,
-                        snapshot=snapshot,
-                        context=context,
-                    )
-                    if outcome.failure:
-                        raise CorruptPersistenceData(
-                            "数据库已有提交事务，但领取快照无法重放同一奖励"
-                        )
-                    assert outcome.value is not None
-                    receipt = self.snapshots.codec.loads(
-                        committed.receipt_payload,
-                        RewardReceipt,
-                    )
-                    if receipt != outcome.value.receipt or not outcome.value.replayed:
-                        raise CorruptPersistenceData("事务表与领取快照中的奖励凭据不一致")
+                outcome = self.settle_in_uow(
+                    uow,
+                    settlement,
+                    keys,
+                    context=context,
+                )
+                if outcome.failure:
                     return outcome
+                uow.commit()
+                return outcome
+        except Exception:
+            context.random.restore(checkpoint)
+            raise
 
+    def settle_in_uow(
+        self,
+        uow: SqliteUnitOfWork,
+        settlement: RewardSettlement,
+        keys: RewardSettlementStorageKeys,
+        *,
+        context: RuleContext,
+    ) -> RuleOutcome[RewardSettlementExecution]:
+        """在调用方持有的事务中结算；本方法绝不自行提交。"""
+
+        checkpoint = context.random.checkpoint()
+        try:
+            snapshot = self._load_snapshot(uow, keys, settlement.claim_scope_id)
+            fingerprint = reward_fingerprint(settlement)
+            committed = uow.load_transaction(settlement.id)
+            if committed is not None:
+                if (
+                    committed.fingerprint != fingerprint
+                    or committed.scope_id != settlement.claim_scope_id
+                ):
+                    raise TransactionMismatch(
+                        f"同一奖励事务 ID 对应不同内容：{settlement.id}"
+                    )
                 outcome = self.engine.settle(
                     settlement,
                     snapshot=snapshot,
                     context=context,
                 )
                 if outcome.failure:
-                    return outcome
-                assert outcome.value is not None
-                if outcome.value.replayed:
                     raise CorruptPersistenceData(
-                        "领取快照声明奖励已完成，但缺少数据库提交事务"
+                        "数据库已有提交事务，但领取快照无法重放同一奖励"
                     )
-                self._save_changed(
-                    uow,
-                    keys,
-                    snapshot,
-                    outcome.value.snapshot,
-                    context.logical_time,
+                assert outcome.value is not None
+                receipt = self.snapshots.codec.loads(
+                    committed.receipt_payload,
+                    RewardReceipt,
                 )
-                timestamp = context.logical_time.isoformat()
-                uow.insert_transaction(
+                if receipt != outcome.value.receipt or not outcome.value.replayed:
+                    raise CorruptPersistenceData("事务表与领取快照中的奖励凭据不一致")
+                return outcome
+
+            outcome = self.engine.settle(
+                settlement,
+                snapshot=snapshot,
+                context=context,
+            )
+            if outcome.failure:
+                return outcome
+            assert outcome.value is not None
+            if outcome.value.replayed:
+                raise CorruptPersistenceData(
+                    "领取快照声明奖励已完成，但缺少数据库提交事务"
+                )
+            self._save_changed(
+                uow,
+                keys,
+                snapshot,
+                outcome.value.snapshot,
+                context.logical_time,
+            )
+            timestamp = context.logical_time.isoformat()
+            uow.insert_transaction(
+                settlement.id,
+                fingerprint,
+                settlement.claim_scope_id,
+                self.snapshots.codec.dumps(outcome.value.receipt),
+                timestamp,
+            )
+            for sequence, event in enumerate(outcome.value.events):
+                uow.append_outbox(
                     settlement.id,
-                    fingerprint,
-                    settlement.claim_scope_id,
-                    self.snapshots.codec.dumps(outcome.value.receipt),
+                    sequence,
+                    event.kind,
+                    self.snapshots.codec.dumps(event),
                     timestamp,
                 )
-                for sequence, event in enumerate(outcome.value.events):
-                    uow.append_outbox(
-                        settlement.id,
-                        sequence,
-                        event.kind,
-                        self.snapshots.codec.dumps(event),
-                        timestamp,
-                    )
-                uow.commit()
-                return outcome
+            return outcome
         except Exception:
             context.random.restore(checkpoint)
             raise

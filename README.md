@@ -1,6 +1,6 @@
 # xiuxian4
 
-`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v1`，尚未写入新游戏的具体内容和玩家命令。
+`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v1.1`，尚未写入新游戏的具体内容和玩家命令。
 
 ## 当前地基
 
@@ -23,7 +23,8 @@
 - 已封板的账号与归属底座 `account.foundation.v1`
 - 已封板的经济账本底座 `economy.foundation.v1`
 - 已封板的统一奖励结算底座 `reward.foundation.v1`
-- 已封板的持久化联合事务底座 `persistence.foundation.v1`
+- 已封板的权益凭证与兑付底座 `grant.foundation.v1`
+- 已封板的持久化联合事务底座 `persistence.foundation.v2`
 - 已封板的内容包统一组装底座 `content.foundation.v1`
 - 已封板的时间与周期底座 `cycle.foundation.v1`
 - 异步行动槽与生命周期底座 `action.foundation.v1`
@@ -199,6 +200,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [账号与归属底座说明](game/core/account/账号与归属底座说明.md)
 - [经济账本底座说明](game/core/gameplay/economy/经济账本底座说明.md)
 - [统一奖励结算底座说明](game/core/gameplay/rewards/统一奖励结算底座说明.md)
+- [权益凭证与兑付底座说明](game/core/gameplay/grants/权益凭证与兑付底座说明.md)
 - [持久化联合事务底座说明](game/core/persistence/持久化联合事务底座说明.md)
 - [内容包统一组装底座说明](game/core/gameplay/content/内容包统一组装底座说明.md)
 - [时间与周期底座说明](game/core/gameplay/cycles/时间与周期底座说明.md)

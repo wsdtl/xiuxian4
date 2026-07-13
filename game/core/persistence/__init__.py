@@ -1,6 +1,6 @@
 """协议和具体玩法无关的持久化联合事务基础设施。"""
 
-PERSISTENCE_FOUNDATION_VERSION = "persistence.foundation.v1"
+PERSISTENCE_FOUNDATION_VERSION = "persistence.foundation.v2"
 
 from .codec import StructuredJsonCodec
 from .content import ContentActivation, ContentActivationStore
@@ -13,6 +13,7 @@ from .cycles import (
 )
 from .inscriptions import PersistedInscriptionService
 from .item_use import PersistedItemUseService
+from .grants import PersistedGrantService
 from .errors import (
     AggregateNotFound,
     ConcurrencyConflict,
@@ -77,6 +78,7 @@ __all__ = [
     "PendingRuleEvent",
     "PersistentCycleService",
     "PersistedRewardSettlementService",
+    "PersistedGrantService",
     "PersistedInscriptionService",
     "PersistedItemUseService",
     "PersistenceError",
