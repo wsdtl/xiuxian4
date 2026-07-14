@@ -1,6 +1,6 @@
 # xiuxian4
 
-`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v4`，尚未写入新游戏的具体内容和玩家命令。
+`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v5`，尚未写入新游戏的具体内容和玩家命令。
 
 ## 当前地基
 
@@ -202,6 +202,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 ## 说明文档
 
 - [游戏核心边界](game/core/核心边界说明.md)
+- [核心架构门禁](design/核心架构门禁说明.md)
 - [后台接口占位](game/cmd/后台接口/说明.md)
 - [公共底座封板说明](design/公共底座封板说明.md)
 - [真正核心封板清单](design/真正核心封板清单.md)

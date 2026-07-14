@@ -49,10 +49,10 @@ def _assert_physical_layout() -> None:
 
 
 def _assert_public_root() -> None:
-    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v4"
+    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v5"
     assert set(game.__all__) == {"PUBLIC_FOUNDATION_VERSION"}
     assert cmd.router is not None
-    assert core.GAME_CORE_VERSION == "game-core.v4"
+    assert core.GAME_CORE_VERSION == "game-core.v5"
     assert core.CORE_LAYERS == (
         "game.core.gameplay",
         "game.core.account",

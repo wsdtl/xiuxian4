@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.core.gameplay import (  # noqa: E402
+    ACTION_FOUNDATION_VERSION,
     ActionCatalog,
     ActionDefinition,
     ActionEngine,
@@ -42,6 +43,7 @@ TIME = datetime(2026, 7, 13, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
 def main() -> None:
+    assert ACTION_FOUNDATION_VERSION == "action.foundation.v1"
     catalog = ActionCatalog()
     catalog.register(ActionDefinition("action.explore", ActionSlotKind.MAIN, timedelta(minutes=10)))
     catalog.register(ActionDefinition("action.rest", ActionSlotKind.MAIN, timedelta(minutes=5)))

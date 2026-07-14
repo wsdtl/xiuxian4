@@ -52,6 +52,7 @@ class SequenceIds:
 
 
 def main() -> None:
+    assert ACCOUNT_FOUNDATION_VERSION == "account.foundation.v1"
     _assert_group_and_private_resolve_same_account()
     _assert_actor_only_group_bridges_private()
     _assert_new_group_alias_is_added()
