@@ -214,6 +214,7 @@ def _environment(path: Path):
         characters.create_character(
             character_id="character-a",
             account_id="account-a",
+            name="使用者",
             template_id="character_template.test",
             created_at=TIME,
         ),
@@ -223,6 +224,7 @@ def _environment(path: Path):
         characters.create_character(
             character_id="character-b",
             account_id="account-b",
+            name="目标角色",
             template_id="character_template.test",
             created_at=TIME,
         ),

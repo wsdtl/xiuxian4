@@ -1,16 +1,12 @@
-"""游戏命令与 HTTP 接口总路由。
+"""游戏消息命令与小游戏 HTTP 接口总入口。
 
-二级组件使用中文命名。规则、状态和持久化实现不得写入本包。
+二级组件使用中文命名。当前 router 为空；小游戏提供真实 HTTP 路由时由本入口统一挂载。
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from .后台接口 import router as backend_router
-
-
 router = APIRouter()
-router.include_router(backend_router)
 
 __all__ = ["router"]

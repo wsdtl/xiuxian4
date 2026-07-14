@@ -19,6 +19,8 @@ from .context import MENTION_DEFAULT as MENTION_DEFAULT
 from .context import MENTION_NONE as MENTION_NONE
 from .context import MENTION_SENDER as MENTION_SENDER
 from .context import MessageContext as MessageContext
+from .context import MessageIdentity as MessageIdentity
+from .context import MessageIdentityClaim as MessageIdentityClaim
 from .context import ReplyTarget as ReplyTarget
 from .context import SendOptions as SendOptions
 from .context import SendRequest as SendRequest

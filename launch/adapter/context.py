@@ -1,7 +1,7 @@
 """协议中立的消息上下文与发送意图。
 
 业务层只能依赖本模块公开的身份、会话、能力和目标；QQ event 等协议对象只可
-存在于 driver_context/driver_target，并通过驱动器私有 Depends 显式读取。
+存在于 driver_context/driver_target。常规账号识别使用 MessageIdentity，不需要读取私有事件。
 """
 
 from __future__ import annotations
@@ -33,6 +33,59 @@ class AdapterCapabilities:
     active_push: bool = False
 
 
+@dataclass(frozen=True, order=True)
+class MessageIdentityClaim:
+    """驱动器从已验证事件中提取的一条稳定身份事实。"""
+
+    provider_id: str
+    tenant_id: str
+    subject_kind: str
+    scope_id: str
+    external_id: str
+
+    def __post_init__(self) -> None:
+        for field_name in ("provider_id", "tenant_id", "subject_kind", "external_id"):
+            value = str(getattr(self, field_name) or "").strip()
+            if not value:
+                raise ValueError(f"MessageIdentityClaim 缺少 {field_name}")
+            object.__setattr__(self, field_name, value)
+        object.__setattr__(self, "scope_id", str(self.scope_id or "").strip())
+
+    @property
+    def key(self) -> tuple[str, str, str, str, str]:
+        return (
+            self.provider_id,
+            self.tenant_id,
+            self.subject_kind,
+            self.scope_id,
+            self.external_id,
+        )
+
+
+@dataclass(frozen=True)
+class MessageIdentity:
+    """一条已验证消息证明的主身份与别名集合。"""
+
+    evidence_id: str
+    source_kind: str
+    primary: MessageIdentityClaim
+    aliases: tuple[MessageIdentityClaim, ...] = ()
+
+    def __post_init__(self) -> None:
+        for field_name in ("evidence_id", "source_kind"):
+            value = str(getattr(self, field_name) or "").strip()
+            if not value:
+                raise ValueError(f"MessageIdentity 缺少 {field_name}")
+            object.__setattr__(self, field_name, value)
+        claims = (self.primary, *tuple(self.aliases))
+        if len({claim.key for claim in claims}) != len(claims):
+            raise ValueError("MessageIdentity 存在重复身份事实")
+        namespaces = {(claim.provider_id, claim.tenant_id) for claim in claims}
+        if len(namespaces) != 1:
+            raise ValueError("一条消息身份不能跨平台或跨租户")
+        object.__setattr__(self, "aliases", tuple(self.aliases))
+
+
 @dataclass(frozen=True)
 class ReplyTarget:
     """一次回复的目标。
@@ -59,7 +112,9 @@ class MessageContext:
     conversation_type: str
     reply_target: ReplyTarget
     capabilities: AdapterCapabilities
+    identity: MessageIdentity
     driver_context: Any = None
+    sender_name: str = ""
 
 
 @dataclass(frozen=True)

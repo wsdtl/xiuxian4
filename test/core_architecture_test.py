@@ -20,11 +20,39 @@ from game.core import account, gameplay, persistence  # noqa: E402
 
 def main() -> None:
     _assert_physical_layout()
+    _assert_ascii_python_identifiers()
     _assert_public_root()
     _assert_layer_public_exports()
     _assert_import_boundaries()
     _assert_core_neutrality()
     print("core architecture tests passed")
+
+
+def _assert_ascii_python_identifiers() -> None:
+    """二级组件目录可用中文，Python 文件名与代码标识符必须使用英文。"""
+
+    failures: list[str] = []
+    for path in (ROOT / "game").rglob("*.py"):
+        relative = path.relative_to(ROOT)
+        if not path.name.isascii():
+            failures.append(f"{relative} 的 Python 文件名不是英文")
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        identifiers: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                identifiers.append(node.name)
+            elif isinstance(node, ast.Name):
+                identifiers.append(node.id)
+            elif isinstance(node, ast.arg):
+                identifiers.append(node.arg)
+            elif isinstance(node, ast.Attribute):
+                identifiers.append(node.attr)
+            elif isinstance(node, ast.alias) and node.asname:
+                identifiers.append(node.asname)
+        invalid = sorted({name for name in identifiers if not name.isascii()})
+        if invalid:
+            failures.append(f"{relative} 存在中文代码标识符：{', '.join(invalid)}")
+    assert not failures, "\n".join(failures)
 
 
 def _assert_physical_layout() -> None:
@@ -40,8 +68,25 @@ def _assert_physical_layout() -> None:
 
     commands = game / "cmd"
     assert (commands / "__init__.py").is_file()
-    assert (commands / "后台接口" / "__init__.py").is_file()
+    assert not (commands / "后台接口").exists(), "禁止保留空的后台接口占位组件"
     assert not (game / "修仙4").exists(), "禁止保留提前建立的旧产品目录"
+
+    content = game / "content"
+    assert (content / "__init__.py").is_file()
+    assert (content / "official.py").is_file()
+    assert not (content / "runtime.py").exists(), "官方内容装配不得再使用 runtime 名称"
+    assert (content / "catalog" / "__init__.py").is_file()
+    assert (content / "skins" / "__init__.py").is_file()
+
+    rules = game / "rules"
+    assert (rules / "__init__.py").is_file()
+    assert (rules / "character" / "__init__.py").is_file()
+    assert not (game / "product").exists(), "禁止保留含义重复的 product 层"
+    assert not (game / "service").exists(), "具体规则不得再使用 service 层名称"
+
+    assert (game / "app.py").is_file()
+    assert not (game / "runtime").exists(), "应用装配不得再使用 runtime 目录"
+    assert not (ROOT / "auto" / "game").exists(), "游戏组合根不得放回 auto/"
 
     assert (ROOT / "组件测试" / "QQ协议测试" / "__init__.py").is_file()
     for legacy in ("src", "components", "xiuxian_game"):
@@ -49,10 +94,10 @@ def _assert_physical_layout() -> None:
 
 
 def _assert_public_root() -> None:
-    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v5"
+    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v6"
     assert set(game.__all__) == {"PUBLIC_FOUNDATION_VERSION"}
     assert cmd.router is not None
-    assert core.GAME_CORE_VERSION == "game-core.v5"
+    assert core.GAME_CORE_VERSION == "game-core.v6"
     assert core.CORE_LAYERS == (
         "game.core.gameplay",
         "game.core.account",
@@ -95,7 +140,11 @@ def _assert_import_boundaries() -> None:
                     if imported.startswith("game.core.")
                     else root_name
                 )
-                if core_layer in forbidden or _is_game_integration(imported):
+                if (
+                    core_layer in forbidden
+                    or _is_game_integration(imported)
+                    or _is_game_product(imported)
+                ):
                     failures.append(
                         f"{path.relative_to(ROOT)} 导入了禁止层 {imported}"
                     )
@@ -120,6 +169,65 @@ def _assert_import_boundaries() -> None:
             if imported == "game" or imported.startswith("game."):
                 failures.append(
                     f"{path.relative_to(ROOT)} 协议测试不得依赖游戏代码 {imported}"
+                )
+    for path in (ROOT / "game" / "content").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for imported in _imports(tree, path):
+            if (
+                imported == "launch"
+                or imported.startswith("launch.")
+                or imported == "message"
+                or imported.startswith("message.")
+                or imported == "auto"
+                or imported.startswith("auto.")
+                or imported == "组件测试"
+                or imported.startswith("组件测试.")
+                or _is_game_integration(imported)
+                or _is_game_policy(imported)
+                or imported == "game.core.account"
+                or imported.startswith("game.core.account.")
+                or imported == "game.core.persistence"
+                or imported.startswith("game.core.persistence.")
+            ):
+                failures.append(
+                    f"{path.relative_to(ROOT)} 正式内容层导入了禁止模块 {imported}"
+                )
+    for path in (ROOT / "game" / "rules" / "character").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for imported in _imports(tree, path):
+            if (
+                imported == "launch"
+                or imported.startswith("launch.")
+                or imported == "message"
+                or imported.startswith("message.")
+                or imported == "auto"
+                or imported.startswith("auto.")
+                or imported == "组件测试"
+                or imported.startswith("组件测试.")
+                or _is_game_integration(imported)
+                or imported == "game.core.persistence"
+                or imported.startswith("game.core.persistence.")
+            ):
+                failures.append(
+                    f"{path.relative_to(ROOT)} 角色内部策略导入了禁止模块 {imported}"
+                )
+    for path in (ROOT / "game" / "cmd").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for imported in _imports(tree, path):
+            private_driver = imported.startswith("launch.adapter.qq") or imported.startswith(
+                "launch.adapter.local"
+            )
+            registration_bypass = path.name == "__init__.py" and (
+                imported == "game.core"
+                or imported.startswith("game.core.")
+                or imported == "game.content"
+                or imported.startswith("game.content.")
+                or imported == "game.app"
+                or imported.startswith("game.app.")
+            )
+            if private_driver or registration_bypass:
+                failures.append(
+                    f"{path.relative_to(ROOT)} 命令注册入口导入了禁止模块 {imported}"
                 )
     assert not failures, "\n".join(failures)
 
@@ -167,6 +275,18 @@ def _is_game_core(imported: str) -> bool:
 
 def _is_game_integration(imported: str) -> bool:
     return imported == "game.cmd" or imported.startswith("game.cmd.")
+
+
+def _is_game_product(imported: str) -> bool:
+    return (
+        imported == "game.content"
+        or imported.startswith("game.content.")
+        or _is_game_policy(imported)
+    )
+
+
+def _is_game_policy(imported: str) -> bool:
+    return imported == "game.rules" or imported.startswith("game.rules.")
 
 
 def _imports(tree: ast.AST, path: Path) -> tuple[str, ...]:

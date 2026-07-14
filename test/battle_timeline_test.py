@@ -66,6 +66,7 @@ def main() -> None:
     _assert_control_skip_and_expiry()
     _assert_victory_and_invalid_actor()
     _assert_random_rollback_and_max_round_draw()
+    _assert_speed_action_frequency()
     print("battle timeline test: OK")
 
 
@@ -611,6 +612,53 @@ def _assert_random_rollback_and_max_round_draw() -> None:
         event for event in second.value.events if event.kind == "combat.battle.finished"
     )
     assert finished.values["reason"] == "maximum_rounds"
+
+
+def _assert_speed_action_frequency() -> None:
+    engine, _effects = _build_engine()
+    assert abs(engine.rules.action_efficiency(50) - 2 / 3) < 1e-9
+    assert abs(engine.rules.action_efficiency(100) - 1) < 1e-9
+    assert abs(engine.rules.action_efficiency(200) - 4 / 3) < 1e-9
+
+    entities = {
+        "fast": _entity("fast", speed=200),
+        "normal": _entity("normal", speed=100),
+        "slow": _entity("slow", speed=50),
+    }
+    state = _start(
+        engine,
+        entities,
+        {"fast": "team.fast", "normal": "team.normal", "slow": "team.slow"},
+        {"fast": 0, "normal": 0, "slow": 0},
+        "battle.speed_frequency",
+    )
+    # 开场每人保留一次行动，避免慢速角色出生时长时间空等。
+    assert state.turn_order == ("fast", "normal", "slow")
+    for index in range(3):
+        outcome = engine.execute_turn(
+            state,
+            None,
+            context=_context(f"battle.speed_frequency.initial.{index}"),
+        )
+        assert outcome.ok and outcome.value
+        state = outcome.value.state
+
+    actors: list[str] = []
+    for index in range(9):
+        actor_id = state.current_actor_id
+        assert actor_id is not None
+        actors.append(actor_id)
+        outcome = engine.execute_turn(
+            state,
+            None,
+            context=_context(f"battle.speed_frequency.timeline.{index}"),
+        )
+        assert outcome.ok and outcome.value
+        state = outcome.value.state
+
+    assert actors.count("fast") == 4
+    assert actors.count("normal") == 3
+    assert actors.count("slow") == 2
 
 
 if __name__ == "__main__":

@@ -156,9 +156,11 @@ def _character(catalog: CharacterCatalog):
     character = catalog.create_character(
         character_id="character-a",
         account_id="account-a",
+        name="测试角色",
         template_id="character_template.standard",
         created_at=TIME,
     )
+    assert character.name == "测试角色"
     return _projector(catalog).initialize_new_character(character)
 
 
@@ -173,7 +175,7 @@ def _transaction(state, transaction_id: str, *operations):
 
 
 def _assert_template_and_catalog_boundaries() -> None:
-    assert CHARACTER_FOUNDATION_VERSION == "character.foundation.v1"
+    assert CHARACTER_FOUNDATION_VERSION == "character.foundation.v3"
     assert len(CORE_ATTRIBUTE_IDS) == 5
     try:
         CharacterTemplateDefinition(
@@ -225,6 +227,7 @@ def _assert_multilevel_progression() -> None:
     assert progression.total_experience == 350
     assert result.state.core_attributes[COMBAT_ATTACK] == 15
     assert result.state.core_attributes[HEALTH_MAXIMUM] == 120
+    assert result.state.resources[HEALTH_CURRENT] == 140
     assert "feature.awakened_sight" in result.state.features
     kinds = [event.kind for event in result.events]
     assert kinds.count("character.progression.advanced") == 2

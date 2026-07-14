@@ -1,6 +1,6 @@
 """武器与六槽装备共享的原子装配底座。"""
 
-LOADOUT_FOUNDATION_VERSION = "loadout.foundation.v1"
+LOADOUT_FOUNDATION_VERSION = "loadout.foundation.v2"
 
 from .models import (
     ACCESSORY_SLOT_ID,

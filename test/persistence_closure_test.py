@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 import sys
@@ -38,6 +39,7 @@ from game.core.persistence import (  # noqa: E402
     PersistedLoadoutService,
     SnapshotRepository,
     SqliteDatabase,
+    TransactionMismatch,
 )
 
 from action_foundation_test import TIME as ACTION_TIME, _context as action_context, _snapshot  # noqa: E402
@@ -77,6 +79,17 @@ def _assert_account_relations_and_hmac(path: Path) -> None:
     assert service.identity_count("account-1") == 3
     replay = service.resolve_identity(group)
     assert replay.replayed and replay.account == first.account
+    delayed_replay = service.resolve_identity(
+        replace(group, logical_time=group.logical_time + timedelta(minutes=5))
+    )
+    assert delayed_replay.replayed and delayed_replay.account == first.account
+    try:
+        service.resolve_identity(
+            _group_evidence("event-group-1", member="M999")
+        )
+        raise AssertionError("同一事件 ID 不能更换身份集合")
+    except TransactionMismatch:
+        pass
 
     restarted = PersistedAccountService(database, AccountEngine(SequenceIds()), secret)
     private = restarted.resolve_identity(_private_evidence("event-private-1"))

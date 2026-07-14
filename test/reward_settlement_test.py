@@ -203,6 +203,7 @@ def _environment() -> dict[str, object]:
     character = characters.create_character(
         character_id="character-a",
         account_id="account-a",
+        name="结算测试角色",
         template_id="character_template.standard",
         created_at=TIME,
     )

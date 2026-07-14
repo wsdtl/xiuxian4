@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 import sys
@@ -76,6 +77,7 @@ from game.core.gameplay.loadout import (  # noqa: E402
     QualityCatalog,
     QualityDefinition,
     SaveLoadoutPreset,
+    UnequipSlot,
     register_loadout_item_component,
     standard_loadout_slot_catalog,
 )
@@ -464,8 +466,8 @@ def _prepared_loadout(env: dict[str, object]):
 
 
 def _assert_foundation_shapes(env: dict[str, object]) -> None:
-    assert LOADOUT_FOUNDATION_VERSION == "loadout.foundation.v1"
-    assert WEAPON_FOUNDATION_VERSION == "weapon.foundation.v1"
+    assert LOADOUT_FOUNDATION_VERSION == "loadout.foundation.v2"
+    assert WEAPON_FOUNDATION_VERSION == "weapon.foundation.v2"
     assert EQUIPMENT_FOUNDATION_VERSION == "equipment.foundation.v1"
     slots = env["slots"]
     assert len(slots.definitions.ids()) == 7  # type: ignore[union-attr]
@@ -473,52 +475,93 @@ def _assert_foundation_shapes(env: dict[str, object]) -> None:
 
 def _assert_multi_loadout_switch_is_atomic(env: dict[str, object]) -> None:
     engine, loadout, inventory = _prepared_loadout(env)
-    saved_a = engine.execute(
-        _loadout_transaction(loadout, "save-preset-a", SaveLoadoutPreset("loadout_preset.a")),
-        loadout=loadout,
-        inventory_state=inventory,
-        context=_context(70),
-    ).unwrap()
-    assert saved_a.inventory is inventory
+    presets = {
+        "loadout_preset.a": LoadoutPreset("loadout_preset.a", loadout.slots),
+        "loadout_preset.b": LoadoutPreset(
+            "loadout_preset.b",
+            {WEAPON_SLOT_ID: "weapon-new", HEAD_SLOT_ID: "head-new"},
+        ),
+    }
+    loadout = LoadoutState(
+        loadout.character_id,
+        loadout.slots,
+        loadout.revision,
+        presets,
+        "loadout_preset.a",
+    )
     changed = engine.execute(
         _loadout_transaction(
-            saved_a.loadout,
-            "build-preset-b",
-            EquipAsset(WEAPON_SLOT_ID, "weapon-new"),
-            EquipAsset(HEAD_SLOT_ID, "head-new"),
+            loadout,
+            "activate-preset-b",
+            ActivateLoadoutPreset("loadout_preset.b"),
         ),
-        loadout=saved_a.loadout,
+        loadout=loadout,
         inventory_state=inventory,
         context=_context(72),
     ).unwrap()
-    assert changed.loadout.active_preset_id is None
-    saved_b = engine.execute(
+    assert changed.loadout.active_preset_id == "loadout_preset.b"
+    assert changed.loadout.weapon_asset_id == "weapon-new"
+    assert changed.inventory.instances["weapon-old"].container_id == "bag"
+    containers = dict(changed.inventory.containers)
+    containers["bag"] = replace(containers["bag"], maximum_assets=3)
+    editable_inventory = replace(changed.inventory, containers=containers)
+
+    unequipped = engine.execute(
         _loadout_transaction(
             changed.loadout,
-            "save-preset-b",
-            SaveLoadoutPreset("loadout_preset.b"),
+            "edit-active-preset-b",
+            UnequipSlot(HEAD_SLOT_ID),
         ),
         loadout=changed.loadout,
-        inventory_state=changed.inventory,
+        inventory_state=editable_inventory,
         context=_context(71),
     ).unwrap()
-    assert saved_b.loadout.presets["loadout_preset.a"].slots[WEAPON_SLOT_ID] == "weapon-old"
-    assert saved_b.loadout.presets["loadout_preset.b"].slots[WEAPON_SLOT_ID] == "weapon-new"
+    assert unequipped.loadout.active_preset_id == "loadout_preset.b"
+    assert HEAD_SLOT_ID not in unequipped.loadout.presets["loadout_preset.b"].slots
+
+    restored_head = engine.execute(
+        _loadout_transaction(
+            unequipped.loadout,
+            "restore-active-preset-b-head",
+            EquipAsset(HEAD_SLOT_ID, "head-new"),
+        ),
+        loadout=unequipped.loadout,
+        inventory_state=unequipped.inventory,
+        context=_context(75),
+    ).unwrap()
+    assert restored_head.loadout.presets["loadout_preset.b"].slots[HEAD_SLOT_ID] == "head-new"
 
     restored = engine.execute(
         _loadout_transaction(
-            saved_b.loadout,
+            restored_head.loadout,
             "activate-preset-a",
             ActivateLoadoutPreset("loadout_preset.a"),
         ),
-        loadout=saved_b.loadout,
-        inventory_state=saved_b.inventory,
+        loadout=restored_head.loadout,
+        inventory_state=restored_head.inventory,
         context=_context(73),
     ).unwrap()
     assert restored.loadout.weapon_asset_id == "weapon-old"
     assert restored.loadout.slots[HEAD_SLOT_ID] == "head-old"
     assert restored.inventory.instances["weapon-old"].container_id == "equipped"
     assert restored.inventory.instances["weapon-new"].container_id == "bag"
+
+    try:
+        LoadoutState(
+            restored.loadout.character_id,
+            restored.loadout.slots,
+            presets={
+                "loadout_preset.a": restored.loadout.presets["loadout_preset.a"],
+                "loadout_preset.duplicate": LoadoutPreset(
+                    "loadout_preset.duplicate",
+                    {WEAPON_SLOT_ID: "weapon-old"},
+                ),
+            },
+            active_preset_id="loadout_preset.a",
+        )
+        raise AssertionError("同一个资产不能跨配装复用")
+    except ValueError as exc:
+        assert "多套配装" in str(exc)
 
     bad_presets = dict(restored.loadout.presets)
     bad_presets["loadout_preset.bad"] = LoadoutPreset(
@@ -743,6 +786,7 @@ def _assert_only_equipped_assets_are_projected(env: dict[str, object]) -> None:
     character = characters.create_character(
         character_id="character-a",
         account_id="account-a",
+        name="装配测试角色",
         template_id="character_template.standard",
         created_at=TIME,
     )

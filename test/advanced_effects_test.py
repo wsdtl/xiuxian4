@@ -98,7 +98,7 @@ from game.core.gameplay import (  # noqa: E402
 
 
 def main() -> None:
-    assert COMBAT_FOUNDATION_VERSION == "combat.foundation.v1"
+    assert COMBAT_FOUNDATION_VERSION == "combat.foundation.v2"
     engine, effects = _build()
     _assert_composite_magnitudes(effects)
     _assert_state_resource_and_cooldown_operations(effects)

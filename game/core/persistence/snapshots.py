@@ -52,7 +52,12 @@ from ..gameplay.actions import (
     InterruptAction,
     StartAction,
 )
-from ..gameplay.character import CharacterState, CharacterStatus, ProgressionState
+from ..gameplay.character import (
+    CharacterRosterState,
+    CharacterState,
+    CharacterStatus,
+    ProgressionState,
+)
 from ..gameplay.economy import (
     AppliedLedgerTransaction,
     FundHold,
@@ -220,6 +225,7 @@ from .sqlite import SNAPSHOT_CODEC_VERSION, SqliteUnitOfWork
 INVENTORY_AGGREGATE = "snapshot.inventory"
 LEDGER_AGGREGATE = "snapshot.ledger"
 CHARACTER_AGGREGATE = "snapshot.character"
+CHARACTER_ROSTER_AGGREGATE = "snapshot.character_roster"
 WEAPON_AGGREGATE = "snapshot.weapon"
 REWARD_CLAIM_AGGREGATE = "snapshot.reward_claim"
 INSCRIPTION_PREFERENCE_AGGREGATE = "snapshot.inscription_preference"
@@ -347,6 +353,7 @@ def gameplay_snapshot_codec(
         ("economy.state", LedgerState),
         ("character.status", CharacterStatus),
         ("character.progression_state", ProgressionState),
+        ("character.roster_state", CharacterRosterState),
         ("character.state", CharacterState),
         ("weapon.state", WeaponState),
         ("equipment.state", EquipmentState),
@@ -528,6 +535,7 @@ __all__ = [
     "ACTIVITY_AGGREGATE",
     "ACTION_AGGREGATE",
     "CHARACTER_AGGREGATE",
+    "CHARACTER_ROSTER_AGGREGATE",
     "EXCHANGE_AGGREGATE",
     "INVENTORY_AGGREGATE",
     "INSCRIPTION_PREFERENCE_AGGREGATE",

@@ -63,6 +63,7 @@ async def _assert_message_handler_registers_local() -> None:
         message: str,
         cmd: str,
         raw_message: str,
+        sender_name: str,
         message_context,
         reply_target,
         adapter_capabilities,
@@ -74,8 +75,10 @@ async def _assert_message_handler_registers_local() -> None:
                 "message": message,
                 "cmd": cmd,
                 "raw_message": raw_message,
+                "sender_name": sender_name,
                 "adapter": message_context.adapter,
                 "conversation_type": message_context.conversation_type,
+                "identity": message_context.identity,
                 "reply_target": reply_target,
                 "can_markdown": adapter_capabilities.markdown,
                 "uses_public_manager": manager is adapter_manager,
@@ -88,7 +91,11 @@ async def _assert_message_handler_registers_local() -> None:
 
     await LocalEventHandler.run()
     assert LocalEventHandler.exact_rules["本地测试"][0].metadata == {"test": {"access": "public"}}
-    result = await dispatch(client_id="local-user", raw_message="本地测试 参数")
+    result = await dispatch(
+        client_id="local-user",
+        raw_message="本地测试 参数",
+        sender_name="本地昵称",
+    )
 
     assert result.matched is True
     assert result.matched_count == 1
@@ -102,8 +109,12 @@ async def _assert_message_handler_registers_local() -> None:
     assert captured[0]["message"] == "参数"
     assert captured[0]["cmd"] == "本地测试"
     assert captured[0]["raw_message"] == "本地测试 参数"
+    assert captured[0]["sender_name"] == "本地昵称"
     assert captured[0]["adapter"] == "local"
     assert captured[0]["conversation_type"] == CONVERSATION_PRIVATE
+    assert captured[0]["identity"].evidence_id.startswith("local:")
+    assert captured[0]["identity"].primary.provider_id == "platform.local"
+    assert captured[0]["identity"].primary.external_id == "local-user"
     assert captured[0]["reply_target"].adapter == "local"
     assert captured[0]["can_markdown"] is True
     assert captured[0]["uses_public_manager"] is True

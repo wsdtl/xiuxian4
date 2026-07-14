@@ -39,12 +39,21 @@ class SkinPack:
 
     id: StableId
     version: int
+    name: str
+    description: str = ""
+    icon: str = ""
     entries: Mapping[StableId, SkinEntry] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "id", stable_id(self.id, field="skin id"))
         if self.version < 1:
             raise ValueError("世界皮肤版本必须从 1 开始")
+        name = self.name.strip()
+        if not name:
+            raise ValueError("世界皮肤缺少名称")
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "description", self.description.strip())
+        object.__setattr__(self, "icon", self.icon.strip())
         normalized: dict[StableId, SkinEntry] = {}
         for key, entry in self.entries.items():
             content_id = stable_id(key, field="skin content id")
@@ -113,6 +122,7 @@ class SkinCatalog:
         )
         self._packs: dict[tuple[StableId, int], SkinPack] = {}
         self._latest_versions: dict[StableId, int] = {}
+        self._name_owners: dict[str, StableId] = {}
         self._frozen = False
 
     def register(self, pack: SkinPack) -> SkinPack:
@@ -123,9 +133,16 @@ class SkinCatalog:
         key = (pack.id, pack.version)
         if key in self._packs:
             raise ValueError(f"世界皮肤版本重复：{pack.id}@{pack.version}")
+        name_key = self._name_key(pack.name)
+        name_owner = self._name_owners.get(name_key)
+        if name_owner is not None and name_owner != pack.id:
+            raise ValueError(
+                f"世界皮肤名称冲突：{pack.name} 同时属于 {name_owner} 和 {pack.id}"
+            )
         pack.validate(self._required_ids)
         SkinProjector(pack)
         self._packs[key] = pack
+        self._name_owners[name_key] = pack.id
         self._latest_versions[pack.id] = max(
             pack.version,
             self._latest_versions.get(pack.id, 0),
@@ -155,6 +172,10 @@ class SkinCatalog:
 
     def skin_ids(self) -> tuple[StableId, ...]:
         return tuple(sorted(self._latest_versions))
+
+    @staticmethod
+    def _name_key(value: object) -> str:
+        return " ".join(str(value or "").strip().casefold().split())
 
     def freeze(self) -> None:
         if not self._packs:

@@ -49,8 +49,15 @@ Webhook 请求体上限为 1 MiB，且 `Content-Type` 必须是 `application/jso
 | `member_openid` | 群成员身份，私聊事件可能为空 |
 | `actor_openid` | 当前操作者统一身份，也是业务 `client_id` |
 | `group_openid` | 群聊发送目标 |
+| `sender_name` | QQ 事件实际携带的昵称或用户名，平台未下发时为空 |
 
 私聊优先选择 `user_openid`，群聊优先选择 `member_openid`。字段必须分别保留，不能再次把群成员身份塞进 `user_openid`。
+
+QQ 驱动器会把这些字段一次性转换为公共 `MessageIdentity`：群聊主身份是群成员，私聊主身份是
+用户，行为人身份作为别名保留。正式业务读取公共身份，不需要注册 QQ 专用命令。
+
+`sender_name` 只读取 QQ payload 中明确存在的 `username`、`nickname` 或 `nick`。QQ 群事件常常只
+提供 OpenID，此时业务必须接受空值，不能把 OpenID 展示成玩家名称。
 
 日志只记录身份短指纹，完整 OpenID 不进入普通运行日志。
 

@@ -61,7 +61,7 @@ from ..weapon import WeaponCatalog, weapon_level_contribution
 from .models import CombatProfileDefinition, ContentPackage, ContentVersion
 
 
-CONTENT_FOUNDATION_VERSION = "content.foundation.v1"
+CONTENT_FOUNDATION_VERSION = "content.foundation.v2"
 
 
 @dataclass(frozen=True)

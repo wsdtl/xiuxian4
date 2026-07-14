@@ -9,7 +9,7 @@ from typing import Mapping
 from ..attributes import ModifierLayer
 from ..character import AttributeGrant, ContributionSpec
 from ..ids import StableId, stable_id
-from ..inventory import ItemAssetKind, ItemCatalog
+from ..inventory import ItemAssetKind, ItemCatalog, ItemInstance
 from ..itemization import ItemRollState, ItemizationEngine, ItemizationKind
 from ..loadout import (
     LOADOUT_ITEM_COMPONENT_ID,
@@ -17,6 +17,9 @@ from ..loadout import (
     LoadoutItemComponent,
     QualityCatalog,
 )
+
+
+WEAPON_STATE_DATA_KEY = "weapon.state"
 from ..registry import DefinitionRegistry
 
 
@@ -242,11 +245,38 @@ def weapon_level_contribution(
     )
 
 
+def weapon_state_data(state: WeaponState) -> Mapping[str, object]:
+    """生成库存实例时使用的稳定类型化武器数据。"""
+
+    return MappingProxyType({WEAPON_STATE_DATA_KEY: state})
+
+
+def weapon_state_from_data(data: Mapping[str, object]) -> WeaponState:
+    try:
+        state = data[WEAPON_STATE_DATA_KEY]
+    except KeyError as exc:
+        raise KeyError("物品实例缺少武器状态") from exc
+    if not isinstance(state, WeaponState):
+        raise TypeError("物品实例中的武器状态类型不正确")
+    return state
+
+
+def weapon_state_from_instance(instance: ItemInstance) -> WeaponState:
+    state = weapon_state_from_data(instance.data)
+    if state.asset_id != instance.id:
+        raise ValueError("物品实例与武器状态资产 id 不一致")
+    return state
+
+
 __all__ = [
     "WeaponCatalog",
     "WeaponDefinition",
     "WeaponLevelAttribute",
     "WeaponQualityProfile",
     "WeaponState",
+    "WEAPON_STATE_DATA_KEY",
+    "weapon_state_data",
+    "weapon_state_from_data",
+    "weapon_state_from_instance",
     "weapon_level_contribution",
 ]

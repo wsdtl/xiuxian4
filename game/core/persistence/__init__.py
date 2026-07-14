@@ -1,6 +1,6 @@
 """协议和具体玩法无关的持久化联合事务基础设施。"""
 
-PERSISTENCE_FOUNDATION_VERSION = "persistence.foundation.v4"
+PERSISTENCE_FOUNDATION_VERSION = "persistence.foundation.v6"
 
 from .codec import StructuredJsonCodec
 from .actions import (
@@ -10,6 +10,12 @@ from .actions import (
 )
 from .activities import PersistedActivityExecution, PersistedActivityService
 from .accounts import PersistedAccountService
+from .characters import (
+    CharacterCreationWorkflow,
+    PersistedCharacterCreationService,
+    PersistedCharacterRegistration,
+    PersistedCharacterService,
+)
 from .content import ContentActivation, ContentActivationStore
 from .cycles import (
     CycleCursor,
@@ -56,6 +62,7 @@ from .snapshots import (
     ACTION_AGGREGATE,
     ACTIVITY_AGGREGATE,
     CHARACTER_AGGREGATE,
+    CHARACTER_ROSTER_AGGREGATE,
     EXCHANGE_AGGREGATE,
     INVENTORY_AGGREGATE,
     INSCRIPTION_PREFERENCE_AGGREGATE,
@@ -89,6 +96,8 @@ __all__ = [
     "AggregateNotFound",
     "AggregateSnapshotRow",
     "CHARACTER_AGGREGATE",
+    "CHARACTER_ROSTER_AGGREGATE",
+    "CharacterCreationWorkflow",
     "EXCHANGE_AGGREGATE",
     "FactJournalService",
     "CommittedTransactionRow",
@@ -116,6 +125,9 @@ __all__ = [
     "ProjectionStore",
     "PendingRuleEvent",
     "PersistedAccountService",
+    "PersistedCharacterRegistration",
+    "PersistedCharacterCreationService",
+    "PersistedCharacterService",
     "PersistedActionClaimExecution",
     "PersistedActionExecution",
     "PersistedActionService",

@@ -1,6 +1,6 @@
 """角色身份、成长和规则实体投影底座。"""
 
-CHARACTER_FOUNDATION_VERSION = "character.foundation.v1"
+CHARACTER_FOUNDATION_VERSION = "character.foundation.v3"
 
 from .contributions import (
     AttributeGrant,
@@ -22,14 +22,17 @@ from .models import (
     COMBAT_DEFENSE,
     COMBAT_SPEED,
     CORE_ATTRIBUTE_IDS,
+    CharacterRosterState,
     CharacterState,
     CharacterStatus,
     HEALTH_CURRENT,
     HEALTH_MAXIMUM,
+    MAX_CHARACTER_NAME_LENGTH,
     PERSISTENT_RESOURCE_IDS,
     ProgressionState,
     SPIRIT_CURRENT,
     SPIRIT_MAXIMUM,
+    normalize_character_name,
 )
 from .projection import CharacterProjection, CharacterProjector
 from .transactions import (
@@ -60,6 +63,7 @@ __all__ = [
     "CharacterOperation",
     "CharacterProjection",
     "CharacterProjector",
+    "CharacterRosterState",
     "CharacterState",
     "CharacterStatus",
     "CharacterTemplateDefinition",
@@ -68,6 +72,7 @@ __all__ = [
     "ContributionSpec",
     "HEALTH_CURRENT",
     "HEALTH_MAXIMUM",
+    "MAX_CHARACTER_NAME_LENGTH",
     "PERSISTENT_RESOURCE_IDS",
     "ProgressionDefinition",
     "ProgressionMilestone",
@@ -82,4 +87,5 @@ __all__ = [
     "core_attribute_definitions",
     "persistent_resource_definitions",
     "merge_contribution_specs",
+    "normalize_character_name",
 ]

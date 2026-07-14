@@ -105,6 +105,7 @@ class CharacterTemplateDefinition:
         CharacterState(
             "template-validation",
             "template-validation",
+            "template-validation",
             self.id,
             datetime(2000, 1, 1, tzinfo=timezone.utc),
             attributes,
@@ -169,6 +170,7 @@ class CharacterCatalog:
         *,
         character_id: str,
         account_id: str,
+        name: str,
         template_id: StableId,
         created_at: datetime,
     ) -> CharacterState:
@@ -178,6 +180,7 @@ class CharacterCatalog:
         return CharacterState(
             character_id,
             account_id,
+            name,
             template.id,
             created_at,
             template.core_attributes,

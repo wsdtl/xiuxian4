@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict
 
+from ..context import MessageIdentity, MessageIdentityClaim
+
 FIRST_LEADING_MENTION_RE = re.compile(r"^\s*<@([^>]+)>")
 MENTION_RE = re.compile(r"<@([^>]+)>")
 GROUP_MESSAGE_EVENT_TYPES = {
@@ -38,12 +40,77 @@ class QqMessageEvent:
     member_openid: str
     raw: Dict[str, Any]
     interaction_id: str = ""
+    sender_name: str = ""
 
     @property
     def is_group(self) -> bool:
         """当前事件是否来自群聊。"""
 
         return bool(self.group_openid)
+
+
+def qq_message_identity(
+    event: QqMessageEvent,
+    *,
+    bot_app_id: str,
+) -> MessageIdentity:
+    """把 QQ 已验证事件转换成协议中立的主身份与别名。"""
+
+    tenant = str(bot_app_id or "").strip()
+    if not tenant:
+        raise ValueError("QQ 消息身份缺少 bot_app_id")
+    claims: list[MessageIdentityClaim] = []
+    if event.user_openid:
+        claims.append(
+            MessageIdentityClaim(
+                "platform.qq",
+                tenant,
+                "identity.qq_user",
+                "",
+                event.user_openid,
+            )
+        )
+    if event.member_openid:
+        if not event.group_openid:
+            raise ValueError("QQ 群成员身份缺少 group_openid")
+        claims.append(
+            MessageIdentityClaim(
+                "platform.qq",
+                tenant,
+                "identity.qq_group_member",
+                event.group_openid,
+                event.member_openid,
+            )
+        )
+    if event.actor_openid:
+        claims.append(
+            MessageIdentityClaim(
+                "platform.qq",
+                tenant,
+                "identity.qq_actor",
+                "",
+                event.actor_openid,
+            )
+        )
+    if not claims:
+        raise ValueError("QQ 消息身份没有可用的 OpenID")
+    if event.is_group and event.member_openid:
+        primary = next(
+            claim for claim in claims if claim.subject_kind == "identity.qq_group_member"
+        )
+    elif event.user_openid:
+        primary = next(claim for claim in claims if claim.subject_kind == "identity.qq_user")
+    else:
+        primary = claims[0]
+    source_event_id = event.event_id or event.interaction_id or event.message_id
+    if not source_event_id:
+        raise ValueError("QQ 消息身份缺少事件 ID")
+    return MessageIdentity(
+        evidence_id=f"qq:{tenant}:{source_event_id}",
+        source_kind="identity.qq_signed_event",
+        primary=primary,
+        aliases=tuple(claim for claim in claims if claim != primary),
+    )
 
 
 def parse_message_event(payload: dict) -> QqMessageEvent | None:
@@ -101,6 +168,7 @@ def parse_message_event(payload: dict) -> QqMessageEvent | None:
         user_openid=user_openid,
         member_openid=member_openid,
         raw=payload,
+        sender_name=extract_sender_name(data),
     )
 
 
@@ -143,7 +211,29 @@ def parse_interaction_event(payload: dict, data: dict) -> QqMessageEvent | None:
         member_openid=member_openid,
         raw=payload,
         interaction_id=interaction_id,
+        sender_name=extract_sender_name(data),
     )
+
+
+def extract_sender_name(data: dict) -> str:
+    """尽力读取 QQ 事件携带的发送者名称；OpenID 不能冒充名称。"""
+
+    author = data.get("author") if isinstance(data.get("author"), dict) else {}
+    member = data.get("member") if isinstance(data.get("member"), dict) else {}
+    member_user = member.get("user") if isinstance(member.get("user"), dict) else {}
+    for value in (
+        author.get("username"),
+        author.get("nickname"),
+        author.get("nick"),
+        member.get("nick"),
+        member.get("nickname"),
+        member_user.get("username"),
+        data.get("sender_name"),
+    ):
+        name = " ".join(str(value or "").split())
+        if name:
+            return name
+    return ""
 
 
 def normalize_content(

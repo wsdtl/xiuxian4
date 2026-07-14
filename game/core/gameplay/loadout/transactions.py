@@ -172,8 +172,11 @@ class LoadoutEngine:
                         loadout,
                         inventory_state,
                         transaction,
+                        presets,
+                        active_preset_id,
                     )
-                    active_preset_id = None
+                    if active_preset_id is not None:
+                        presets[active_preset_id] = LoadoutPreset(active_preset_id, slots)
                 elif isinstance(operation, UnequipSlot):
                     self._unequip(
                         operation,
@@ -184,8 +187,21 @@ class LoadoutEngine:
                         inventory_state,
                         transaction,
                     )
-                    active_preset_id = None
+                    if active_preset_id is not None:
+                        presets[active_preset_id] = LoadoutPreset(active_preset_id, slots)
                 elif isinstance(operation, SaveLoadoutPreset):
+                    # 保存到另一套等同于转移这些实例的配装归属，原套对应槽位自动清空。
+                    transferring = set(slots.values())
+                    for preset_id, preset in tuple(presets.items()):
+                        if preset_id == operation.preset_id:
+                            continue
+                        remaining = {
+                            slot_id: asset_id
+                            for slot_id, asset_id in preset.slots.items()
+                            if asset_id not in transferring
+                        }
+                        if len(remaining) != len(preset.slots):
+                            presets[preset_id] = LoadoutPreset(preset_id, remaining)
                     presets[operation.preset_id] = LoadoutPreset(operation.preset_id, slots)
                     active_preset_id = operation.preset_id
                     event_specs.append(
@@ -343,11 +359,20 @@ class LoadoutEngine:
         loadout: LoadoutState,
         inventory_state: InventoryState,
         transaction: LoadoutTransaction,
+        presets: Mapping[StableId, LoadoutPreset],
+        active_preset_id: StableId | None,
     ) -> None:
         slot = self.slots.require(operation.slot_id)
         instance = self._require_instance(operation.asset_id, inventory_state)
         if inventory_state.owner_of(instance.id) != loadout.character_id:
             self._fail("loadout.owner_mismatch", "角色不是待装备物品的当前所有者")
+        for preset_id, preset in presets.items():
+            if preset_id != active_preset_id and instance.id in preset.slots.values():
+                self._fail(
+                    "loadout.asset_bound_to_other_preset",
+                    "物品已经属于另一套配装",
+                    {"asset_id": instance.id, "preset_id": preset_id},
+                )
         component = self._component(instance)
         definition = self.items.require(instance.definition_id)
         if slot.id not in component.allowed_slot_ids or not definition.tags.allows(

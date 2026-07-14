@@ -30,6 +30,7 @@ CORE_ATTRIBUTE_IDS = frozenset(
     }
 )
 PERSISTENT_RESOURCE_IDS = frozenset({HEALTH_CURRENT, SPIRIT_CURRENT})
+MAX_CHARACTER_NAME_LENGTH = 24
 
 
 class CharacterStatus(str, Enum):
@@ -68,6 +69,7 @@ class CharacterState:
 
     id: str
     account_id: str
+    name: str
     template_id: StableId
     created_at: datetime
     core_attributes: Mapping[StableId, float]
@@ -82,6 +84,7 @@ class CharacterState:
             raise ValueError("CharacterState 缺少 id")
         if not self.account_id.strip():
             raise ValueError("CharacterState 缺少 account_id")
+        object.__setattr__(self, "name", normalize_character_name(self.name))
         object.__setattr__(self, "template_id", stable_id(self.template_id, field="template id"))
         if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
             raise ValueError("CharacterState.created_at 必须包含时区")
@@ -125,6 +128,31 @@ class CharacterState:
         object.__setattr__(self, "status", CharacterStatus(self.status))
 
 
+@dataclass(frozen=True)
+class CharacterRosterState:
+    """一个账号拥有的角色 ID 目录；数量上限由具体游戏决定。"""
+
+    account_id: str
+    character_ids: tuple[str, ...] = ()
+    revision: int = 0
+
+    def __post_init__(self) -> None:
+        account_id = str(self.account_id or "").strip()
+        if not account_id:
+            raise ValueError("CharacterRosterState 缺少 account_id")
+        character_ids = tuple(
+            character_id
+            for value in self.character_ids
+            if (character_id := str(value or "").strip())
+        )
+        if len(character_ids) != len(set(character_ids)):
+            raise ValueError("账号角色目录存在重复角色 ID")
+        if self.revision < 0:
+            raise ValueError("CharacterRosterState.revision 不能小于 0")
+        object.__setattr__(self, "account_id", account_id)
+        object.__setattr__(self, "character_ids", character_ids)
+
+
 def _validate_core_attributes(values: Mapping[StableId, float]) -> None:
     if values[HEALTH_MAXIMUM] < 1:
         raise ValueError("最大血气必须大于等于 1")
@@ -134,17 +162,31 @@ def _validate_core_attributes(values: Mapping[StableId, float]) -> None:
     # 防御刻意不设置下限，负防由战斗规则折算为增伤。
 
 
+def normalize_character_name(value: object) -> str:
+    """清理玩家角色名；具体名称来源由产品策略决定。"""
+
+    name = " ".join(str(value or "").split())
+    if not name:
+        raise ValueError("角色名不能为空")
+    if len(name) > MAX_CHARACTER_NAME_LENGTH:
+        raise ValueError(f"角色名不能超过 {MAX_CHARACTER_NAME_LENGTH} 个字符")
+    return name
+
+
 __all__ = [
     "COMBAT_ATTACK",
     "COMBAT_DEFENSE",
     "COMBAT_SPEED",
     "CORE_ATTRIBUTE_IDS",
     "CharacterState",
+    "CharacterRosterState",
     "CharacterStatus",
     "HEALTH_CURRENT",
     "HEALTH_MAXIMUM",
+    "MAX_CHARACTER_NAME_LENGTH",
     "PERSISTENT_RESOURCE_IDS",
     "ProgressionState",
     "SPIRIT_CURRENT",
     "SPIRIT_MAXIMUM",
+    "normalize_character_name",
 ]

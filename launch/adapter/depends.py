@@ -67,6 +67,7 @@ def _expanded_context(values: Mapping[str, Any]) -> dict[str, Any]:
         context.setdefault("message_context", message_context)
         context.setdefault("reply_target", message_context.reply_target)
         context.setdefault("adapter_capabilities", message_context.capabilities)
+        context.setdefault("message_identity", message_context.identity)
     else:
         reply_target = context.get("reply_target") or current_reply_target()
         if reply_target is not None:

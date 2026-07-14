@@ -211,6 +211,15 @@ class LoadoutState:
             if preset_id != preset.id:
                 raise ValueError("配装映射键与预设 id 不一致")
             presets[preset_id] = preset
+        asset_owners: dict[str, StableId] = {}
+        for preset_id, preset in presets.items():
+            for asset_id in preset.slots.values():
+                previous = asset_owners.get(asset_id)
+                if previous is not None:
+                    raise ValueError(
+                        f"同一个物品资产不能同时属于多套配装：{asset_id} ({previous}, {preset_id})"
+                    )
+                asset_owners[asset_id] = preset_id
         active = self.active_preset_id
         if active is not None:
             active = stable_id(active, field="loadout preset id")

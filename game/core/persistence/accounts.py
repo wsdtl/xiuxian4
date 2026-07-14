@@ -49,7 +49,16 @@ class PersistedAccountService:
 
     def resolve_identity(self, evidence: IdentityEvidence) -> AccountResolution:
         protected = self._protect_evidence(evidence)
-        fingerprint = self._fingerprint("account-evidence.v1", protected)
+        # 同一平台事件可能在不同进程时间被重投；处理时间不属于身份集合。
+        fingerprint = self._fingerprint(
+            "account-evidence.v2",
+            (
+                protected.id,
+                protected.primary,
+                protected.aliases,
+                protected.source_kind,
+            ),
+        )
         transaction_id = f"account:evidence:{protected.id}"
         with self.database.unit_of_work() as uow:
             previous = uow.connection.execute(

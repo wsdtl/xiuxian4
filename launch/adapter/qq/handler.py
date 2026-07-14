@@ -32,7 +32,7 @@ from ..context import (
 from ..depends import call_with_dependencies
 from .client import client
 from .diagnostics import safe_payload_summary
-from .event import QqMessageEvent, parse_message_event
+from .event import QqMessageEvent, parse_message_event, qq_message_identity
 from .manager import current_event, manager
 from .signature import make_validation_signature
 
@@ -737,6 +737,7 @@ class QqEventHandler(BaseAdapter):
                     "cmd": item.command,
                     "raw_message": event.content,
                     "message_context": message_context,
+                    "sender_name": message_context.sender_name,
                     "reply_target": message_context.reply_target,
                     "adapter_capabilities": message_context.capabilities,
                     "match": item.match,
@@ -765,7 +766,12 @@ class QqEventHandler(BaseAdapter):
             conversation_type=conversation_type,
             reply_target=reply_target,
             capabilities=QqEventHandler.CAPABILITIES,
+            identity=qq_message_identity(
+                event,
+                bot_app_id=config.get("QQ_BOT_APP_ID", ""),
+            ),
             driver_context=event,
+            sender_name=event.sender_name,
         )
 
     @staticmethod

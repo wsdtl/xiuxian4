@@ -31,6 +31,18 @@ APPROVED_CROSS_DOMAIN_STATE_FIELDS = {
     ("game/core/gameplay/rewards/planning.py", "RewardPlan", "generated_weapons", "WeaponState"),
     ("game/core/gameplay/rewards/planning.py", "RewardPlanBuilder", "generated_weapons", "WeaponState"),
     ("game/core/gameplay/weapon/models.py", "WeaponState", "roll", "ItemRollState"),
+    (
+        "game/core/persistence/characters.py",
+        "PersistedCharacterRegistration",
+        "character",
+        "CharacterState",
+    ),
+    (
+        "game/core/persistence/characters.py",
+        "PersistedCharacterRegistration",
+        "roster",
+        "CharacterRosterState",
+    ),
 }
 
 
@@ -132,12 +144,14 @@ def main() -> None:
 
 
 def _assert_database_write_boundary() -> None:
-    """SQLite 和快照实现只能由持久化层、启动装配和测试持有。"""
+    """SQLite 和快照实现只能由持久化层、游戏组合根和测试持有。"""
 
     failures: list[str] = []
     for path in (ROOT / "game").rglob("*.py"):
         relative = path.relative_to(ROOT)
-        if _is_below(relative, Path("game/core/persistence")):
+        if _is_below(relative, Path("game/core/persistence")) or relative == Path(
+            "game/app.py"
+        ):
             continue
         tree = _parse(path)
         for imported in _imports(tree, path):

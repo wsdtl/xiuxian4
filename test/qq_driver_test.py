@@ -43,6 +43,7 @@ def _group_payload(content: str = "状态") -> dict:
             "author": {
                 "user_openid": "global-user-openid",
                 "member_openid": "member-openid",
+                "username": "群聊昵称",
             },
             "mentions": [
                 {"id": "bot-token", "user_openid": "bot-openid", "is_you": True}
@@ -58,7 +59,7 @@ def _private_payload(content: str = "状态") -> dict:
         "d": {
             "id": "message-private",
             "content": content,
-            "author": {"user_openid": "private-openid"},
+            "author": {"user_openid": "private-openid", "username": "私聊昵称"},
         },
     }
 
@@ -115,11 +116,18 @@ def _assert_single_callback() -> None:
 
     group_event = parse_message_event(_group_payload())
     private_event = parse_message_event(_private_payload())
+    private_without_name_payload = _private_payload()
+    private_without_name_payload["d"]["author"].pop("username")
+    private_without_name = parse_message_event(private_without_name_payload)
     assert group_event is not None and group_event.is_group
     assert private_event is not None and not private_event.is_group
+    assert private_without_name is not None
     assert group_event.actor_openid == "member-openid"
     assert group_event.user_openid == "global-user-openid"
     assert private_event.actor_openid == "private-openid"
+    assert group_event.sender_name == "群聊昵称"
+    assert private_event.sender_name == "私聊昵称"
+    assert private_without_name.sender_name == ""
     assert not hasattr(group_event, "bot_key")
     assert QqEventHandler._actor_identity_source(group_event) == "member"
     assert QqEventHandler._actor_identity_source(private_event) == "user"
@@ -136,6 +144,8 @@ async def _assert_context_and_deduplication() -> None:
 
     async def command(
         client_id: str,
+        sender_name: str,
+        message_context,
         qq_event=Depends(current_qq_event),
         actor_openid=Depends(current_qq_actor_openid),
         group_openid=Depends(current_qq_group_openid),
@@ -144,6 +154,8 @@ async def _assert_context_and_deduplication() -> None:
         captured.append(
             {
                 "client_id": client_id,
+                "sender_name": sender_name,
+                "identity": message_context.identity,
                 "event": qq_event,
                 "actor_openid": actor_openid,
                 "group_openid": group_openid,
@@ -157,6 +169,14 @@ async def _assert_context_and_deduplication() -> None:
         event,
     )
     assert captured[0]["client_id"] == "member-openid"
+    assert captured[0]["sender_name"] == "群聊昵称"
+    identity = captured[0]["identity"]
+    assert identity.primary.subject_kind == "identity.qq_group_member"
+    assert identity.primary.external_id == "member-openid"
+    assert {claim.subject_kind for claim in identity.aliases} == {
+        "identity.qq_user",
+        "identity.qq_actor",
+    }
     assert captured[0]["event"] is event
     assert captured[0]["actor_openid"] == "member-openid"
     assert captured[0]["group_openid"] == "group-openid"

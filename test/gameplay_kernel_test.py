@@ -119,6 +119,7 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     cultivation_v1 = SkinPack(
         id="skin.cultivation",
         version=1,
+        name="基础修仙界",
         entries={
             "item.main_hand.fast_001": SkinEntry("青锋剑", "剑走轻灵", aliases=("青锋",)),
             "item.consumable.recover_001": SkinEntry("生骨丹", "恢复血气"),
@@ -127,6 +128,7 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     cultivation_v2 = SkinPack(
         id="skin.cultivation",
         version=2,
+        name="基础修仙界",
         entries={
             "item.main_hand.fast_001": SkinEntry("流云剑", "剑势轻灵", aliases=("流云",)),
             "item.consumable.recover_001": SkinEntry("生骨丹", "恢复血气"),
@@ -135,6 +137,7 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     magic = SkinPack(
         id="skin.magic",
         version=1,
+        name="魔法世界",
         entries={
             "item.main_hand.fast_001": SkinEntry("秘银短杖", "快速引导法术"),
             "item.consumable.recover_001": SkinEntry("生命药剂", "恢复生命"),
@@ -143,6 +146,7 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     martial = SkinPack(
         id="skin.martial",
         version=1,
+        name="武侠世界",
         entries={
             "item.main_hand.fast_001": SkinEntry("雁翎刀", "出手迅疾"),
             "item.consumable.recover_001": SkinEntry("金疮药", "恢复气血"),
@@ -151,6 +155,7 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     science_fiction = SkinPack(
         id="skin.science_fiction",
         version=1,
+        name="科幻世界",
         entries={
             "item.main_hand.fast_001": SkinEntry("粒子刃", "高频近战武装"),
             "item.consumable.recover_001": SkinEntry("修复针剂", "修复生命损伤"),
@@ -170,12 +175,27 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     )
     assert catalog.versions("skin.cultivation") == (1, 2)
     assert len(catalog) == 5
+    assert catalog.require("skin.cultivation").name == "基础修仙界"
     cultivation_view = catalog.projector("skin.cultivation", version=1)
     latest_cultivation_view = catalog.projector("skin.cultivation")
     magic_view = catalog.projector("skin.magic")
     assert cultivation_view.name("item.main_hand.fast_001") == "青锋剑"
     assert latest_cultivation_view.name("item.main_hand.fast_001") == "流云剑"
     assert magic_view.name("item.main_hand.fast_001") == "秘银短杖"
+    try:
+        catalog = SkinCatalog(content_ids)
+        catalog.register(cultivation_v1)
+        catalog.register(
+            SkinPack(
+                id="skin.duplicate_name",
+                version=1,
+                name="基础修仙界",
+                entries=cultivation_v1.entries,
+            )
+        )
+        raise AssertionError("不同世界皮肤不能使用相同名称")
+    except ValueError as exc:
+        assert "名称冲突" in str(exc)
     assert cultivation_view.resolve_alias("青锋") == "item.main_hand.fast_001"
 
 

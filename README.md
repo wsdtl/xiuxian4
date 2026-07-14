@@ -1,6 +1,7 @@
 # xiuxian4
 
-`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v5`，尚未写入新游戏的具体内容和玩家命令。
+`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v6`，
+已经建立正式名录、双世界皮肤和第一个玩家命令。
 
 ## 当前地基
 
@@ -14,11 +15,11 @@
 - 协议与存储无关的 Gameplay 标签、属性、Effect、Ability、条件和 Trigger 规则内核
 - 显式规则版本、Ruleset、逻辑时间、确定性随机源和标准失败码
 - 任意数量、多历史版本的世界皮肤投影目录
-- 已封板的战斗底座 `combat.foundation.v1`
+- 已封板的战斗底座 `combat.foundation.v2`
 - 已封板的物品与物资底座 `inventory.foundation.v1`
-- 已封板的角色与成长底座 `character.foundation.v1`
-- 已封板的原子装配底座 `loadout.foundation.v1`
-- 已封板的武器底座 `weapon.foundation.v1`
+- 已封板的角色与成长底座 `character.foundation.v3`
+- 已封板的原子装配底座 `loadout.foundation.v2`
+- 已封板的武器底座 `weapon.foundation.v2`
 - 已封板的装备底座 `equipment.foundation.v1`
 - 已封板的价值评估底座 `valuation.foundation.v1`
 - 已封板的随机物品化底座 `itemization.foundation.v1`
@@ -27,8 +28,8 @@
 - 已封板的经济账本底座 `economy.foundation.v1`
 - 已封板的统一奖励结算底座 `reward.foundation.v1`
 - 已封板的权益凭证与兑付底座 `grant.foundation.v1`
-- 已封板的持久化联合事务底座 `persistence.foundation.v4`
-- 已封板的内容包统一组装底座 `content.foundation.v1`
+- 已封板的持久化联合事务底座 `persistence.foundation.v6`
+- 已封板的内容包统一组装底座 `content.foundation.v2`
 - 已封板的时间与周期底座 `cycle.foundation.v1`
 - 异步行动槽与生命周期底座 `action.foundation.v1`
 - 已封板的铭刻底座 `inscription.foundation.v1`
@@ -128,17 +129,28 @@ https://公网域名:端口/qq/events
 
 ```dotenv
 ROUTER_MODULE_GROUPS=["auto", "组件测试"]
-ROUTER_MODULES=[]
+ROUTER_MODULES=["game.app"]
 ROUTER_FOLDERS=[]
 ROUTER_GROUPS=["game.cmd"]
 ROUTER_CHILD_FOLDERS=[]
 ```
 
-`game/cmd/` 是命令与 HTTP 接口总路由，目前只保留待定的空后台接口；`组件测试/` 继续提供 QQ 现场联调能力。
+`game/cmd/` 是命令与 HTTP 接口总路由。`ROUTER_GROUPS=["game.cmd"]` 会注册总 HTTP 路由，并导入
+各个中文二级组件完成消息命令注册；`组件测试/` 继续提供可删除的 QQ 现场联调能力。
 
-## 未来注册命令
+当前第一个正式命令是：
 
-进入正式玩法阶段后，命令通过公共 `MessageHandler` 注册，使同一回调可以被所有启用的消息驱动器消费：
+```text
+创建角色
+创建角色 名称
+```
+
+未显式提供名称时使用消息携带的平台昵称。`game/cmd/角色/__init__.py` 只处理命令注册，实际业务与
+回复放在同目录的 `service.py`；数据库联合提交和服务装配留在内部底座。
+
+## 注册命令
+
+不依赖平台私有事实的命令可以通过公共 `MessageHandler` 注册，使同一回调被所有启用的消息驱动器消费：
 
 ```python
 from launch.adapter import MessageHandler, manager
@@ -156,7 +168,9 @@ async def show_status(client_id: str) -> None:
     await manager.send(reply, client_id)
 ```
 
-业务回调中注入的 `manager` 也是公共管理器。协议私有字段必须通过对应驱动器的显式 `Depends` 读取，不能藏进组件依赖。
+业务回调中注入的 `manager` 也是公共管理器。普通游戏命令入口只需声明业务参数，例如
+`message`；身份、昵称和回复目标由组件服务读取当前公共上下文。QQ 与本地驱动器只在各自内部完成
+身份规整，组件仍然只注册一次。
 
 ## 消息协议
 
@@ -203,7 +217,10 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 
 - [游戏核心边界](game/core/核心边界说明.md)
 - [核心架构门禁](design/核心架构门禁说明.md)
-- [后台接口占位](game/cmd/后台接口/说明.md)
+- [正式内容层](game/content/正式内容层说明.md)
+- [具体游戏规则](game/rules/具体游戏规则说明.md)
+- [游戏应用装配](game/应用装配说明.md)
+- [角色组件](game/cmd/角色/说明.md)
 - [公共底座封板说明](design/公共底座封板说明.md)
 - [真正核心封板清单](design/真正核心封板清单.md)
 - [游戏设计宪章](design/游戏设计宪章.md)
@@ -251,7 +268,11 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - `game/core/gameplay/` 是规则中立地基，不能导入 `launch`、`message`、数据库或具体玩法。
 - `game/core/account/` 是平台协议中立的账号与归属地基，不能导入 `launch`、QQ 驱动、数据库或 Gameplay。
 - `game/core/persistence/` 可以适配领域快照，但领域包不能反向导入持久化实现。
-- `game/cmd/` 只承接命令注册和 HTTP 接口，不承载规则与持久化实现。
+- `game/content/` 只承载稳定名录、世界皮肤和统一装配，只能依赖 Gameplay 公共契约。
+- `game/rules/` 只保存跨组件复用的英文具体游戏规则，不放中文组件业务文件。
+- `game/app.py` 负责组装内容、规则、持久化服务和启动生命周期。
+- `game/cmd/` 承接命令与对应组件业务；二级组件的 `__init__.py` 只注册，`service.py` 负责调用底座和展示。
+- 只有 `game/cmd/` 的二级组件目录使用中文；Python 文件名和代码标识符统一使用英文。
 - `组件测试/` 只存放可删除的联调与协议测试，禁止依赖游戏代码。
 - `launch/` 只负责应用运行与通信基础设施，不能导入未来修仙业务包。
 - 未来业务组件通过 `MessageHandler` 注册命令，通过公共 `manager` 发送统一消息对象。

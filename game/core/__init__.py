@@ -4,7 +4,7 @@
 所属领域导入，避免再次形成包含数百符号的公共命名空间。
 """
 
-GAME_CORE_VERSION = "game-core.v5"
+GAME_CORE_VERSION = "game-core.v6"
 
 CORE_LAYERS = (
     "game.core.gameplay",

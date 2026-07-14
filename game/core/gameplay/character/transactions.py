@@ -13,6 +13,8 @@ from ..phases import ExecutionPhase
 from .definitions import CharacterCatalog, ProgressionMilestone
 from .models import (
     CORE_ATTRIBUTE_IDS,
+    HEALTH_CURRENT,
+    HEALTH_MAXIMUM,
     PERSISTENT_RESOURCE_IDS,
     CharacterState,
     CharacterStatus,
@@ -181,6 +183,7 @@ class CharacterEngine:
             result = CharacterState(
                 state.id,
                 state.account_id,
+                state.name,
                 state.template_id,
                 state.created_at,
                 draft.core_attributes,
@@ -313,6 +316,29 @@ class CharacterEngine:
         for attribute_id, delta in milestone.core_attribute_deltas.items():
             draft.core_attributes[attribute_id] += delta
         self._validate_core_values(draft.core_attributes)
+        health_growth = float(milestone.core_attribute_deltas.get(HEALTH_MAXIMUM, 0.0))
+        if health_growth > 0:
+            before = draft.resources[HEALTH_CURRENT]
+            draft.resources[HEALTH_CURRENT] = before + health_growth
+            self._event(
+                draft,
+                original,
+                transaction,
+                context,
+                "character.resource.changed",
+                HEALTH_CURRENT,
+                operation.source_id,
+                {
+                    "delta": health_growth,
+                    "before": before,
+                    "current": draft.resources[HEALTH_CURRENT],
+                    "progression_id": progression_id,
+                    "milestone_level": milestone.level,
+                    "source_kind": operation.source_kind,
+                    "source_id": operation.source_id,
+                    "reason": "maximum_health_growth",
+                },
+            )
         for feature_id in sorted(milestone.feature_ids):
             if feature_id in draft.features:
                 continue

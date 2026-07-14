@@ -365,6 +365,7 @@ def _assert_character_ownership_uses_account_id() -> None:
     character = catalog.create_character(
         character_id="character-a",
         account_id="account-1",
+        name="归属测试角色",
         template_id="character_template.standard",
         created_at=TIME,
     )

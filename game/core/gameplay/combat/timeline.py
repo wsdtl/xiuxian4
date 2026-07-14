@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from enum import Enum
+from math import floor, isfinite
 from types import MappingProxyType
 from typing import Mapping
 
@@ -57,6 +58,9 @@ class BattleRules:
     maximum_rounds: int = 100
     maximum_turns: int = 1000
     maximum_extra_turns_per_action: int = 8
+    baseline_speed: float = 100.0
+    minimum_effective_speed: float = 25.0
+    maximum_action_efficiency: float = 2.0
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -76,6 +80,28 @@ class BattleRules:
             raise ValueError("BattleRules.maximum_turns 必须大于 0")
         if self.maximum_extra_turns_per_action < 0:
             raise ValueError("maximum_extra_turns_per_action 不能小于 0")
+        if not isfinite(self.baseline_speed) or self.baseline_speed <= 0:
+            raise ValueError("baseline_speed 必须大于 0")
+        if not isfinite(self.minimum_effective_speed) or self.minimum_effective_speed <= 0:
+            raise ValueError("minimum_effective_speed 必须大于 0")
+        if self.minimum_effective_speed > self.baseline_speed:
+            raise ValueError("minimum_effective_speed 不能大于 baseline_speed")
+        if not isfinite(self.maximum_action_efficiency) or self.maximum_action_efficiency <= 1:
+            raise ValueError("maximum_action_efficiency 必须大于 1")
+
+    def action_efficiency(self, speed: float) -> float:
+        """把面板速度映射为每个标准时间轮获得的行动进度。"""
+
+        if not self.speed_attribute:
+            return 1.0
+        value = float(speed)
+        if not isfinite(value):
+            raise ValueError("面板速度必须是有限值")
+        effective_speed = max(self.minimum_effective_speed, value)
+        limit = self.maximum_action_efficiency
+        return limit * effective_speed / (
+            effective_speed + (limit - 1.0) * self.baseline_speed
+        )
 
 
 @dataclass(frozen=True)
@@ -134,6 +160,7 @@ class BattleState:
     turn_number: int
     turn_order: tuple[str, ...]
     turn_index: int
+    action_progress: Mapping[str, float] = field(default_factory=dict)
     inactive_ids: frozenset[str] = frozenset()
     status: BattleStatus = BattleStatus.ACTIVE
     winning_teams: tuple[StableId, ...] = ()
@@ -144,6 +171,12 @@ class BattleState:
             raise ValueError("BattleState 缺少 battle_id")
         object.__setattr__(self, "participants", MappingProxyType(dict(self.participants)))
         object.__setattr__(self, "entities", MappingProxyType(dict(self.entities)))
+        progress = {str(key): float(value) for key, value in self.action_progress.items()}
+        if set(progress) - set(self.entities):
+            raise ValueError("BattleState.action_progress 包含未知实体")
+        if any(not isfinite(value) or not 0 <= value < 1 for value in progress.values()):
+            raise ValueError("BattleState.action_progress 必须位于 0 到 1 之间")
+        object.__setattr__(self, "action_progress", MappingProxyType(progress))
         unknown_inactive = set(self.inactive_ids) - set(self.entities)
         if unknown_inactive:
             raise ValueError("BattleState.inactive_ids 包含未知实体")
@@ -308,8 +341,10 @@ class BattleEngine:
             )
         participants = dict(state.participants)
         entities = dict(state.entities)
+        action_progress = dict(state.action_progress)
         participants[entity.id] = participant
         entities[entity.id] = entity
+        action_progress[entity.id] = 0.0
         event = RuleEvent.from_context(
             context,
             kind="combat.participant.joined",
@@ -334,6 +369,7 @@ class BattleEngine:
             state,
             participants=participants,
             entities=entities,
+            action_progress=action_progress,
             revision=state.revision + 1,
         )
         return BattleStepResult(joined, events)
@@ -377,6 +413,9 @@ class BattleEngine:
         )
         participants = dict(state.participants)
         entities = dict(processed_entities)
+        inactive_ids = state.inactive_ids | {entity_id}
+        action_progress = dict(state.action_progress)
+        action_progress.pop(entity_id, None)
         order = list(state.turn_order)
         removed_indices = [index for index, value in enumerate(order) if value == entity_id]
         order = [value for value in order if value != entity_id]
@@ -384,29 +423,32 @@ class BattleEngine:
         round_number = state.round_number
         if removed_indices:
             turn_index -= sum(index < state.turn_index for index in removed_indices)
-            if state.current_actor_id == entity_id:
-                if turn_index >= len(order):
-                    order = list(
-                        self._turn_order(
-                            participants,
-                            entities,
-                            state.inactive_ids | {entity_id},
-                        )
-                    )
-                    turn_index = 0
-                    round_number += 1
-
-        inactive_ids = state.inactive_ids | {entity_id}
+        if turn_index >= len(order):
+            order = []
+            turn_index = 0
         alive_teams = self._alive_teams(participants, entities, inactive_ids)
         status = BattleStatus.ACTIVE
         winners: tuple[StableId, ...] = ()
         extra_events: list[RuleEvent] = []
+        finish_reason = reason
         if len(alive_teams) <= 1:
             status = BattleStatus.FINISHED if alive_teams else BattleStatus.DRAW
             winners = tuple(sorted(alive_teams))
         elif not order:
-            order = list(self._turn_order(participants, entities, inactive_ids))
-            turn_index = 0
+            scheduled_round, scheduled_order, action_progress = self._next_action_window(
+                participants,
+                entities,
+                inactive_ids,
+                action_progress,
+                round_number,
+            )
+            if scheduled_round is None:
+                status = BattleStatus.DRAW
+                finish_reason = "maximum_rounds"
+            else:
+                round_number = scheduled_round
+                order = list(scheduled_order)
+                turn_index = 0
         withdrawn = replace(
             state,
             participants=participants,
@@ -415,12 +457,13 @@ class BattleEngine:
             turn_order=tuple(order),
             turn_index=turn_index,
             round_number=round_number,
+            action_progress=action_progress,
             status=status,
             winning_teams=winners,
             revision=state.revision + 1,
         )
         if status is not BattleStatus.ACTIVE:
-            extra_events.append(self._finished_event(withdrawn, context, reason))
+            extra_events.append(self._finished_event(withdrawn, context, finish_reason))
         return BattleStepResult(withdrawn, (*events, *extra_events))
 
     def _start(
@@ -463,6 +506,7 @@ class BattleEngine:
         states, events = self._process_external_events((event,), entities, context)
         alive_after_start = self._alive_teams(participant_map, states)
         order = self._turn_order(participant_map, states)
+        action_progress = {entity_id: 0.0 for entity_id in states}
         if len(alive_after_start) <= 1:
             status = BattleStatus.FINISHED if alive_after_start else BattleStatus.DRAW
             state = BattleState(
@@ -473,6 +517,7 @@ class BattleEngine:
                 turn_number=0,
                 turn_order=order,
                 turn_index=0,
+                action_progress=action_progress,
                 status=status,
                 winning_teams=tuple(sorted(alive_after_start)),
             )
@@ -505,6 +550,7 @@ class BattleEngine:
             turn_number=0,
             turn_order=order,
             turn_index=0,
+            action_progress=action_progress,
             status=status,
             winning_teams=winners,
         )
@@ -679,12 +725,18 @@ class BattleEngine:
                 next_state = replace(next_state, entities=transitioned_entities)
                 events.extend(generated)
             else:
-                order = self._turn_order(
-                    next_state.participants,
-                    next_state.entities,
-                    next_state.inactive_ids,
+                remaining_order = tuple(
+                    entity_id
+                    for entity_id in next_state.turn_order
+                    if entity_id not in next_state.inactive_ids
+                    and self._alive(next_state.entities[entity_id])
                 )
-                next_state = replace(next_state, turn_order=order, turn_index=0)
+                if remaining_order:
+                    next_state = replace(
+                        next_state,
+                        turn_order=remaining_order,
+                        turn_index=0,
+                    )
         return BattleStepResult(next_state, tuple(events))
 
     def _apply_timeline_directives(
@@ -804,19 +856,25 @@ class BattleEngine:
                     (),
                 )
 
-        if state.round_number >= self.rules.maximum_rounds:
+        next_round, order, action_progress = self._next_action_window(
+            state.participants,
+            entities,
+            state.inactive_ids,
+            state.action_progress,
+            state.round_number,
+        )
+        if next_round is None:
             draw = replace(
                 state,
                 entities=entities,
                 turn_number=next_turn_number,
+                action_progress=action_progress,
                 status=BattleStatus.DRAW,
                 winning_teams=(),
                 revision=state.revision + 1,
             )
             return draw, (self._finished_event(draw, context, "maximum_rounds"),)
 
-        next_round = state.round_number + 1
-        order = self._turn_order(state.participants, entities, state.inactive_ids)
         advanced = replace(
             state,
             entities=entities,
@@ -824,6 +882,7 @@ class BattleEngine:
             turn_number=next_turn_number,
             turn_order=order,
             turn_index=0,
+            action_progress=action_progress,
             revision=state.revision + 1,
         )
         event = RuleEvent.from_context(
@@ -870,13 +929,6 @@ class BattleEngine:
         entities: Mapping[str, RuleEntity],
         inactive_ids: frozenset[str] = frozenset(),
     ) -> tuple[str, ...]:
-        def speed(entity_id: str) -> float:
-            if not self.rules.speed_attribute:
-                return 0.0
-            return entities[entity_id].snapshot(self.effects.attributes).value(
-                self.rules.speed_attribute
-            )
-
         return tuple(
             sorted(
                 (
@@ -885,13 +937,79 @@ class BattleEngine:
                     if entity_id not in inactive_ids and self._alive(entities[entity_id])
                 ),
                 key=lambda entity_id: (
-                    -speed(entity_id),
+                    -self._speed(entities[entity_id]),
                     participants[entity_id].team_id,
                     participants[entity_id].slot,
                     entity_id,
                 ),
             )
         )
+
+    def _next_action_window(
+        self,
+        participants: Mapping[str, BattleParticipant],
+        entities: Mapping[str, RuleEntity],
+        inactive_ids: frozenset[str],
+        action_progress: Mapping[str, float],
+        current_round: int,
+    ) -> tuple[int | None, tuple[str, ...], Mapping[str, float]]:
+        """推进标准时间轮，直到至少有一个实体积满一次普通行动。"""
+
+        progress: Mapping[str, float] = action_progress
+        round_number = current_round + 1
+        while round_number <= self.rules.maximum_rounds:
+            order, progress = self._action_window(
+                participants,
+                entities,
+                inactive_ids,
+                progress,
+            )
+            if order:
+                return round_number, order, progress
+            round_number += 1
+        return None, (), progress
+
+    def _action_window(
+        self,
+        participants: Mapping[str, BattleParticipant],
+        entities: Mapping[str, RuleEntity],
+        inactive_ids: frozenset[str],
+        action_progress: Mapping[str, float],
+    ) -> tuple[tuple[str, ...], Mapping[str, float]]:
+        progress = dict(action_progress)
+        occurrences: list[tuple[float, float, StableId, int, str, int]] = []
+        for entity_id, entity in entities.items():
+            if entity_id in inactive_ids or not self._alive(entity):
+                continue
+            speed = self._speed(entity)
+            efficiency = self.rules.action_efficiency(speed)
+            before = progress.get(entity_id, 0.0)
+            total = before + efficiency
+            action_count = floor(total + 1e-9)
+            remainder = total - action_count
+            if remainder < 0 and remainder > -1e-8:
+                remainder = 0.0
+            progress[entity_id] = min(max(remainder, 0.0), 1.0 - 1e-12)
+            participant = participants[entity_id]
+            for ordinal in range(action_count):
+                ready_at = (ordinal + 1.0 - before) / efficiency
+                occurrences.append(
+                    (
+                        ready_at,
+                        -speed,
+                        participant.team_id,
+                        participant.slot,
+                        entity_id,
+                        ordinal,
+                    )
+                )
+        occurrences.sort()
+        return tuple(value[4] for value in occurrences), MappingProxyType(progress)
+
+    def _speed(self, entity: RuleEntity) -> float:
+        if not self.rules.speed_attribute:
+            return self.rules.baseline_speed
+        return entity.snapshot(self.effects.attributes).value(self.rules.speed_attribute)
 
     def _alive_teams(
         self,

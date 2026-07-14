@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, List, Optional, Pattern, Set, Tuple, Union
 
+from launch.config import config
 from launch.log import C, logger
 from launch.message_events import emit_message_event, event_from_incoming
 
@@ -20,7 +21,7 @@ from ..context import (
     set_current_message_context,
 )
 from ..depends import call_with_dependencies
-from .event import LocalCommandEvent, local_command_event
+from .event import LocalCommandEvent, local_command_event, local_message_identity
 from .manager import LocalDispatchResult, current_event, manager
 
 
@@ -87,6 +88,7 @@ class LocalEventHandler(BaseMessageHandler):
         *,
         client_id: str = "",
         raw_message: str = "",
+        sender_name: str = "",
         conversation_type: str = CONVERSATION_PRIVATE,
         event_id: str = "",
         bypass_guards: bool = False,
@@ -97,6 +99,7 @@ class LocalEventHandler(BaseMessageHandler):
             event = local_command_event(
                 client_id=client_id,
                 raw_message=raw_message,
+                sender_name=sender_name,
                 conversation_type=conversation_type,
                 event_id=event_id,
                 bypass_guards=bypass_guards,
@@ -235,6 +238,7 @@ class LocalEventHandler(BaseMessageHandler):
                     "cmd": item.command,
                     "raw_message": event.raw_message,
                     "message_context": message_context,
+                    "sender_name": message_context.sender_name,
                     "reply_target": message_context.reply_target,
                     "adapter_capabilities": message_context.capabilities,
                     "match": item.match,
@@ -262,7 +266,9 @@ class LocalEventHandler(BaseMessageHandler):
             conversation_type=event.conversation_type,
             reply_target=reply_target,
             capabilities=LocalEventHandler.CAPABILITIES,
+            identity=local_message_identity(event, tenant_id=config.project.name),
             driver_context=event,
+            sender_name=event.sender_name,
         )
 
     @staticmethod

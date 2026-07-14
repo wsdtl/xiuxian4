@@ -338,8 +338,8 @@ def _skin_package(display_ids: frozenset[str]) -> ContentPackage:
     return ContentPackage(
         _manifest("content.world_skins", "content.core", "content.adventure"),
         skin_packs=(
-            SkinPack("skin.cultivation", 1, entries),
-            SkinPack("skin.magic", 1, entries),
+            SkinPack("skin.cultivation", 1, "基础修仙界", entries=entries),
+            SkinPack("skin.magic", 1, "魔法世界", entries=entries),
         ),
     )
 
@@ -395,7 +395,7 @@ def _assert_dependency_resolution(packages) -> None:
 
 def _assert_complete_runtime(packages):
     runtime = ContentAssembler().assemble(tuple(reversed(packages)))
-    assert CONTENT_FOUNDATION_VERSION == "content.foundation.v1"
+    assert CONTENT_FOUNDATION_VERSION == "content.foundation.v2"
     assert runtime.report.active_combat_profile_id == "combat_profile.standard"
     assert runtime.report.packages[-1].id == "content.world_skins"
     assert len(runtime.report.content_fingerprint) == 64
@@ -438,6 +438,8 @@ def _assert_complete_runtime(packages):
     assert codec.loads(codec.dumps(weapon_state), type(weapon_state)) == weapon_state
     assert codec.loads(codec.dumps(equipment_state), type(equipment_state)) == equipment_state
     assert runtime.skins.skin_ids() == ("skin.cultivation", "skin.magic")
+    assert runtime.skins.require("skin.cultivation").name == "基础修仙界"
+    assert runtime.skins.require("skin.magic").name == "魔法世界"
     assert runtime.skins.projector("skin.cultivation").name("ability.adventure_strike")
     cycle = runtime.cycle_engine.current_window(
         "cycle.daily_reset",
