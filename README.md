@@ -1,6 +1,6 @@
 # xiuxian4
 
-`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v3`，尚未写入新游戏的具体内容和玩家命令。
+`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v4`，尚未写入新游戏的具体内容和玩家命令。
 
 ## 当前地基
 
@@ -22,6 +22,7 @@
 - 已封板的装备底座 `equipment.foundation.v1`
 - 已封板的价值评估底座 `valuation.foundation.v1`
 - 已封板的随机物品化底座 `itemization.foundation.v1`
+- 已封板的临时队伍底座 `party.foundation.v1`
 - 已封板的账号与归属底座 `account.foundation.v1`
 - 已封板的经济账本底座 `economy.foundation.v1`
 - 已封板的统一奖励结算底座 `reward.foundation.v1`
@@ -48,6 +49,7 @@
 - 开放随机装备、分段套装能力、生成后品质和不可变生成凭据
 - 单件内在价值、整套价值、边际价值和多维价值向量
 - 多套配装保存与背包满载时的原子一键切换
+- 队长、成员、站位、准备状态、社会邀请接力和战斗阵营投影
 - QQ 多身份到稳定内部账号的自动归并、冲突保护和防重放
 - SQLite 结构版本、CAS 聚合快照、数据库事务防重和 Outbox
 - 货币、物品、角色与武器奖励的跨领域数据库联合提交
@@ -213,6 +215,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [装备底座说明](game/core/gameplay/equipment/装备底座说明.md)
 - [价值评估底座说明](game/core/gameplay/valuation/价值评估底座说明.md)
 - [随机物品化底座说明](game/core/gameplay/itemization/随机物品化底座说明.md)
+- [队伍底座说明](game/core/gameplay/party/队伍底座说明.md)
 - [账号与归属底座说明](game/core/account/账号与归属底座说明.md)
 - [经济账本底座说明](game/core/gameplay/economy/经济账本底座说明.md)
 - [统一奖励结算底座说明](game/core/gameplay/rewards/统一奖励结算底座说明.md)

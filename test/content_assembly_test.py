@@ -77,6 +77,7 @@ from game.core.gameplay.loadout import (  # noqa: E402
     LoadoutItemComponent,
     QualityDefinition,
 )
+from game.core.gameplay.party import PartyDefinition  # noqa: E402
 from game.core.gameplay.weapon import WeaponDefinition, WeaponQualityProfile  # noqa: E402
 from game.core.gameplay.valuation import (  # noqa: E402
     AttributeValuationDefinition,
@@ -249,6 +250,7 @@ def _core_package() -> ContentPackage:
         character_templates=(template,),
         items=(weapon_item, equipment_item),
         equipment_styles=(style,),
+        party_types=(PartyDefinition("party_type.standard", 3),),
         attribute_valuations=(attack_value,),
         random_properties=(attack_property,),
         generation_profiles=(weapon_generation, equipment_generation),
@@ -401,6 +403,7 @@ def _assert_complete_runtime(packages):
     assert runtime.items.require("item.material.spirit_ore").stack_limit == 99
     assert runtime.weapons.require("weapon.training_blade")
     assert runtime.equipment.require("equipment.training_head")
+    assert runtime.parties.require("party_type.standard").capacity == 3
     weapon_roll = runtime.itemization_engine.generate(
         ItemGenerationCommand(
             "generate-training-weapon",

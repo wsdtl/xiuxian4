@@ -14,6 +14,7 @@ from typing import Iterable, Mapping
 from ..actions import ActionCatalog, ActionEngine
 from ..activities import ActivityCatalog, ActivityEngine
 from ..loot import LootCatalog, LootEngine
+from ..party import PartyCatalog, PartyEngine
 from ..social import SocialCatalog, SocialEngine
 from ..world import WorldCatalog, WorldEngine
 from ..abilities import AbilityDefinition, AbilityEngine
@@ -155,6 +156,7 @@ class ContentRuntime:
     loot_tables: LootCatalog
     world: WorldCatalog
     social: SocialCatalog
+    parties: PartyCatalog
     damage_engine: DamageEngine
     recovery_engine: RecoveryEngine
     control_engine: ControlEngine
@@ -168,6 +170,7 @@ class ContentRuntime:
     loot_engine: LootEngine
     world_engine: WorldEngine
     social_engine: SocialEngine
+    party_engine: PartyEngine
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", MappingProxyType(dict(self.attributes)))
@@ -209,6 +212,7 @@ class ContentAssembler:
         loot_tables = LootCatalog()
         world = WorldCatalog()
         social = SocialCatalog()
+        parties = PartyCatalog()
         attributes: dict[StableId, AttributeDefinition] = {}
         resources: dict[StableId, ResourceDefinition] = {}
         valuations = ValuationCatalog()
@@ -378,6 +382,14 @@ class ContentAssembler:
                 "relation_type",
                 package.relation_types,
                 social.relations.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "party_type",
+                package.party_types,
+                parties.register,
                 ownership,
                 known_displayable,
             )
@@ -690,6 +702,7 @@ class ContentAssembler:
         loot_engine = LootEngine(loot_tables)
         world_engine = WorldEngine(world)
         social_engine = SocialEngine(social)
+        party_engine = PartyEngine(parties)
         selectors.freeze()
 
         currencies.finalize()
@@ -740,6 +753,7 @@ class ContentAssembler:
             loot_tables,
             world,
             social,
+            parties,
             damage_engine,
             recovery_engine,
             control_engine,
@@ -753,6 +767,7 @@ class ContentAssembler:
             loot_engine,
             world_engine,
             social_engine,
+            party_engine,
         )
 
     @staticmethod

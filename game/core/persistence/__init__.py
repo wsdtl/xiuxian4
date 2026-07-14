@@ -22,6 +22,12 @@ from .inscriptions import PersistedInscriptionService
 from .item_use import PersistedItemUseService
 from .loadouts import PersistedLoadoutExecution, PersistedLoadoutService
 from .loot import PersistedLootExecution, PersistedLootService
+from .parties import (
+    PersistedPartyAdmissionExecution,
+    PersistedPartyAdmissionService,
+    PersistedPartyExecution,
+    PersistedPartyService,
+)
 from .world import PersistedWorldExecution, PersistedWorldService
 from .social import PersistedSocialExecution, PersistedSocialService
 from .projections import (
@@ -56,6 +62,7 @@ from .snapshots import (
     LEDGER_AGGREGATE,
     LOADOUT_AGGREGATE,
     LOOT_AGGREGATE,
+    PARTY_AGGREGATE,
     REWARD_CLAIM_AGGREGATE,
     SOCIAL_AGGREGATE,
     WEAPON_AGGREGATE,
@@ -101,6 +108,7 @@ __all__ = [
     "LEDGER_AGGREGATE",
     "LOADOUT_AGGREGATE",
     "LOOT_AGGREGATE",
+    "PARTY_AGGREGATE",
     "NotificationInboxService",
     "OutboxEventRow",
     "PERSISTENCE_FOUNDATION_VERSION",
@@ -124,6 +132,10 @@ __all__ = [
     "PersistedLoadoutService",
     "PersistedLootExecution",
     "PersistedLootService",
+    "PersistedPartyAdmissionExecution",
+    "PersistedPartyAdmissionService",
+    "PersistedPartyExecution",
+    "PersistedPartyService",
     "PersistedSocialExecution",
     "PersistedSocialService",
     "PersistedWorldExecution",

@@ -50,6 +50,7 @@ from ..inventory import ItemComponentType, ItemDefinition
 from ..itemization import GenerationProfileDefinition, PropertyDefinition
 from ..loadout import QualityDefinition
 from ..loot import LootTableDefinition
+from ..party import PartyDefinition
 from ..social import (
     OrganizationRoleDefinition,
     OrganizationTypeDefinition,
@@ -225,6 +226,7 @@ class ContentPackage:
     organization_types: tuple[OrganizationTypeDefinition, ...] = ()
     social_request_types: tuple[SocialRequestDefinition, ...] = ()
     relation_types: tuple[RelationTypeDefinition, ...] = ()
+    party_types: tuple[PartyDefinition, ...] = ()
     skin_packs: tuple[SkinPack, ...] = ()
     display_content_ids: frozenset[StableId] = frozenset()
     magnitude_registrations: tuple[MagnitudeRegistration, ...] = ()
@@ -277,6 +279,7 @@ class ContentPackage:
             "organization_types",
             "social_request_types",
             "relation_types",
+            "party_types",
             "skin_packs",
             "magnitude_registrations",
             "condition_registrations",

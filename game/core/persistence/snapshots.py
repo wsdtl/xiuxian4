@@ -132,6 +132,24 @@ from ..gameplay.loot import (
     LootTableDefinition,
 )
 from ..gameplay.phases import ExecutionPhase
+from ..gameplay.party import (
+    AddPartyMember,
+    CreateParty,
+    DisbandParty,
+    LeaveParty,
+    Party,
+    PartyAdmissionCommand,
+    PartyAdmissionExecution,
+    PartyCommand,
+    PartyExecution,
+    PartyMember,
+    PartyState,
+    PartyStatus,
+    RemovePartyMember,
+    SetPartyMemberReady,
+    SetPartyMemberSlot,
+    TransferPartyLeadership,
+)
 from ..gameplay.projections import (
     FactRecord,
     NotificationAction,
@@ -212,6 +230,7 @@ WORLD_AGGREGATE = "snapshot.world"
 EXCHANGE_AGGREGATE = "snapshot.exchange"
 ACTIVITY_AGGREGATE = "snapshot.activity"
 SOCIAL_AGGREGATE = "snapshot.social"
+PARTY_AGGREGATE = "snapshot.party"
 
 StateT = TypeVar("StateT")
 
@@ -362,6 +381,22 @@ def gameplay_snapshot_codec(
         ("social.adjust_relation", AdjustSocialRelation),
         ("social.command", SocialCommand),
         ("social.execution", SocialExecution),
+        ("party.status", PartyStatus),
+        ("party.member", PartyMember),
+        ("party.value", Party),
+        ("party.state", PartyState),
+        ("party.create", CreateParty),
+        ("party.add_member", AddPartyMember),
+        ("party.remove_member", RemovePartyMember),
+        ("party.leave", LeaveParty),
+        ("party.transfer_leadership", TransferPartyLeadership),
+        ("party.set_ready", SetPartyMemberReady),
+        ("party.set_slot", SetPartyMemberSlot),
+        ("party.disband", DisbandParty),
+        ("party.command", PartyCommand),
+        ("party.execution", PartyExecution),
+        ("party.admission_command", PartyAdmissionCommand),
+        ("party.admission_execution", PartyAdmissionExecution),
         ("rule.execution_phase", ExecutionPhase),
         ("rule.event", RuleEvent),
         ("projection.fact_record", FactRecord),
@@ -501,6 +536,7 @@ __all__ = [
     "LOOT_AGGREGATE",
     "REWARD_CLAIM_AGGREGATE",
     "SOCIAL_AGGREGATE",
+    "PARTY_AGGREGATE",
     "SnapshotRepository",
     "WEAPON_AGGREGATE",
     "WORLD_AGGREGATE",
