@@ -23,6 +23,10 @@ from .combat import (
     COMBAT_DISPLAY_CONTENT_IDS,
 )
 from .items import ITEM_DISPLAY_CONTENT_IDS, STARTER_ITEMS
+from .character_realms import (
+    CHARACTER_REALM_CONTENT_DEFINITIONS,
+    CHARACTER_REALM_DISPLAY_IDS,
+)
 from .weapons import (
     STARTER_WEAPON,
     STARTER_WEAPON_ITEM,
@@ -44,6 +48,7 @@ CATALOG_PACKAGE = ContentPackage(
         id=CATALOG_PACKAGE_ID,
         version=ContentVersion(1, 0, 0),
     ),
+    display_definitions=CHARACTER_REALM_CONTENT_DEFINITIONS,
     currencies=BASE_CURRENCIES,
     qualities=BASE_QUALITIES,
     attributes=BASE_ATTRIBUTES,
@@ -64,6 +69,7 @@ CATALOG_PACKAGE = ContentPackage(
     display_content_ids=(
         BASE_DISPLAY_CONTENT_IDS
         | CHARACTER_DISPLAY_CONTENT_IDS
+        | CHARACTER_REALM_DISPLAY_IDS
         | COMBAT_DISPLAY_CONTENT_IDS
         | ITEM_DISPLAY_CONTENT_IDS
         | WEAPON_DISPLAY_CONTENT_IDS

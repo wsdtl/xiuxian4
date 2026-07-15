@@ -1,6 +1,6 @@
 # xiuxian4
 
-`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v6`，
+`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v7`，
 已经建立正式名录、双世界皮肤和第一个玩家命令。
 
 ## 当前地基
@@ -17,7 +17,7 @@
 - 任意数量、多历史版本的世界皮肤投影目录
 - 已封板的战斗底座 `combat.foundation.v2`
 - 已封板的物品与物资底座 `inventory.foundation.v1`
-- 已封板的角色与成长底座 `character.foundation.v3`
+- 已封板的角色与成长底座 `character.foundation.v4`
 - 已封板的原子装配底座 `loadout.foundation.v2`
 - 已封板的武器底座 `weapon.foundation.v2`
 - 已封板的装备底座 `equipment.foundation.v1`
@@ -29,7 +29,7 @@
 - 已封板的统一奖励结算底座 `reward.foundation.v1`
 - 已封板的权益凭证与兑付底座 `grant.foundation.v1`
 - 已封板的持久化联合事务底座 `persistence.foundation.v6`
-- 已封板的内容包统一组装底座 `content.foundation.v2`
+- 已封板的内容包统一组装底座 `content.foundation.v3`
 - 已封板的时间与周期底座 `cycle.foundation.v1`
 - 异步行动槽与生命周期底座 `action.foundation.v1`
 - 已封板的铭刻底座 `inscription.foundation.v1`
@@ -60,6 +60,7 @@
 - 武器、装备和武器 Ability 的实例铭刻、原名投影与联合事务防重
 - 永久事实日志、可归零重建的投影检查点、通知收件箱和不可变排名快照
 - 掉落审计与保底、任意世界拓扑、交换冻结、活动参与和通用组织关系
+- 注册式全服活动目录、首尾热点窗口、统一活动通栏和只读活动入口
 - QQ Markdown/按钮键盘与本地测试结果渲染器
 - 回调签名、时间窗、请求体限制、有界队列、事件去重和安全重试
 - 脱敏结构日志与真实 QQ 协议测试组件
@@ -138,11 +139,15 @@ ROUTER_CHILD_FOLDERS=[]
 `game/cmd/` 是命令与 HTTP 接口总路由。`ROUTER_GROUPS=["game.cmd"]` 会注册总 HTTP 路由，并导入
 各个中文二级组件完成消息命令注册；`组件测试/` 继续提供可删除的 QQ 现场联调能力。
 
-当前第一个正式命令是：
+当前正式命令是：
 
 ```text
 创建角色
 创建角色 名称
+我的角色
+心情
+心情 开启
+心情 关闭
 ```
 
 未显式提供名称时使用消息携带的平台昵称。`game/cmd/角色/__init__.py` 只处理命令注册，实际业务与
@@ -150,27 +155,27 @@ ROUTER_CHILD_FOLDERS=[]
 
 ## 注册命令
 
-不依赖平台私有事实的命令可以通过公共 `MessageHandler` 注册，使同一回调被所有启用的消息驱动器消费：
+正式游戏命令通过 `GameCommand` 注册，使同一回调被所有启用的消息驱动器消费。它已经统一了
+`priority=100`、`block=True` 和游戏访问元数据，组件不需要重复声明：
 
 ```python
-from launch.adapter import MessageHandler, manager
-from message import M
+from ..command import GameCommand
+from . import service
 
 
-@MessageHandler.handler(cmd="状态", priority=100, block=True)
-async def show_status(client_id: str) -> None:
-    reply = (
-        M.document()
-        .section("运行状态", icon="status")
-        .row(("阶段", 1), ("状态", "正常"))
-        .build()
-    )
-    await manager.send(reply, client_id)
+@GameCommand.handler(cmd="状态")
+async def show_status(message: str = "") -> None:
+    await service.show_status(message)
 ```
 
-业务回调中注入的 `manager` 也是公共管理器。普通游戏命令入口只需声明业务参数，例如
-`message`；身份、昵称和回复目标由组件服务读取当前公共上下文。QQ 与本地驱动器只在各自内部完成
-身份规整，组件仍然只注册一次。
+创建角色这类未建档用户也能使用的命令显式写 `access="public"`。玩家输入只声明 `message`；重复使用的
+当前身份、当前角色和角色详情通过 `game.cmd.dependencies` 中的公共 `Depends` 按需注入。昵称、回复目标
+和公共 `manager` 由组件服务读取当前消息上下文。QQ 与本地驱动器只在各自内部完成身份规整，组件仍然
+只注册一次。
+
+默认 `access="player"` 会由游戏角色守卫真实校验，未建档时统一返回创建入口。组件业务构造完
+`message.Message` 后使用 `send_game_reply()` 发送，不重复读取 `client_id` 或直接调用驱动器。完整边界见
+[正式游戏命令层](game/cmd/命令层说明.md)。
 
 ## 消息协议
 
@@ -193,6 +198,9 @@ await manager.send(reply, client_id)
 ```
 
 公共适配器管理器会拒绝 QQ 原生字典。平台原生 payload 只允许存在于驱动器内部和协议探针。
+
+上例展示的是公共消息协议能力。正式 `game/cmd` 组件不能自行调用 `inline_section()` 或设置彩色 Header；
+已建档玩家的人物头、全服活动通栏和个人提醒通栏由 `GameReplyComposer` 在 `send_game_reply()` 中统一生成。
 
 ## QQ 联调
 
@@ -221,6 +229,8 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [具体游戏规则](game/rules/具体游戏规则说明.md)
 - [游戏应用装配](game/应用装配说明.md)
 - [角色组件](game/cmd/角色/说明.md)
+- [提醒组件](game/cmd/提醒/说明.md)
+- [活动组件](game/cmd/活动/说明.md)
 - [公共底座封板说明](design/公共底座封板说明.md)
 - [真正核心封板清单](design/真正核心封板清单.md)
 - [游戏设计宪章](design/游戏设计宪章.md)

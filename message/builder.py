@@ -20,7 +20,6 @@ from .schema import (
     RichText,
     SectionBlock,
     Span,
-    Strong,
     Text,
 )
 
@@ -33,10 +32,10 @@ def rich(*parts: TextPart) -> RichText:
 
     result: list[Span] = []
     for part in parts:
-        if isinstance(part, (Text, Emphasis, Strong, Link, CommandLink, FieldSeparator)):
+        if isinstance(part, (Text, Emphasis, Link, CommandLink, FieldSeparator)):
             result.append(part)
         elif isinstance(part, tuple) and all(
-            isinstance(item, (Text, Emphasis, Strong, Link, CommandLink, FieldSeparator))
+            isinstance(item, (Text, Emphasis, Link, CommandLink, FieldSeparator))
             for item in part
         ):
             result.extend(part)
@@ -55,10 +54,10 @@ class DocumentBuilder:
         self._actions: list[Action] = []
         self._section_index: int | None = None
 
-    def header(self, *parts: TextPart) -> "DocumentBuilder":
+    def header(self, *parts: TextPart, color: str = "") -> "DocumentBuilder":
         """添加消息主标题。"""
 
-        self._blocks.append(HeaderBlock(rich(*parts)))
+        self._blocks.append(HeaderBlock(rich(*parts), color))
         self._section_index = None
         return self
 
@@ -183,10 +182,6 @@ class M:
     @staticmethod
     def em(value: TextPart) -> Emphasis:
         return Emphasis(rich(value))
-
-    @staticmethod
-    def strong(value: TextPart) -> Strong:
-        return Strong(rich(value))
 
     @staticmethod
     def link(label: TextPart, url: object) -> Link:

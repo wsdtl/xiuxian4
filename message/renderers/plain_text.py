@@ -14,7 +14,6 @@ from ..schema import (
     NoteBlock,
     RichText,
     SectionBlock,
-    Strong,
     Text,
 )
 
@@ -52,7 +51,7 @@ def _render_rich(value: RichText) -> str:
     for span in value:
         if isinstance(span, Text):
             parts.append(span.value.replace("\r", " ").replace("\n", " "))
-        elif isinstance(span, (Emphasis, Strong)):
+        elif isinstance(span, Emphasis):
             parts.append(_render_rich(span.value))
         elif isinstance(span, Link):
             parts.append(f"{_render_rich(span.label)} ({span.url})")

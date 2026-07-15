@@ -24,6 +24,7 @@ def main() -> None:
     _assert_public_root()
     _assert_layer_public_exports()
     _assert_import_boundaries()
+    _assert_game_reply_boundaries()
     _assert_core_neutrality()
     print("core architecture tests passed")
 
@@ -76,10 +77,32 @@ def _assert_physical_layout() -> None:
     assert (content / "official.py").is_file()
     assert not (content / "runtime.py").exists(), "官方内容装配不得再使用 runtime 名称"
     assert (content / "catalog" / "__init__.py").is_file()
-    assert (content / "skins" / "__init__.py").is_file()
+    assert (content / "catalog" / "character_realms.py").is_file()
+    assert not (content / "catalog" / "realms.py").exists()
+    world_skins = content / "world_skins"
+    assert (world_skins / "__init__.py").is_file()
+    assert (world_skins / "validation.py").is_file()
+    assert not (content / "skins").exists(), "具体世界皮肤必须归入 world_skins"
+    for skin_name in ("cultivation", "magic"):
+        skin = world_skins / skin_name
+        for module_name in (
+            "base.py",
+            "character.py",
+            "combat.py",
+            "items.py",
+            "skin.py",
+            "weapons.py",
+            "world.py",
+        ):
+            assert (skin / module_name).is_file()
+
+    gameplay = core / "gameplay"
+    assert (gameplay / "content" / "skins.py").is_file()
+    assert not (gameplay / "skins.py").exists(), "皮肤契约必须归入核心内容子域"
 
     rules = game / "rules"
     assert (rules / "__init__.py").is_file()
+    assert (rules / "activity" / "__init__.py").is_file()
     assert (rules / "character" / "__init__.py").is_file()
     assert not (game / "product").exists(), "禁止保留含义重复的 product 层"
     assert not (game / "service").exists(), "具体规则不得再使用 service 层名称"
@@ -88,16 +111,22 @@ def _assert_physical_layout() -> None:
     assert not (game / "runtime").exists(), "应用装配不得再使用 runtime 目录"
     assert not (ROOT / "auto" / "game").exists(), "游戏组合根不得放回 auto/"
 
+    for component_name in ("活动", "提醒", "角色"):
+        component = commands / component_name
+        assert (component / "__init__.py").is_file()
+        assert (component / "service.py").is_file()
+        assert (component / "说明.md").is_file()
+
     assert (ROOT / "组件测试" / "QQ协议测试" / "__init__.py").is_file()
     for legacy in ("src", "components", "xiuxian_game"):
         assert not (ROOT / legacy).exists(), f"禁止保留旧目录：{legacy}"
 
 
 def _assert_public_root() -> None:
-    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v6"
+    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v7"
     assert set(game.__all__) == {"PUBLIC_FOUNDATION_VERSION"}
     assert cmd.router is not None
-    assert core.GAME_CORE_VERSION == "game-core.v6"
+    assert core.GAME_CORE_VERSION == "game-core.v7"
     assert core.CORE_LAYERS == (
         "game.core.gameplay",
         "game.core.account",
@@ -266,6 +295,28 @@ def _assert_core_neutrality() -> None:
                     and node.func.attr == "time"
                 ):
                     failures.append(f"{relative} 直接读取机器当前时间")
+    assert not failures, "\n".join(failures)
+
+
+def _assert_game_reply_boundaries() -> None:
+    """全局通知通栏和彩色人物头只能由统一回复装饰器生成。"""
+
+    failures: list[str] = []
+    reply_path = ROOT / "game" / "cmd" / "reply.py"
+    for path in (ROOT / "game" / "cmd").rglob("*.py"):
+        if path == reply_path:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            relative = path.relative_to(ROOT)
+            if node.func.attr == "inline_section":
+                failures.append(f"{relative} 手写了全局通知通栏")
+            if node.func.attr == "header" and any(
+                keyword.arg == "color" for keyword in node.keywords
+            ):
+                failures.append(f"{relative} 手写了彩色人物头")
     assert not failures, "\n".join(failures)
 
 

@@ -121,7 +121,12 @@ def _assert_world_skins(content_ids: set[str]) -> None:
         version=1,
         name="基础修仙界",
         entries={
-            "item.main_hand.fast_001": SkinEntry("青锋剑", "剑走轻灵", aliases=("青锋",)),
+            "item.main_hand.fast_001": SkinEntry(
+                "青锋剑",
+                "剑走轻灵",
+                aliases=("青锋",),
+                compact_name="青锋",
+            ),
             "item.consumable.recover_001": SkinEntry("生骨丹", "恢复血气"),
         },
     )
@@ -180,6 +185,8 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     latest_cultivation_view = catalog.projector("skin.cultivation")
     magic_view = catalog.projector("skin.magic")
     assert cultivation_view.name("item.main_hand.fast_001") == "青锋剑"
+    assert cultivation_view.compact_name("item.main_hand.fast_001") == "青锋"
+    assert cultivation_view.compact_name("item.consumable.recover_001") == "生骨丹"
     assert latest_cultivation_view.name("item.main_hand.fast_001") == "流云剑"
     assert magic_view.name("item.main_hand.fast_001") == "秘银短杖"
     try:

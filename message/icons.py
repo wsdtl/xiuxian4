@@ -23,6 +23,7 @@ _icon_values: dict[str, str] = {
     "status": "🌱",
     "player": "🌱",
     "profile": "🌱",
+    "mood": "🎐",
     "notice": "📌",
     "system": "✨",
     "map": "🗺️",

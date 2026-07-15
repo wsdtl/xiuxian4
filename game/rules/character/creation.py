@@ -518,9 +518,10 @@ class CharacterCreationWorkflow:
         )
 
     def _new_ids(self) -> CharacterCreationIds:
+        character_id = self.id_factory("character")
         return CharacterCreationIds(
-            self.id_factory("character"),
-            self.id_factory("inventory"),
+            character_id,
+            character_id,
             self.id_factory("bag"),
             self.id_factory("equipped"),
             self.id_factory("health_stack"),

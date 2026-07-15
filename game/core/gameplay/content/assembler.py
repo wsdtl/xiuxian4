@@ -54,14 +54,14 @@ from ..loadout import (
     standard_loadout_slot_catalog,
 )
 from ..registry import DefinitionRegistry
-from ..skins import SkinCatalog
+from .skins import SkinCatalog
 from ..triggers import TriggerDefinition, TriggerEngine
 from ..valuation import ReferenceValueKind, ValuationCatalog, ValuationEngine
 from ..weapon import WeaponCatalog, weapon_level_contribution
 from .models import CombatProfileDefinition, ContentPackage, ContentVersion
 
 
-CONTENT_FOUNDATION_VERSION = "content.foundation.v2"
+CONTENT_FOUNDATION_VERSION = "content.foundation.v3"
 
 
 @dataclass(frozen=True)
@@ -281,6 +281,14 @@ class ContentAssembler:
 
         for package in ordered:
             package_id = package.manifest.id
+            for definition in package.display_definitions:
+                self._claim(
+                    definition.id,
+                    "display",
+                    package_id,
+                    ownership,
+                )
+                known_displayable.add(definition.id)
             self._register_many(
                 package,
                 "currency",

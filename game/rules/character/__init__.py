@@ -2,10 +2,12 @@
 
 from .identity import (
     CHARACTERS_PER_ACCOUNT,
+    MAX_CHARACTER_NAME_DISPLAY_WIDTH,
     CharacterIdentityPolicy,
     CharacterIdentityViolation,
     CharacterNameSource,
     PreparedCharacterIdentity,
+    validate_character_name,
 )
 from .initialization import (
     INITIAL_CORE_ATTRIBUTES,
@@ -46,6 +48,7 @@ from .creation import (
 
 __all__ = [
     "CHARACTERS_PER_ACCOUNT",
+    "MAX_CHARACTER_NAME_DISPLAY_WIDTH",
     "CHARACTER_CREATION_PROTOCOL_VERSION",
     "CHARACTER_SETTINGS_AGGREGATE",
     "AUTO_HEALTH_TARGET_RATIO",
@@ -79,4 +82,5 @@ __all__ = [
     "REST_MINIMUM_SECONDS",
     "character_level_milestone",
     "character_level_milestones",
+    "validate_character_name",
 ]

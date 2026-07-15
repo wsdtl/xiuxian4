@@ -367,6 +367,29 @@ class NotificationInboxService:
             self.codec.loads(str(row["payload"]), NotificationEntry) for row in rows
         )
 
+    def count_unread(
+        self,
+        recipient_id: str,
+        *,
+        logical_time: datetime,
+    ) -> int:
+        """只读统计当前有效未读通知，不改变通知状态。"""
+
+        _aware(logical_time)
+        normalized_recipient = str(recipient_id or "").strip()
+        if not normalized_recipient:
+            raise ValueError("通知查询缺少接收主体")
+        with self.database.unit_of_work(write=False) as uow:
+            row = uow.connection.execute(
+                """
+                SELECT COUNT(*) AS total FROM notification_entry
+                WHERE recipient_id = ? AND status = 'unread'
+                  AND (expires_at IS NULL OR expires_at > ?)
+                """,
+                (normalized_recipient, logical_time.isoformat()),
+            ).fetchone()
+        return int(row["total"])
+
     def mark(
         self,
         notification_id: str,

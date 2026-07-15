@@ -395,7 +395,7 @@ def _assert_dependency_resolution(packages) -> None:
 
 def _assert_complete_runtime(packages):
     runtime = ContentAssembler().assemble(tuple(reversed(packages)))
-    assert CONTENT_FOUNDATION_VERSION == "content.foundation.v2"
+    assert CONTENT_FOUNDATION_VERSION == "content.foundation.v3"
     assert runtime.report.active_combat_profile_id == "combat_profile.standard"
     assert runtime.report.packages[-1].id == "content.world_skins"
     assert len(runtime.report.content_fingerprint) == 64

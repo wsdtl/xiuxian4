@@ -23,6 +23,7 @@ from message.renderers.plain_text import render_plain_text
 def main() -> None:
     message = _sample_message()
     _assert_markdown_shape(message)
+    _assert_header_rules()
     _assert_qq_translation(message)
     _assert_strict_structure()
     _assert_icon_registration()
@@ -70,6 +71,28 @@ def _assert_markdown_shape(message) -> None:
     plain = render_plain_text(message.document)
     assert "数量: 2 | 状态: 可用" in plain
     assert ">" not in plain
+
+
+def _assert_header_rules() -> None:
+    colored = M.document().header("未入道 云舟客 Lv1", color="#1abc9c").build()
+    assert render_markdown(colored.document) == (
+        r"$\textcolor{#1ABC9C}{\text{未入道 云舟客 Lv1}}$"
+    )
+    assert render_plain_text(colored.document) == "未入道 云舟客 Lv1"
+    escaped = M.document().header("A_B", color="#2980B9").build()
+    assert r"A\_B" in render_markdown(escaped.document)
+    assert not hasattr(M, "strong")
+    for invalid in (
+        lambda: M.document().header(M.em("斜体")),
+        lambda: M.document().header(M.link("链接", "https://example.com")),
+        lambda: M.document().header("换行\n标题"),
+        lambda: M.document().header("标题", color="red"),
+    ):
+        try:
+            invalid()
+            raise AssertionError("人物头只能使用单行普通文本和 #RRGGBB 颜色")
+        except ValueError:
+            pass
 
 
 def _assert_qq_translation(message) -> None:

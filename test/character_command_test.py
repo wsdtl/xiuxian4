@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
 import inspect
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,16 +16,51 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.app import (  # noqa: E402
+    PlayerReplyState,
     build_game_services,
     install_game_services,
     restore_game_services,
 )
+from game.content import STARTER_WEAPON_ID, STARTING_CITY_ID  # noqa: E402
 from game.core.persistence import CHARACTER_AGGREGATE  # noqa: E402
+from game.core.gameplay import (  # noqa: E402
+    ActivityInstance,
+    ActivityStatus,
+    NotificationEntry,
+)
+from game.rules.activity import (  # noqa: E402
+    GlobalActivityRegistration,
+    GlobalActivityView,
+)
 from game.cmd import 角色 as character_component  # noqa: E402
-from game.cmd.角色 import COMMAND  # noqa: E402
+from game.cmd import 活动 as activity_component  # noqa: E402,F401
+from game.cmd import 提醒 as reminder_component  # noqa: E402,F401
+from game.cmd.command import GameCommand  # noqa: E402
+from game.cmd.dependencies import current_character_overview  # noqa: E402
+from game.cmd.reply import GameReplyComposer, send_game_reply  # noqa: E402
+from game.cmd.reply_intents import ReplyIntentRegistry  # noqa: E402
+from launch.adapter import Depends  # noqa: E402
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
-from message import RenderedMessage  # noqa: E402
+from message import M, RenderedMessage  # noqa: E402
+from message.renderers.markdown import render_markdown  # noqa: E402
+from launch.adapter.qq.render import render_qq_message  # noqa: E402
+
+
+CREATE_COMMAND = "创建角色"
+PROFILE_COMMAND = "我的角色"
+MOOD_COMMAND = "心情"
+PROTECTED_COMMAND = "角色守卫测试"
+NOTIFICATION_COMMAND = "notifications"
+PENDING_COMMAND = "pending_actions"
+WORLD_EVENTS_COMMAND = "world_events"
+
+
+@GameCommand.handler(cmd=PROTECTED_COMMAND)
+async def protected_command() -> None:
+    await send_game_reply(
+        M.document().section("角色守卫", icon="status").line("已放行").build()
+    )
 
 
 def main() -> None:
@@ -32,11 +69,34 @@ def main() -> None:
 
 
 async def _main() -> None:
-    assert tuple(inspect.signature(character_component.create_character_command).parameters) == (
+    assert tuple(inspect.signature(character_component.create_character).parameters) == (
         "message",
     )
-    assert len(LocalEventHandler.exact_rules[COMMAND]) == 1
-    assert len(QqEventHandler.exact_rules[COMMAND]) == 1
+    assert tuple(inspect.signature(character_component.view_character).parameters) == ("overview",)
+    overview_parameter = inspect.signature(character_component.view_character).parameters[
+        "overview"
+    ]
+    assert isinstance(overview_parameter.default, Depends)
+    assert overview_parameter.default.dependency is current_character_overview
+    assert len(LocalEventHandler.exact_rules[CREATE_COMMAND]) == 1
+    assert len(QqEventHandler.exact_rules[CREATE_COMMAND]) == 1
+    assert len(LocalEventHandler.exact_rules[PROFILE_COMMAND]) == 1
+    assert len(QqEventHandler.exact_rules[PROFILE_COMMAND]) == 1
+    assert len(LocalEventHandler.exact_rules[MOOD_COMMAND]) == 1
+    assert len(QqEventHandler.exact_rules[MOOD_COMMAND]) == 1
+    assert len(LocalEventHandler.exact_rules[PROTECTED_COMMAND]) == 1
+    assert len(QqEventHandler.exact_rules[PROTECTED_COMMAND]) == 1
+    assert len(LocalEventHandler.exact_rules[NOTIFICATION_COMMAND]) == 1
+    assert len(QqEventHandler.exact_rules[NOTIFICATION_COMMAND]) == 1
+    assert len(LocalEventHandler.exact_rules[PENDING_COMMAND]) == 1
+    assert len(QqEventHandler.exact_rules[PENDING_COMMAND]) == 1
+    assert len(LocalEventHandler.exact_rules[WORLD_EVENTS_COMMAND]) == 1
+    assert len(QqEventHandler.exact_rules[WORLD_EVENTS_COMMAND]) == 1
+    assert LocalEventHandler.exact_rules[CREATE_COMMAND][0].priority == 100
+    assert LocalEventHandler.exact_rules[CREATE_COMMAND][0].block
+    assert LocalEventHandler.exact_rules[CREATE_COMMAND][0].metadata == {
+        "game": {"access": "public"}
+    }
     with TemporaryDirectory() as directory:
         services = build_game_services(
             database_path=Path(directory) / "character-command.db",
@@ -47,13 +107,32 @@ async def _main() -> None:
         try:
             await LocalEventHandler.run()
 
+            blocked = await dispatch(
+                client_id="local-user-guarded",
+                raw_message=PROTECTED_COMMAND,
+                sender_name="未建档用户",
+                event_id="local-guard-blocked",
+            )
+            blocked_content = _content(blocked)
+            assert blocked_content == (
+                "**创建角色**\n"
+                "> 📌 建档状态\n"
+                "> > 尚未创建角色\n"
+                "> \n"
+                "> 发送: 创建角色 名称"
+            )
+            assert blocked.replies[0].message.actions[0].behavior == "fill"
+            assert _character_count(services) == 0
+
             created = await dispatch(
                 client_id="local-user-a",
-                raw_message=f"{COMMAND} 云舟客",
+                raw_message=f"{CREATE_COMMAND} 云舟客",
                 sender_name="平台昵称甲",
                 event_id="local-create-a",
             )
             content = _content(created)
+            assert content.splitlines()[0] == "**未入道 云舟客 Lv1**"
+            assert "未入道 云舟客 Lv1" in content
             assert "云舟客 Lv1" in content
             assert "人族" in content and "凡体" in content
             assert "仙京制式剑" in content
@@ -61,9 +140,249 @@ async def _main() -> None:
             assert "太玄仙城" in content
             assert _character_count(services) == 1
 
+            allowed = await dispatch(
+                client_id="local-user-a",
+                raw_message=PROTECTED_COMMAND,
+                sender_name="平台昵称甲",
+                event_id="local-guard-allowed",
+            )
+            assert "角色守卫" in _content(allowed)
+            assert "已放行" in _content(allowed)
+
+            mood_status = await dispatch(
+                client_id="local-user-a",
+                raw_message=MOOD_COMMAND,
+                sender_name="平台昵称甲",
+                event_id="local-mood-status",
+            )
+            assert mood_status.replies[0].message.content.splitlines()[0] == (
+                "**未入道 云舟客 Lv1**"
+            )
+            assert "当前状态: _关闭_" in _content(mood_status)
+
+            mood_enabled = await dispatch(
+                client_id="local-user-a",
+                raw_message=f"{MOOD_COMMAND} 开启",
+                sender_name="平台昵称甲",
+                event_id="local-mood-enable",
+            )
+            assert mood_enabled.replies[0].message.content.startswith(r"$\textcolor{#")
+            assert "当前状态: _开启_" in _content(mood_enabled)
+            character_id = _character_ids(services)[0]
+            settings = services.load_character_settings(character_id)
+            assert settings.mood_header_enabled and settings.revision == 1
+
+            existing_with_mood = await dispatch(
+                client_id="local-user-a",
+                raw_message=f"{CREATE_COMMAND} 第二角色",
+                sender_name="平台昵称甲",
+                event_id="local-create-a-with-mood",
+            )
+            assert existing_with_mood.replies[0].message.content.startswith(
+                r"$\textcolor{#"
+            )
+            assert "角色已存在" in _content(existing_with_mood)
+
+            character = services.characters.load_character(character_id)
+            assert character is not None
+            notification_time = datetime.now(ZoneInfo("Asia/Shanghai"))
+            services.notifications.issue(
+                NotificationEntry(
+                    "notification-character-command",
+                    character.account_id,
+                    "notification.test",
+                    "character-command:test",
+                    100,
+                    1,
+                    notification_time,
+                )
+            )
+            assert services.notifications.count_unread(
+                character.account_id,
+                logical_time=notification_time,
+            ) == 1
+            composer = GameReplyComposer(services.content.projector)
+            activity_spotlights = (
+                GlobalActivityView(
+                    ActivityInstance(
+                        "event-city",
+                        STARTING_CITY_ID,
+                        1,
+                        notification_time - timedelta(hours=1),
+                        notification_time + timedelta(hours=2),
+                        status=ActivityStatus.OPEN,
+                    ),
+                    GlobalActivityRegistration(STARTING_CITY_ID),
+                ),
+                GlobalActivityView(
+                    ActivityInstance(
+                        "event-weapon",
+                        STARTER_WEAPON_ID,
+                        1,
+                        notification_time - timedelta(hours=1),
+                        notification_time + timedelta(hours=3),
+                        status=ActivityStatus.OPEN,
+                    ),
+                    GlobalActivityRegistration(STARTER_WEAPON_ID),
+                ),
+            )
+            composed = composer.compose(
+                M.document()
+                .header("组件标题")
+                .section("正文", icon="status")
+                .line("内容")
+                .build(),
+                PlayerReplyState(
+                    character,
+                    settings,
+                    activity_spotlights=activity_spotlights,
+                    additional_activity_count=2,
+                    unread_notification_count=2,
+                    pending_action_count=3,
+                ),
+                logical_time=notification_time,
+            )
+            composed_lines = render_markdown(composed.document).splitlines()
+            assert composed_lines[0].startswith(r"$\textcolor{#")
+            assert composed_lines[1] == (
+                "> ✨ 活动: 太玄仙城&nbsp;|&nbsp;仙京制式剑&nbsp;|&nbsp;+2"
+            )
+            assert composed_lines[2] == (
+                "> 📌 提醒: 3 项待领取&nbsp;|&nbsp;2 条未读通知"
+            )
+            assert "组件标题" not in composed_lines[0]
+            qq_content = render_qq_message(composed)["content"]
+            assert qq_content.count("mqqapi://aio/inlinecmd") == 5
+            assert "command=world_events%20event-city" in qq_content
+            assert "command=world_events%20event-weapon" in qq_content
+            assert "command=world_events&" in qq_content
+            assert "command=pending_actions" in qq_content
+            assert "command=notifications" in qq_content
+            plain_intents = ReplyIntentRegistry()
+            plain_composed = GameReplyComposer(
+                services.content.projector,
+                plain_intents,
+            ).compose(
+                M.document().section("正文", icon="status").line("内容").build(),
+                    PlayerReplyState(
+                        character,
+                        settings,
+                        activity_spotlights=activity_spotlights,
+                        additional_activity_count=2,
+                        unread_notification_count=2,
+                    pending_action_count=3,
+                ),
+                logical_time=notification_time,
+            )
+            assert "mqqapi://" not in render_qq_message(plain_composed)["content"]
+            payload_intents = ReplyIntentRegistry()
+            payload_intents.register(
+                "notification.open_test",
+                lambda payload: f"通知详情 {payload['notification_id']}",
+            )
+            payload_link = payload_intents.link(
+                "处理",
+                "notification.open_test",
+                {"notification_id": "notice-1"},
+            )
+            assert payload_link.command == "通知详情 notice-1"
+            for invalid_body in (
+                M.document().inline_section("提醒", "组件手写通栏").build(),
+                M.document().header("组件彩色头", color="#1ABC9C").build(),
+            ):
+                try:
+                    composer.compose(
+                        invalid_body,
+                        PlayerReplyState(character, settings),
+                        logical_time=notification_time,
+                    )
+                    raise AssertionError("组件不能手写全局通栏或彩色人物头")
+                except ValueError:
+                    pass
+
+            profile = await dispatch(
+                client_id="local-user-a",
+                raw_message=PROFILE_COMMAND,
+                sender_name="平台昵称甲",
+                event_id="local-profile-a",
+            )
+            profile_content = _content(profile)
+            assert profile_content.startswith(r"$\textcolor{#")
+            assert profile_content.splitlines()[1] == "> 📌 提醒: 1 条未读通知"
+            assert services.notifications.count_unread(
+                character.account_id,
+                logical_time=notification_time,
+            ) == 1
+
+            notification_list = await dispatch(
+                client_id="local-user-a",
+                raw_message=NOTIFICATION_COMMAND,
+                sender_name="平台昵称甲",
+                event_id="local-notification-list",
+            )
+            notification_content = _content(notification_list)
+            assert "未读通知" in notification_content
+            assert "系统通知" in notification_content
+            assert services.notifications.count_unread(
+                character.account_id,
+                logical_time=notification_time,
+            ) == 1
+
+            pending_list = await dispatch(
+                client_id="local-user-a",
+                raw_message=PENDING_COMMAND,
+                sender_name="平台昵称甲",
+                event_id="local-pending-list",
+            )
+            assert "暂无待领取行动" in _content(pending_list)
+
+            activity_list = await dispatch(
+                client_id="local-user-a",
+                raw_message=WORLD_EVENTS_COMMAND,
+                sender_name="平台昵称甲",
+                event_id="local-world-events-list",
+            )
+            assert "当前没有开放的全服活动" in _content(activity_list)
+
+            activity_detail = await dispatch(
+                client_id="local-user-a",
+                raw_message=f"{WORLD_EVENTS_COMMAND} missing-event",
+                sender_name="平台昵称甲",
+                event_id="local-world-events-detail",
+            )
+            assert "活动不存在、尚未开放或已经结束" in _content(activity_detail)
+            profile_plain = _plain(profile_content)
+            assert "云舟客 Lv1" in profile_plain
+            assert "境界: 未入道" in profile_plain
+            assert "经验: 0/" in profile_plain
+            assert "血气: 100/100" in profile_plain
+            assert "灵力: 100/100" in profile_plain
+            assert "最大血气: 100" in profile_plain
+            assert "最大灵力: 100" in profile_plain
+            assert "攻击: 10" in profile_plain
+            assert "防御: 0" in profile_plain
+            assert "速度: 100" in profile_plain
+            assert "仙京制式剑" in profile_plain
+            assert "装备: 0/6 | 无" in profile_plain
+            assert "太玄仙城" in profile_plain
+            assert "灵石: 100" in profile_plain
+            assert "行动: 空闲" in profile_plain
+
+            mood_disabled = await dispatch(
+                client_id="local-user-a",
+                raw_message=f"{MOOD_COMMAND} 关闭",
+                sender_name="平台昵称甲",
+                event_id="local-mood-disable",
+            )
+            assert mood_disabled.replies[0].message.content.splitlines()[0] == (
+                "**未入道 云舟客 Lv1**"
+            )
+            settings = services.load_character_settings(character_id)
+            assert not settings.mood_header_enabled and settings.revision == 2
+
             replayed = await dispatch(
                 client_id="local-user-a",
-                raw_message=f"{COMMAND} 云舟客",
+                raw_message=f"{CREATE_COMMAND} 云舟客",
                 sender_name="平台昵称甲",
                 event_id="local-create-a",
             )
@@ -72,7 +391,7 @@ async def _main() -> None:
 
             existing = await dispatch(
                 client_id="local-user-a",
-                raw_message=f"{COMMAND} 第二角色",
+                raw_message=f"{CREATE_COMMAND} 第二角色",
                 sender_name="平台昵称甲",
                 event_id="local-create-a-again",
             )
@@ -81,7 +400,7 @@ async def _main() -> None:
 
             nickname = await dispatch(
                 client_id="local-user-b",
-                raw_message=COMMAND,
+                raw_message=CREATE_COMMAND,
                 sender_name="平台昵称乙",
                 event_id="local-create-b",
             )
@@ -90,7 +409,7 @@ async def _main() -> None:
 
             missing = await dispatch(
                 client_id="local-user-c",
-                raw_message=COMMAND,
+                raw_message=CREATE_COMMAND,
                 sender_name="",
                 event_id="local-create-c",
             )
@@ -98,6 +417,33 @@ async def _main() -> None:
             assert "需要角色名" in missing_content
             assert "创建角色 名称" in missing_content
             assert missing.replies[0].message.actions[0].behavior == "fill"
+            assert _character_count(services) == 2
+
+            invalid_name = await dispatch(
+                client_id="local-user-d",
+                raw_message=f"{CREATE_COMMAND} 七个汉字角色名",
+                sender_name="平台昵称丁",
+                event_id="local-create-d",
+            )
+            invalid_content = _content(invalid_name)
+            assert "名称不可用" in invalid_content
+            assert "显示宽度不能超过 12" in invalid_content
+            assert invalid_name.replies[0].message.actions[0].behavior == "fill"
+            assert _character_count(services) == 2
+
+            not_created = await dispatch(
+                client_id="local-user-c",
+                raw_message=PROFILE_COMMAND,
+                sender_name="",
+                event_id="local-profile-c",
+            )
+            assert _content(not_created) == (
+                "**我的角色**\n"
+                "> 📌 建档状态\n"
+                "> > 尚未创建角色\n"
+                "> \n"
+                "> 发送: 创建角色 名称"
+            )
             assert _character_count(services) == 2
         finally:
             restore_game_services(previous)
@@ -113,12 +459,21 @@ def _content(result) -> str:
 
 
 def _character_count(services) -> int:
+    return len(_character_ids(services))
+
+
+def _character_ids(services) -> tuple[str, ...]:
     with services.database.unit_of_work(write=False) as uow:
-        row = uow.connection.execute(
-            "SELECT COUNT(*) FROM aggregate_snapshot WHERE aggregate_kind = ?",
+        rows = uow.connection.execute(
+            "SELECT aggregate_id FROM aggregate_snapshot WHERE aggregate_kind = ? "
+            "ORDER BY aggregate_id",
             (CHARACTER_AGGREGATE,),
-        ).fetchone()
-        return int(row[0])
+        ).fetchall()
+        return tuple(str(row[0]) for row in rows)
+
+
+def _plain(content: str) -> str:
+    return content.replace("_", "").replace("&nbsp;", " ")
 
 
 if __name__ == "__main__":

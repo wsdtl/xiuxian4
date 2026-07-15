@@ -175,7 +175,7 @@ def _transaction(state, transaction_id: str, *operations):
 
 
 def _assert_template_and_catalog_boundaries() -> None:
-    assert CHARACTER_FOUNDATION_VERSION == "character.foundation.v3"
+    assert CHARACTER_FOUNDATION_VERSION == "character.foundation.v4"
     assert len(CORE_ATTRIBUTE_IDS) == 5
     try:
         CharacterTemplateDefinition(

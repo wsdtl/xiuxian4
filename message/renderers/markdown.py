@@ -16,7 +16,6 @@ from ..schema import (
     NoteBlock,
     RichText,
     SectionBlock,
-    Strong,
     Text,
 )
 
@@ -33,7 +32,7 @@ def render_markdown(document: Document, *, command_renderer: CommandRenderer | N
         if isinstance(block, HeaderBlock):
             if lines and lines[-1] != "":
                 lines.append("")
-            lines.append(f"**{_render_rich(block.content, command_renderer)}**")
+            lines.append(_render_header(block, command_renderer))
             previous_block = block
             continue
 
@@ -80,8 +79,6 @@ def _render_rich(value: RichText, command_renderer: CommandRenderer | None) -> s
             parts.append(_escape(span.value))
         elif isinstance(span, Emphasis):
             parts.append(f"_{_render_rich(span.value, command_renderer)}_")
-        elif isinstance(span, Strong):
-            parts.append(f"**{_render_rich(span.value, command_renderer)}**")
         elif isinstance(span, Link):
             parts.append(f"[{_render_rich(span.label, command_renderer)}]({_escape_url(span.url)})")
         elif isinstance(span, CommandLink):
@@ -89,6 +86,32 @@ def _render_rich(value: RichText, command_renderer: CommandRenderer | None) -> s
         elif isinstance(span, FieldSeparator):
             parts.append("&nbsp;|&nbsp;")
     return "".join(parts)
+
+
+def _render_header(
+    block: HeaderBlock,
+    command_renderer: CommandRenderer | None,
+) -> str:
+    if not block.color:
+        return f"**{_render_rich(block.content, command_renderer)}**"
+    text = "".join(span.value for span in block.content if isinstance(span, Text))
+    return f"$\\textcolor{{{block.color}}}{{\\text{{{_escape_latex(text)}}}}}$"
+
+
+def _escape_latex(value: object) -> str:
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "{": r"\{",
+        "}": r"\}",
+        "$": r"\$",
+        "%": r"\%",
+        "_": r"\_",
+        "#": r"\#",
+        "&": r"\&",
+        "^": r"\^{}",
+        "~": r"\~{}",
+    }
+    return "".join(replacements.get(character, character) for character in str(value))
 
 
 def _escape(value: object) -> str:

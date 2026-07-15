@@ -46,6 +46,7 @@ from ..equipment import (
     EquipmentStyleDefinition,
 )
 from ..ids import StableId, stable_id
+from ..registry import ContentDefinition
 from ..inventory import ItemComponentType, ItemDefinition
 from ..itemization import GenerationProfileDefinition, PropertyDefinition
 from ..loadout import QualityDefinition
@@ -63,7 +64,7 @@ from ..world import (
     WorldMeterDefinition,
     WorldSpaceDefinition,
 )
-from ..skins import SkinPack
+from .skins import SkinPack
 from ..triggers import TriggerDefinition
 from ..valuation import (
     AttributeValuationDefinition,
@@ -188,6 +189,7 @@ class ContentPackage:
     """一个包只声明内容，不自行决定装配顺序或冻结时机。"""
 
     manifest: ContentPackageManifest
+    display_definitions: tuple[ContentDefinition, ...] = ()
     item_component_types: tuple[ItemComponentType[object], ...] = ()
     currencies: tuple[CurrencyDefinition, ...] = ()
     qualities: tuple[QualityDefinition, ...] = ()
@@ -241,6 +243,7 @@ class ContentPackage:
         if not isinstance(self.manifest, ContentPackageManifest):
             raise TypeError("ContentPackage.manifest 类型不正确")
         tuple_fields = (
+            "display_definitions",
             "item_component_types",
             "currencies",
             "qualities",

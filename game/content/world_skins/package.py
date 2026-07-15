@@ -12,12 +12,12 @@ from .cultivation import CULTIVATION_SKIN
 from .magic import MAGIC_SKIN
 
 
-SKIN_PACKAGE_ID = "content.skins.official"
+WORLD_SKIN_PACKAGE_ID = "content.world_skins.official"
 
 
-SKIN_PACKAGE = ContentPackage(
+WORLD_SKIN_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
-        id=SKIN_PACKAGE_ID,
+        id=WORLD_SKIN_PACKAGE_ID,
         version=ContentVersion(1, 0, 0),
         dependencies=(
             PackageRequirement(
@@ -31,4 +31,4 @@ SKIN_PACKAGE = ContentPackage(
 )
 
 
-__all__ = ["SKIN_PACKAGE", "SKIN_PACKAGE_ID"]
+__all__ = ["WORLD_SKIN_PACKAGE", "WORLD_SKIN_PACKAGE_ID"]

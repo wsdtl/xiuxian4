@@ -1,6 +1,6 @@
 """角色身份、成长和规则实体投影底座。"""
 
-CHARACTER_FOUNDATION_VERSION = "character.foundation.v3"
+CHARACTER_FOUNDATION_VERSION = "character.foundation.v4"
 
 from .contributions import (
     AttributeGrant,
@@ -32,6 +32,7 @@ from .models import (
     ProgressionState,
     SPIRIT_CURRENT,
     SPIRIT_MAXIMUM,
+    character_name_display_width,
     normalize_character_name,
 )
 from .projection import CharacterProjection, CharacterProjector
@@ -85,6 +86,7 @@ __all__ = [
     "UnlockFeature",
     "UnlockProgression",
     "core_attribute_definitions",
+    "character_name_display_width",
     "persistent_resource_definitions",
     "merge_contribution_specs",
     "normalize_character_name",

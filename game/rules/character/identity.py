@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import re
 
-from game.core.gameplay import normalize_character_name
+from game.core.gameplay import character_name_display_width, normalize_character_name
 
 
 CHARACTERS_PER_ACCOUNT = 1
+MAX_CHARACTER_NAME_DISPLAY_WIDTH = 12
+_CHARACTER_NAME_PATTERN = re.compile(r"[A-Za-z0-9\u3400-\u4dbf\u4e00-\u9fff]+")
 
 
 class CharacterNameSource(str, Enum):
@@ -59,8 +62,8 @@ class CharacterIdentityPolicy:
                 "一个账号只能拥有一个角色",
             )
 
-        requested = " ".join(str(requested_name or "").split())
-        platform = " ".join(str(platform_name or "").split())
+        requested = str(requested_name or "").strip()
+        platform = str(platform_name or "").strip()
         if requested:
             source = CharacterNameSource.REQUESTED
             raw_name = requested
@@ -73,6 +76,7 @@ class CharacterIdentityPolicy:
                 "当前消息没有提供角色名，QQ 事件也没有携带可用名称",
             )
         try:
+            validate_character_name(raw_name)
             name = normalize_character_name(raw_name)
         except ValueError as exc:
             raise CharacterIdentityViolation(
@@ -82,10 +86,27 @@ class CharacterIdentityPolicy:
         return PreparedCharacterIdentity(owner, name, source)
 
 
+def validate_character_name(value: object) -> str:
+    """校验聊天文游角色名的字符范围和单行显示宽度。"""
+
+    name = str(value or "").strip()
+    if not name:
+        raise ValueError("角色名不能为空")
+    if _CHARACTER_NAME_PATTERN.fullmatch(name) is None:
+        raise ValueError("角色名只能使用中文、英文字母或数字")
+    if character_name_display_width(name) > MAX_CHARACTER_NAME_DISPLAY_WIDTH:
+        raise ValueError(
+            f"角色名显示宽度不能超过 {MAX_CHARACTER_NAME_DISPLAY_WIDTH}"
+        )
+    return name
+
+
 __all__ = [
     "CHARACTERS_PER_ACCOUNT",
+    "MAX_CHARACTER_NAME_DISPLAY_WIDTH",
     "CharacterIdentityPolicy",
     "CharacterIdentityViolation",
     "CharacterNameSource",
     "PreparedCharacterIdentity",
+    "validate_character_name",
 ]

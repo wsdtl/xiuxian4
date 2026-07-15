@@ -1,5 +1,15 @@
 """跨组件复用的具体游戏规则。"""
 
+from .activity import (
+    GLOBAL_ACTIVITY_SCOPE_ID,
+    ActivitySpotlightPolicy,
+    GlobalActivityCatalog,
+    GlobalActivityRegistration,
+    GlobalActivitySelection,
+    GlobalActivityView,
+    global_activity_catalog,
+    register_global_activity,
+)
 from .character import (
     AUTO_HEALTH_TARGET_RATIO,
     AUTO_HEALTH_TRIGGER_RATIO,
@@ -39,6 +49,7 @@ from .character import (
 
 
 __all__ = [
+    "ActivitySpotlightPolicy",
     "CHARACTERS_PER_ACCOUNT",
     "CHARACTER_CREATION_PROTOCOL_VERSION",
     "CHARACTER_SETTINGS_AGGREGATE",
@@ -58,6 +69,11 @@ __all__ = [
     "CharacterIdentityViolation",
     "CharacterNameSource",
     "CharacterSettingsState",
+    "GLOBAL_ACTIVITY_SCOPE_ID",
+    "GlobalActivityCatalog",
+    "GlobalActivityRegistration",
+    "GlobalActivitySelection",
+    "GlobalActivityView",
     "INITIAL_BAG_CAPACITY",
     "INITIAL_CURRENCY_AMOUNT",
     "INITIAL_MEDICINE_QUANTITY",
@@ -73,4 +89,6 @@ __all__ = [
     "REST_MINIMUM_SECONDS",
     "character_level_milestone",
     "character_level_milestones",
+    "global_activity_catalog",
+    "register_global_activity",
 ]

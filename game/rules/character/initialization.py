@@ -7,7 +7,6 @@ from game.content.catalog.characters import (
     character_level_milestones,
 )
 
-
 __all__ = [
     "INITIAL_CORE_ATTRIBUTES",
     "LEVEL_CORE_ATTRIBUTE_DELTAS",

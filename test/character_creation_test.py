@@ -97,6 +97,7 @@ class SequentialIds:
 
 def main() -> None:
     _assert_policy_constants()
+    _assert_legacy_settings_payload()
     with TemporaryDirectory() as directory:
         path = Path(directory) / "character-creation.db"
         database = SqliteDatabase(path)
@@ -150,6 +151,24 @@ def _assert_policy_constants() -> None:
     assert AUTO_SPIRIT_TARGET_RATIO == 0.45
 
 
+def _assert_legacy_settings_payload() -> None:
+    """新增个人设置字段必须能由 dataclass 默认值接住旧快照。"""
+
+    workflow = CharacterCreationWorkflow(id_factory=lambda kind: kind)
+    service = PersistedCharacterCreationService(
+        SqliteDatabase(":memory:"),
+        workflow,
+    )
+    payload = (
+        '{"format":"structured-json.v1","value":'
+        '{"$fields":{"auto_use_medicine":true,'
+        '"character_id":"legacy-character","revision":0},'
+        '"$type":"product.character_settings"}}'
+    )
+    restored = service.snapshots.codec.loads(payload, CharacterSettingsState)
+    assert restored == CharacterSettingsState("legacy-character")
+
+
 def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> None:
     workflow = CharacterCreationWorkflow(id_factory=ids.game)
     service = PersistedCharacterCreationService(database, workflow)
@@ -161,6 +180,7 @@ def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> 
     receipt = service.create(request, context=_context(1))
     assert not receipt.replayed
     character = receipt.character
+    assert receipt.inventory_id == character.id
     assert character.name == "云舟客"
     assert character.resources[HEALTH_CURRENT] == character.core_attributes[HEALTH_MAXIMUM] == 100
     assert character.resources[SPIRIT_CURRENT] == character.core_attributes[SPIRIT_MAXIMUM] == 100

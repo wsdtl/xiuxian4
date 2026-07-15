@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from . import access_guard as access_guard  # noqa: F401
+
 router = APIRouter()
 
 __all__ = ["router"]

@@ -7,6 +7,7 @@ OpenAPI 字段。驱动器必须把它们渲染成自己的输出协议。
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any, Literal, TypeAlias
 
 
@@ -20,13 +21,6 @@ class Text:
 @dataclass(frozen=True)
 class Emphasis:
     """需要突出显示的关键值。"""
-
-    value: "RichText"
-
-
-@dataclass(frozen=True)
-class Strong:
-    """需要加重显示的内容。"""
 
     value: "RichText"
 
@@ -54,7 +48,7 @@ class FieldSeparator:
     """字段组分隔符；具体空白由渲染器决定。"""
 
 
-Span: TypeAlias = Text | Emphasis | Strong | Link | CommandLink | FieldSeparator
+Span: TypeAlias = Text | Emphasis | Link | CommandLink | FieldSeparator
 RichText: TypeAlias = tuple[Span, ...]
 
 
@@ -63,6 +57,17 @@ class HeaderBlock:
     """消息顶部的主标题。"""
 
     content: RichText
+    color: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.content or any(not isinstance(span, Text) for span in self.content):
+            raise ValueError("消息主标题只允许普通文本")
+        if any(character in span.value for span in self.content for character in "\r\n"):
+            raise ValueError("消息主标题必须保持单行")
+        color = str(self.color or "").strip().upper()
+        if color and re.fullmatch(r"#[0-9A-F]{6}", color) is None:
+            raise ValueError("消息主标题颜色必须是 #RRGGBB")
+        object.__setattr__(self, "color", color)
 
 
 @dataclass(frozen=True)

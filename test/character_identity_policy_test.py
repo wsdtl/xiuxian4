@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 
 from game.rules.character import (  # noqa: E402
     CHARACTERS_PER_ACCOUNT,
+    MAX_CHARACTER_NAME_DISPLAY_WIDTH,
     CharacterIdentityPolicy,
     CharacterIdentityViolation,
     CharacterNameSource,
@@ -24,17 +25,17 @@ def main() -> None:
 
     requested = policy.prepare_creation(
         account_id="account-a",
-        requested_name="  自定义  名称  ",
-        platform_name="QQ 昵称",
+        requested_name="  自定义名称  ",
+        platform_name="QQ昵称",
     )
-    assert requested.name == "自定义 名称"
+    assert requested.name == "自定义名称"
     assert requested.name_source is CharacterNameSource.REQUESTED
 
     platform = policy.prepare_creation(
         account_id="account-b",
-        platform_name="  QQ  昵称  ",
+        platform_name="  QQ昵称  ",
     )
-    assert platform.name == "QQ 昵称"
+    assert platform.name == "QQ昵称"
     assert platform.name_source is CharacterNameSource.PLATFORM
 
     _assert_rejected(
@@ -49,11 +50,35 @@ def main() -> None:
         "character.name_required",
         lambda: policy.prepare_creation(account_id="account-c"),
     )
+    assert MAX_CHARACTER_NAME_DISPLAY_WIDTH == 12
+    assert policy.prepare_creation(
+        account_id="account-width-cn",
+        requested_name="六字角色名称",
+    ).name == "六字角色名称"
+    assert policy.prepare_creation(
+        account_id="account-width-en",
+        requested_name="TwelveChars1",
+    ).name == "TwelveChars1"
+    for invalid_name in (
+        "七个汉字角色名",
+        "ThirteenChars1",
+        "青 衫客",
+        "青衫客_一",
+        "青衫客✨",
+        "**青衫客**",
+    ):
+        _assert_rejected(
+            "character.name_invalid",
+            lambda value=invalid_name: policy.prepare_creation(
+                account_id=f"account-invalid-{value}",
+                requested_name=value,
+            ),
+        )
     _assert_rejected(
         "character.name_invalid",
         lambda: policy.prepare_creation(
             account_id="account-d",
-            requested_name="名" * 25,
+            platform_name="过长的平台昵称不能直接建档",
         ),
     )
     print("character identity policy tests passed")

@@ -313,7 +313,6 @@ from .events import RuleEvent
 from .ids import StableId, stable_id
 from .phases import ExecutionPhase
 from .registry import ContentDefinition, DefinitionRegistry
-from .skins import SkinCatalog, SkinEntry, SkinPack, SkinProjector
 from .tags import EMPTY_TAGS, Tag, TagSet
 from .triggers import (
     TriggerDefinition,
@@ -404,6 +403,7 @@ from .character import (
     RetireCharacter,
     UnlockFeature,
     UnlockProgression,
+    character_name_display_width,
     core_attribute_definitions,
     persistent_resource_definitions,
     merge_contribution_specs,
@@ -614,6 +614,10 @@ from .content import (
     MagnitudeRegistration,
     PackageRequirement,
     SelectedPackage,
+    SkinCatalog,
+    SkinEntry,
+    SkinPack,
+    SkinProjector,
     TargetSelectorRegistration,
     resolve_package_order,
 )
@@ -1005,6 +1009,7 @@ __all__ = [
     "SPIRIT_MAXIMUM",
     "UnlockFeature",
     "UnlockProgression",
+    "character_name_display_width",
     "core_attribute_definitions",
     "persistent_resource_definitions",
     "merge_contribution_specs",

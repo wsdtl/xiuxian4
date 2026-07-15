@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
+from unicodedata import east_asian_width
 
 from ..ids import StableId, stable_id
 
@@ -30,7 +31,7 @@ CORE_ATTRIBUTE_IDS = frozenset(
     }
 )
 PERSISTENT_RESOURCE_IDS = frozenset({HEALTH_CURRENT, SPIRIT_CURRENT})
-MAX_CHARACTER_NAME_LENGTH = 24
+MAX_CHARACTER_NAME_LENGTH = 64
 
 
 class CharacterStatus(str, Enum):
@@ -173,6 +174,15 @@ def normalize_character_name(value: object) -> str:
     return name
 
 
+def character_name_display_width(value: object) -> int:
+    """按聊天界面占位计算名称宽度；全角字符计 2，其余字符计 1。"""
+
+    return sum(
+        2 if east_asian_width(character) in {"F", "W"} else 1
+        for character in str(value or "")
+    )
+
+
 __all__ = [
     "COMBAT_ATTACK",
     "COMBAT_DEFENSE",
@@ -188,5 +198,6 @@ __all__ = [
     "ProgressionState",
     "SPIRIT_CURRENT",
     "SPIRIT_MAXIMUM",
+    "character_name_display_width",
     "normalize_character_name",
 ]

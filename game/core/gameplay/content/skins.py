@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping
 
-from .ids import StableId, stable_id
+from ..ids import StableId, stable_id
 
 
 @dataclass(frozen=True)
@@ -17,6 +17,7 @@ class SkinEntry:
     description: str = ""
     icon: str = ""
     aliases: tuple[str, ...] = ()
+    compact_name: str = ""
 
     def __post_init__(self) -> None:
         if not self.name.strip():
@@ -28,6 +29,7 @@ class SkinEntry:
         object.__setattr__(self, "description", self.description.strip())
         object.__setattr__(self, "icon", self.icon.strip())
         object.__setattr__(self, "aliases", cleaned)
+        object.__setattr__(self, "compact_name", self.compact_name.strip())
 
 
 @dataclass(frozen=True)
@@ -82,7 +84,9 @@ class SkinProjector:
         self.pack = pack
         aliases: dict[str, StableId] = {}
         for content_id, entry in pack.entries.items():
-            for alias in (entry.name, *entry.aliases):
+            for alias in (entry.name, entry.compact_name, *entry.aliases):
+                if not alias:
+                    continue
                 key = self._alias_key(alias)
                 owner = aliases.get(key)
                 if owner and owner != content_id:
@@ -99,6 +103,12 @@ class SkinProjector:
 
     def name(self, content_id: StableId) -> str:
         return self.entry(content_id).name
+
+    def compact_name(self, content_id: StableId) -> str:
+        """读取紧凑界面名称；未配置时回退完整名称。"""
+
+        entry = self.entry(content_id)
+        return entry.compact_name or entry.name
 
     def resolve_alias(self, value: object) -> StableId | None:
         return self._aliases.get(self._alias_key(value))

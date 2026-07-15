@@ -17,6 +17,7 @@ from game.content import (  # noqa: E402
     CATALOG_PACKAGE,
     CATALOG_PACKAGE_ID,
     CHARACTER_LEVEL_EXPERIENCE_REQUIREMENTS,
+    CHARACTER_REALMS,
     DEFAULT_CHARACTER_TEMPLATE_ID,
     COMMON_QUALITY_ID,
     CULTIVATION_SKIN,
@@ -28,9 +29,10 @@ from game.content import (  # noqa: E402
     STARTING_CITY_ID,
     coordinate_token,
     validate_location_coordinate_id,
-    SKIN_PACKAGE_ID,
-    SKIN_PACKAGE,
+    WORLD_SKIN_PACKAGE_ID,
+    WORLD_SKIN_PACKAGE,
     assemble_official_catalog,
+    character_realm_for_level,
     select_world_skin,
 )
 from game.core.gameplay import (  # noqa: E402
@@ -38,6 +40,7 @@ from game.core.gameplay import (  # noqa: E402
     CurrencyDefinition,
     LoadoutState,
     WorldLocationDefinition,
+    character_name_display_width,
 )
 
 
@@ -46,12 +49,18 @@ def main() -> None:
 
     assert tuple(value.id for value in catalog.report.packages) == (
         CATALOG_PACKAGE_ID,
-        SKIN_PACKAGE_ID,
+        WORLD_SKIN_PACKAGE_ID,
     )
     assert len(catalog.report.content_fingerprint) == 64
     assert catalog.report.display_content_ids == CATALOG_PACKAGE.display_content_ids
     progression = catalog.characters.progressions.require("progression.character_level")
     assert progression.maximum_level == 100
+    assert len(CHARACTER_REALMS) == 19
+    assert (character_realm_for_level(1).minimum_level, character_realm_for_level(10).maximum_level) == (1, 10)
+    assert (character_realm_for_level(81).minimum_level, character_realm_for_level(90).maximum_level) == (81, 90)
+    assert character_realm_for_level(91).minimum_level == 91
+    assert character_realm_for_level(100).maximum_level == 100
+    assert character_realm_for_level(91).id != character_realm_for_level(92).id
     assert progression.experience_requirements == CHARACTER_LEVEL_EXPERIENCE_REQUIREMENTS
     assert progression.required_for_next_level(80) == 6_359_356
     assert progression.required_for_next_level(90) == 10_356_800
@@ -94,6 +103,21 @@ def main() -> None:
     assert magic.projector.name(COMMON_QUALITY_ID) == "普通"
     assert cultivation.projector.name(STARTING_CITY_ID) == "太玄仙城"
     assert magic.projector.name(STARTING_CITY_ID) == "星辉王城"
+    first_realm = character_realm_for_level(1).id
+    late_realm = character_realm_for_level(98).id
+    assert cultivation.projector.name(first_realm) == "未入道"
+    assert cultivation.projector.compact_name(first_realm) == "未入道"
+    assert cultivation.projector.name(late_realm) == "太乙金仙"
+    assert magic.projector.name(first_realm) == "见习者"
+    assert magic.projector.compact_name(first_realm) == "见习"
+    assert magic.projector.name(late_realm) == "主神"
+    for realm in CHARACTER_REALMS:
+        assert character_name_display_width(
+            cultivation.projector.compact_name(realm.id)
+        ) <= 8
+        assert character_name_display_width(
+            magic.projector.compact_name(realm.id)
+        ) <= 8
 
     _assert_new_display_content_requires_both_skins()
     print("official content tests passed")
@@ -121,7 +145,7 @@ def _assert_new_display_content_requires_both_skins() -> None:
         ),
     )
     try:
-        ContentAssembler().assemble((changed_catalog, SKIN_PACKAGE))
+        ContentAssembler().assemble((changed_catalog, WORLD_SKIN_PACKAGE))
         raise AssertionError("完整装配不能接受缺少世界皮肤名称的新内容")
     except ValueError as exc:
         assert "缺少条目" in str(exc)

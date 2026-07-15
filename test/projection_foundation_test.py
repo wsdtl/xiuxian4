@@ -155,6 +155,8 @@ def _assert_notification_is_read_only_until_marked(database: SqliteDatabase) -> 
         pass
     assert inbox.list_unread("account-a", logical_time=TIME) == (entry,)
     assert inbox.list_unread("account-a", logical_time=TIME) == (entry,)
+    assert inbox.count_unread("account-a", logical_time=TIME) == 1
+    assert inbox.count_unread("account-a", logical_time=TIME) == 1
     marked = inbox.mark(
         entry.id,
         NotificationStatus.READ,
@@ -163,6 +165,7 @@ def _assert_notification_is_read_only_until_marked(database: SqliteDatabase) -> 
     )
     assert marked.status is NotificationStatus.READ and marked.revision == 1
     assert not inbox.list_unread("account-a", logical_time=TIME + timedelta(minutes=1))
+    assert inbox.count_unread("account-a", logical_time=TIME + timedelta(minutes=1)) == 0
     try:
         inbox.mark(
             entry.id,

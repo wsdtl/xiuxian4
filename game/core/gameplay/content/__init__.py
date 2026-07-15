@@ -21,6 +21,7 @@ from .models import (
     PackageRequirement,
     TargetSelectorRegistration,
 )
+from .skins import SkinCatalog, SkinEntry, SkinPack, SkinProjector
 
 __all__ = [
     "CONTENT_FOUNDATION_VERSION",
@@ -38,6 +39,10 @@ __all__ = [
     "MagnitudeRegistration",
     "PackageRequirement",
     "SelectedPackage",
+    "SkinCatalog",
+    "SkinEntry",
+    "SkinPack",
+    "SkinProjector",
     "TargetSelectorRegistration",
     "resolve_package_order",
 ]
