@@ -15,6 +15,7 @@ from game.core.gameplay import (
     ActionState,
     CharacterState,
     InventoryState,
+    InscriptionPreference,
     LedgerState,
     LoadoutState,
     NotificationEntry,
@@ -24,6 +25,7 @@ from game.core.persistence import (
     ACTION_AGGREGATE,
     ConcurrencyConflict,
     INVENTORY_AGGREGATE,
+    INSCRIPTION_PREFERENCE_AGGREGATE,
     LEDGER_AGGREGATE,
     LOADOUT_AGGREGATE,
     PersistenceError,
@@ -75,6 +77,7 @@ class CharacterOverview:
     loadout: LoadoutState
     ledger: LedgerState
     world: WorldState
+    inscription_preference: InscriptionPreference | None = None
     action: ActionState | None = None
 
 
@@ -286,15 +289,22 @@ class GameServices:
                     character.id,
                     ActionState,
                 )
+                inscription_preference = snapshots.load(
+                    uow,
+                    INSCRIPTION_PREFERENCE_AGGREGATE,
+                    character.id,
+                    InscriptionPreference,
+                )
             return CharacterOverviewResult(
                 "ok",
                 CharacterOverview(
-                    character,
-                    inventory,
-                    loadout,
-                    ledger,
-                    world,
-                    action,
+                    character=character,
+                    inventory=inventory,
+                    loadout=loadout,
+                    ledger=ledger,
+                    world=world,
+                    inscription_preference=inscription_preference,
+                    action=action,
                 ),
             )
         except PersistenceError as exc:

@@ -100,12 +100,12 @@ def _assert_world_skin_projection(catalog) -> None:
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
     definition_id = equipment_definition_id("mystic_sky", "head")
     item_id = equipment_item_id("mystic_sky", "head")
-    assert cultivation.skin.version == 5
-    assert magic.skin.version == 5
-    assert cultivation.projector.name(definition_id) == "玄霄冠"
-    assert cultivation.projector.name(item_id) == "玄霄冠器胚"
-    assert magic.projector.name(definition_id) == "星界头冠"
-    assert cultivation.projector.name(equipment_set_id("army_breaker")) == "破军套"
+    assert cultivation.skin.version == 9
+    assert magic.skin.version == 9
+    assert cultivation.projector.name(definition_id) == "昆仑冠"
+    assert cultivation.projector.name(item_id) == "昆仑冠器胚"
+    assert magic.projector.name(definition_id) == "奥林匹斯头冠"
+    assert cultivation.projector.name(equipment_set_id("army_breaker")) == "七杀破军套"
     assert cultivation.projector.name(equipment_property_id("critical_echo")) == "暴烈回响"
 
 

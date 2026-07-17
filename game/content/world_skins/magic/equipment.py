@@ -18,18 +18,18 @@ from ...catalog.equipment.properties import equipment_property_id
 
 
 _FAMILY_DISPLAY = {
-    "mystic_sky": ("星界", "星界系列的魔法装备型制。"),
-    "crimson_cloud": ("余烬", "余烬系列的魔法装备型制。"),
-    "azure_tide": ("潮汐", "潮汐系列的魔法装备型制。"),
-    "verdant_void": ("翠生", "翠生系列的魔法装备型制。"),
-    "mountain_guard": ("泰坦", "泰坦系列的魔法装备型制。"),
-    "flowing_light": ("辉光", "辉光系列的魔法装备型制。"),
-    "shadow_bamboo": ("暗影", "暗影系列的魔法装备型制。"),
-    "star_array": ("星轨", "星轨系列的魔法装备型制。"),
-    "great_void": ("虚空", "虚空系列的魔法装备型制。"),
-    "startled_thunder": ("雷暴", "雷暴系列的魔法装备型制。"),
-    "ashen_plume": ("灰翼", "灰翼系列的魔法装备型制。"),
-    "returning_origin": ("源初", "源初系列的魔法装备型制。"),
+    "mystic_sky": ("奥林匹斯", "奥林匹斯系列的魔法装备型制。"),
+    "crimson_cloud": ("穆斯贝尔", "穆斯贝尔系列的魔法装备型制。"),
+    "azure_tide": ("亚特兰蒂斯", "亚特兰蒂斯系列的魔法装备型制。"),
+    "verdant_void": ("阿瓦隆", "阿瓦隆系列的魔法装备型制。"),
+    "mountain_guard": ("阿斯加德", "阿斯加德系列的魔法装备型制。"),
+    "flowing_light": ("伊甸", "伊甸系列的魔法装备型制。"),
+    "shadow_bamboo": ("塔尔塔罗斯", "塔尔塔罗斯系列的魔法装备型制。"),
+    "star_array": ("黄道", "黄道系列的魔法装备型制。"),
+    "great_void": ("卡俄斯", "卡俄斯系列的魔法装备型制。"),
+    "startled_thunder": ("瓦尔哈拉", "瓦尔哈拉系列的魔法装备型制。"),
+    "ashen_plume": ("菲尼克斯", "菲尼克斯系列的魔法装备型制。"),
+    "returning_origin": ("世界树", "世界树系列的魔法装备型制。"),
 }
 _SLOT_NAMES = {
     "head": "头冠",
@@ -90,18 +90,18 @@ _PROPERTY_DISPLAY = {
     "healing_shield": ("治愈屏障", "获得有效治疗后生成护盾"),
 }
 _SET_DISPLAY = {
-    "army_breaker": ("征服者套装", "穿透与暴击回响协同"),
-    "everlife": ("永生套装", "恢复与受疗协同"),
-    "myriad_venom": ("疫病套装", "命中与周期毒伤协同"),
-    "mirror_sea": ("镜潮套装", "闪避与反击协同"),
-    "mystic_bastion": ("秘法堡垒套装", "格挡与护盾协同"),
-    "wind_walk": ("疾风套装", "速度与行动节奏协同"),
-    "spirit_well": ("奥能之井套装", "魔力循环与回复协同"),
-    "frost_prison": ("冰牢套装", "控制与冰霜协同"),
-    "starfall": ("星陨套装", "命中与暴击协同"),
-    "sky_burn": ("炼狱套装", "火焰与增伤协同"),
-    "void_realm": ("虚空裂隙套装", "穿盾与真实回响协同"),
-    "samsara": ("重生套装", "残血生存与击败恢复协同"),
+    "army_breaker": ("阿瑞斯征服套装", "穿透与暴击回响协同"),
+    "everlife": ("伊登青春套装", "恢复与受疗协同"),
+    "myriad_venom": ("潘多拉疫灾套装", "命中与周期毒伤协同"),
+    "mirror_sea": ("赫尔墨斯幻行套装", "闪避与反击协同"),
+    "mystic_bastion": ("埃癸斯壁垒套装", "格挡与护盾协同"),
+    "wind_walk": ("玻瑞阿斯北风套装", "速度与行动节奏协同"),
+    "spirit_well": ("密米尔智慧泉套装", "魔力循环与回复协同"),
+    "frost_prison": ("尼福尔寒狱套装", "控制与冰霜协同"),
+    "starfall": ("阿斯特赖俄斯星陨套装", "命中与暴击协同"),
+    "sky_burn": ("苏尔特炼狱套装", "火焰与增伤协同"),
+    "void_realm": ("厄瑞玻斯虚界套装", "穿盾与真实回响协同"),
+    "samsara": ("菲尼克斯重生套装", "残血生存与击败恢复协同"),
 }
 
 

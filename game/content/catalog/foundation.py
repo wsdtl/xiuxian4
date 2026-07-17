@@ -33,7 +33,14 @@ BASE_QUALITIES = (
 BASE_ATTRIBUTES = (*core_attribute_definitions().values(), *DERIVED_COMBAT_ATTRIBUTES)
 BASE_RESOURCES = (*persistent_resource_definitions().values(), *BATTLE_RESOURCES)
 QUALITY_IDS = tuple(definition.id for definition in BASE_QUALITIES)
-BASE_DISPLAY_CONTENT_IDS = frozenset({PRIMARY_CURRENCY_ID, *QUALITY_IDS})
+BASE_DISPLAY_CONTENT_IDS = frozenset(
+    {
+        PRIMARY_CURRENCY_ID,
+        *QUALITY_IDS,
+        *(value.id for value in BASE_ATTRIBUTES),
+        *(value.id for value in BASE_RESOURCES),
+    }
+)
 
 
 __all__ = [

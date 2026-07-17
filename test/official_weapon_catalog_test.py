@@ -22,6 +22,10 @@ from game.content.catalog.weapon.mechanics import (  # noqa: E402
     WEAPON_MECHANIC_CONTENT,
 )
 from game.content.official import assemble_official_catalog  # noqa: E402
+from game.content.world_skins import (  # noqa: E402
+    CULTIVATION_SKIN_ID,
+    MAGIC_SKIN_ID,
+)
 from game.core.gameplay import (  # noqa: E402
     AbilityUse,
     GameplayExecutor,
@@ -69,7 +73,7 @@ def _assert_catalog_shape(catalog) -> None:
     expected_ability_ids = {
         f"ability.weapon.{value.key}" for value in WEAPON_BLUEPRINTS
     }
-    assert set(catalog.battle_ability_targeting) == expected_ability_ids
+    assert expected_ability_ids.issubset(catalog.battle_ability_targeting)
     for blueprint in WEAPON_BLUEPRINTS:
         targeting = catalog.battle_ability_targeting[
             f"ability.weapon.{blueprint.key}"
@@ -128,6 +132,10 @@ def _assert_instance_generation(catalog) -> None:
         assert result.state.quality_id == result.roll.quality_id
         assert result.state.roll == result.roll
         assert len(rolled_ids & profile.core_property_ids) == 1
+        for skin_id in (CULTIVATION_SKIN_ID, MAGIC_SKIN_ID):
+            projector = catalog.skins.projector(skin_id)
+            for property_id in rolled_ids:
+                assert projector.name(property_id)
     try:
         generator.generate(
             WeaponGenerationRequest(

@@ -3,6 +3,7 @@
 from game.core.gameplay import (
     AbilityDefinition,
     AttributeMagnitude,
+    BattleAbilityTargeting,
     ChangeResource,
     DealDamage,
     EffectDefinition,
@@ -188,6 +189,19 @@ BASE_ABILITIES = (
     ),
 )
 
+BASE_BATTLE_TARGETING = (
+    BattleAbilityTargeting(
+        BASIC_ATTACK_ABILITY_ID,
+        frozenset({"target.enemy.explicit", "target.enemy.first"}),
+        1,
+    ),
+    BattleAbilityTargeting(
+        BREAKING_STRIKE_ABILITY_ID,
+        frozenset({"target.enemy.explicit", "target.enemy.first"}),
+        1,
+    ),
+)
+
 COMBAT_DISPLAY_CONTENT_IDS = frozenset(
     {
         PHYSICAL_DAMAGE_ID,
@@ -205,6 +219,7 @@ COMBAT_DISPLAY_CONTENT_IDS = frozenset(
 
 __all__ = [
     "BASE_ABILITIES",
+    "BASE_BATTLE_TARGETING",
     "BASE_DAMAGE_TYPES",
     "BASE_EFFECTS",
     "BASIC_ATTACK_ABILITY_ID",

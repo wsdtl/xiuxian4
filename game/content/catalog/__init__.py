@@ -36,6 +36,13 @@ from .equipment import (
     equipment_set_id,
     equipment_trigger_id,
 )
+from .enemy.encounters import (
+    GLOBAL_BOSS_ENCOUNTER_ID,
+    PARTY_BOSS_ENCOUNTER_ID,
+    PERSONAL_BOSS_ENCOUNTER_ID,
+    PERSONAL_ELITE_ENCOUNTER_ID,
+    PERSONAL_NORMAL_ENCOUNTER_ID,
+)
 from .foundation import (
     COMMON_QUALITY_ID,
     EPIC_QUALITY_ID,

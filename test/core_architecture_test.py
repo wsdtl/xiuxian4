@@ -75,6 +75,8 @@ def _assert_physical_layout() -> None:
     content = game / "content"
     assert (content / "__init__.py").is_file()
     assert (content / "official.py").is_file()
+    assert (content / "presentation" / "__init__.py").is_file()
+    assert (content / "presentation" / "gear.py").is_file()
     assert not (content / "runtime.py").exists(), "官方内容装配不得再使用 runtime 名称"
     catalog = content / "catalog"
     assert (catalog / "__init__.py").is_file()
@@ -135,6 +137,7 @@ def _assert_physical_layout() -> None:
             "combat.py",
             "equipment.py",
             "items.py",
+            "presentation.py",
             "skin.py",
             "weapons.py",
             "world.py",

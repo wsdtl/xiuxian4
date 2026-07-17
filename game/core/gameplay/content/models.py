@@ -46,6 +46,15 @@ from ..equipment import (
     EquipmentSetDefinition,
     EquipmentFamilyDefinition,
 )
+from ..enemy import (
+    EncounterScopeDefinition,
+    EnemyBehaviorDefinition,
+    EnemyDefinition,
+    EnemyEncounterDefinition,
+    EnemyLevelProfileDefinition,
+    EnemyRankDefinition,
+    EnemyRewardProfileDefinition,
+)
 from ..ids import StableId, stable_id
 from ..registry import ContentDefinition
 from ..inventory import ItemComponentType, ItemDefinition
@@ -199,6 +208,13 @@ class ContentPackage:
     character_features: tuple[CharacterFeatureDefinition, ...] = ()
     progressions: tuple[ProgressionDefinition, ...] = ()
     character_templates: tuple[CharacterTemplateDefinition, ...] = ()
+    enemy_level_profiles: tuple[EnemyLevelProfileDefinition, ...] = ()
+    enemy_ranks: tuple[EnemyRankDefinition, ...] = ()
+    enemy_behaviors: tuple[EnemyBehaviorDefinition, ...] = ()
+    enemy_reward_profiles: tuple[EnemyRewardProfileDefinition, ...] = ()
+    enemies: tuple[EnemyDefinition, ...] = ()
+    encounter_scopes: tuple[EncounterScopeDefinition, ...] = ()
+    enemy_encounters: tuple[EnemyEncounterDefinition, ...] = ()
     items: tuple[ItemDefinition, ...] = ()
     equipment_families: tuple[EquipmentFamilyDefinition, ...] = ()
     equipment_sets: tuple[EquipmentSetDefinition, ...] = ()
@@ -254,6 +270,13 @@ class ContentPackage:
             "character_features",
             "progressions",
             "character_templates",
+            "enemy_level_profiles",
+            "enemy_ranks",
+            "enemy_behaviors",
+            "enemy_reward_profiles",
+            "enemies",
+            "encounter_scopes",
+            "enemy_encounters",
             "items",
             "equipment_families",
             "equipment_sets",

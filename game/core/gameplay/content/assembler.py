@@ -21,6 +21,7 @@ from ..abilities import AbilityDefinition, AbilityEngine
 from ..attributes import AttributeDefinition, AttributeResolver, MagnitudeEvaluators, ResourceDefinition
 from ..character import CharacterCatalog
 from ..combat import (
+    BattleAiEngine,
     BattleAbilityTargeting,
     ControlDefinition,
     ControlEngine,
@@ -36,6 +37,11 @@ from ..combat import (
     register_damage_operation,
     register_recovery_operations,
     register_timeline_operations,
+)
+from ..enemy import (
+    EnemyCatalog,
+    EnemyCombatProjector,
+    EnemyThreatEvaluator,
 )
 from ..conditions import ConditionEngine, ConditionHandlers
 from ..cycles import CycleDefinition, CycleEngine, CycleScheduleHandlers
@@ -63,7 +69,7 @@ from ..weapon import WeaponCatalog, weapon_level_contribution
 from .models import CombatProfileDefinition, ContentPackage, ContentVersion
 
 
-CONTENT_FOUNDATION_VERSION = "content.foundation.v5"
+CONTENT_FOUNDATION_VERSION = "content.foundation.v6"
 
 
 @dataclass(frozen=True)
@@ -160,6 +166,10 @@ class ContentRuntime:
     world: WorldCatalog
     social: SocialCatalog
     parties: PartyCatalog
+    enemies: EnemyCatalog
+    enemy_projector: EnemyCombatProjector
+    enemy_threat: EnemyThreatEvaluator
+    battle_ai_engine: BattleAiEngine
     damage_engine: DamageEngine
     recovery_engine: RecoveryEngine
     control_engine: ControlEngine
@@ -223,6 +233,7 @@ class ContentAssembler:
         world = WorldCatalog()
         social = SocialCatalog()
         parties = PartyCatalog()
+        enemies = EnemyCatalog()
         attributes: dict[StableId, AttributeDefinition] = {}
         resources: dict[StableId, ResourceDefinition] = {}
         valuations = ValuationCatalog()
@@ -539,6 +550,62 @@ class ContentAssembler:
             )
             self._register_many(
                 package,
+                "enemy_level_profile",
+                package.enemy_level_profiles,
+                enemies.level_profiles.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "enemy_rank",
+                package.enemy_ranks,
+                enemies.ranks.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "enemy_behavior",
+                package.enemy_behaviors,
+                enemies.behaviors.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "enemy_reward_profile",
+                package.enemy_reward_profiles,
+                enemies.reward_profiles.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "enemy",
+                package.enemies,
+                enemies.definitions.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "encounter_scope",
+                package.encounter_scopes,
+                enemies.scopes.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "enemy_encounter",
+                package.enemy_encounters,
+                enemies.encounters.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
                 "attribute_valuation",
                 package.attribute_valuations,
                 valuations.register_attribute,
@@ -724,6 +791,23 @@ class ContentAssembler:
                     + ", ".join(sorted(unknown_selectors))
                 )
 
+        enemies.finalize(
+            attribute_ids=frozenset(attributes),
+            ability_ids=frozenset(abilities.ids()),
+            trigger_ids=frozenset(triggers.ids()),
+            interceptor_ids=frozenset(interceptors.ids()),
+            constraint_ids=frozenset(constraints.ids()),
+            selector_ids=frozenset(selectors.ids()),
+            loot_table_ids=frozenset(loot_tables.definitions.ids()),
+        )
+        enemy_projector = EnemyCombatProjector(enemies, attribute_resolver, resources)
+        enemy_threat = EnemyThreatEvaluator(enemies, valuation_engine)
+        battle_ai_engine = BattleAiEngine(
+            abilities,
+            attribute_resolver,
+            resources[profile.combat_stats.health_resource],
+        )
+
         ability_engine = AbilityEngine(
             abilities,
             effect_engine,
@@ -791,6 +875,10 @@ class ContentAssembler:
             world,
             social,
             parties,
+            enemies,
+            enemy_projector,
+            enemy_threat,
+            battle_ai_engine,
             damage_engine,
             recovery_engine,
             control_engine,

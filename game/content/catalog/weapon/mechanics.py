@@ -838,6 +838,8 @@ def build_weapon_mechanic_content() -> WeaponMechanicContent:
             )
         display_ids.update((weapon_id, item_id, ability_id))
     all_secondary = (*UNIVERSAL_WEAPON_PROPERTIES, *(value for group in DOMAIN_WEAPON_PROPERTIES.values() for value in group))
+    all_properties = (*all_secondary, *core_properties)
+    display_ids.update(value.id for value in all_properties)
     return WeaponMechanicContent(
         tuple(items),
         tuple(weapons),
@@ -871,7 +873,7 @@ def build_weapon_mechanic_content() -> WeaponMechanicContent:
             TargetConstraintDefinition(TAUNT_CONSTRAINT_ID, TargetConstraintKind.FORCE_GRANT_SOURCE),
             TargetConstraintDefinition(UNTARGETABLE_CONSTRAINT_ID, TargetConstraintKind.UNTARGETABLE),
         ),
-        (*all_secondary, *core_properties),
+        all_properties,
         tuple(profiles),
         tuple(valuations),
         frozenset(display_ids),

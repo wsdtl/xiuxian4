@@ -15,7 +15,7 @@ from game.core.gameplay import (
     ValueVector,
 )
 
-from .definitions import BREAKING_STRIKE_ABILITY_ID
+from .definitions import BASIC_ATTACK_ABILITY_ID, BREAKING_STRIKE_ABILITY_ID
 from .stats import (
     COMBAT_ACCURACY,
     COMBAT_BLOCK_CHANCE,
@@ -106,6 +106,11 @@ BASE_ATTRIBUTE_VALUATIONS = (
 )
 
 BASE_REFERENCE_VALUATIONS = (
+    ReferenceValuationDefinition(
+        ReferenceValueKind.ABILITY,
+        BASIC_ATTACK_ABILITY_ID,
+        ValueVector(offense=5),
+    ),
     ReferenceValuationDefinition(
         ReferenceValueKind.ABILITY,
         BREAKING_STRIKE_ABILITY_ID,

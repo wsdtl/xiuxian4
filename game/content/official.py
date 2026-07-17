@@ -13,7 +13,13 @@ from game.core.gameplay import (
 )
 
 from .catalog import CATALOG_PACKAGE
-from .world_skins import CULTIVATION_SKIN_ID, WORLD_SKIN_PACKAGE
+from .presentation import EnemyNameProjector, GearProjector
+from .world_skins import (
+    CULTIVATION_SKIN_ID,
+    WORLD_SKIN_PACKAGE,
+    enemy_presentation_style,
+    gear_presentation_style,
+)
 
 
 OFFICIAL_PACKAGES = (CATALOG_PACKAGE, WORLD_SKIN_PACKAGE)
@@ -27,6 +33,8 @@ class OfficialContent:
     catalog: ContentRuntime
     skin: SkinPack
     projector: SkinProjector
+    gear_projector: GearProjector
+    enemy_projector: EnemyNameProjector
 
 
 def assemble_official_catalog() -> ContentRuntime:
@@ -44,7 +52,20 @@ def select_world_skin(
     """在不改变规则和存档的前提下选择一套世界皮肤。"""
 
     skin = catalog.skins.require(skin_id, version)
-    return OfficialContent(catalog, skin, SkinProjector(skin))
+    projector = SkinProjector(skin)
+    return OfficialContent(
+        catalog,
+        skin,
+        projector,
+        GearProjector(
+            projector,
+            gear_presentation_style(skin.id, skin.version),
+        ),
+        EnemyNameProjector(
+            projector,
+            enemy_presentation_style(skin.id, skin.version),
+        ),
+    )
 
 
 def build_official_content(

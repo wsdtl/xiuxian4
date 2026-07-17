@@ -53,6 +53,12 @@ from .equipment import (
     EquipmentGenerationResult,
     EquipmentInstanceGenerator,
 )
+from .encounter import (
+    EnemyDefeatRewardPlanner,
+    EnemyDefeatRewardQuote,
+    EnemyEncounterGenerator,
+    EnemyLootQuote,
+)
 from .weapon import (
     WEAPON_GENERATION_PROTOCOL_VERSION,
     WeaponGenerationRequest,
@@ -87,6 +93,10 @@ __all__ = [
     "EquipmentGenerationRequest",
     "EquipmentGenerationResult",
     "EquipmentInstanceGenerator",
+    "EnemyDefeatRewardPlanner",
+    "EnemyDefeatRewardQuote",
+    "EnemyEncounterGenerator",
+    "EnemyLootQuote",
     "WEAPON_GENERATION_PROTOCOL_VERSION",
     "WeaponGenerationRequest",
     "WeaponGenerationResult",

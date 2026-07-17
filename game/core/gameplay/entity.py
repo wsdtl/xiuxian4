@@ -231,7 +231,9 @@ class RuleEntity:
         """推进一回合，统一缩短效果持续时间和能力冷却。"""
 
         effects = tuple(
-            replace(effect, remaining_turns=effect.remaining_turns - 1)
+            effect
+            if effect.remaining_turns is None
+            else replace(effect, remaining_turns=effect.remaining_turns - 1)
             for effect in self.active_effects
             if effect.remaining_turns is None or effect.remaining_turns > 1
         )

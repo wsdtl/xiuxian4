@@ -57,6 +57,13 @@ from .timeline import (
     BattleStatus,
     BattleStepResult,
 )
+from .ai import (
+    BATTLE_AI_FOUNDATION_VERSION,
+    BattleAiCondition,
+    BattleAiConditionKind,
+    BattleAiEngine,
+    BattleAiRule,
+)
 from .timeline_operations import (
     RequestExtraTurn,
     RequestInterrupt,
@@ -66,6 +73,7 @@ from .timeline_operations import (
 
 __all__ = [
     "COMBAT_FOUNDATION_VERSION",
+    "BATTLE_AI_FOUNDATION_VERSION",
     "CombatStats",
     "ApplyControl",
     "BattleAction",
@@ -76,6 +84,10 @@ __all__ = [
     "BattleState",
     "BattleStatus",
     "BattleStepResult",
+    "BattleAiCondition",
+    "BattleAiConditionKind",
+    "BattleAiEngine",
+    "BattleAiRule",
     "ControlDefinition",
     "ControlEngine",
     "ControlResolution",

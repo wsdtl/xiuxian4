@@ -77,8 +77,8 @@ def main() -> None:
         CATALOG_PACKAGE_ID,
         WORLD_SKIN_PACKAGE_ID,
     )
-    assert str(CATALOG_PACKAGE.manifest.version) == "3.0.0"
-    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.1.0"
+    assert str(CATALOG_PACKAGE.manifest.version) == "3.2.0"
+    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.5.0"
     assert len(catalog.report.content_fingerprint) == 64
     assert catalog.report.display_content_ids == CATALOG_PACKAGE.display_content_ids
     progression = catalog.characters.progressions.require("progression.character_level")
@@ -134,7 +134,7 @@ def main() -> None:
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
     assert cultivation.catalog is magic.catalog
     assert cultivation.skin.name == "基础修仙界"
-    assert cultivation.skin.version == 5
+    assert cultivation.skin.version == 9
     assert cultivation.skin.icon == "☯"
     assert cultivation.projector.name(PRIMARY_CURRENCY_ID) == "灵石"
     assert tuple(cultivation.projector.name(value) for value in QUALITY_IDS) == (
@@ -145,7 +145,7 @@ def main() -> None:
         "圣",
     )
     assert magic.skin.name == "魔法世界"
-    assert magic.skin.version == 5
+    assert magic.skin.version == 9
     assert magic.skin.icon == "✦"
     assert magic.projector.name(PRIMARY_CURRENCY_ID) == "魔晶"
     assert magic.projector.name(COMMON_QUALITY_ID) == "普通"

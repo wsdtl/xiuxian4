@@ -135,7 +135,7 @@ async def _main() -> None:
             assert "未入道 云舟客 Lv1" in content
             assert "云舟客 Lv1" in content
             assert "人族" in content and "凡体" in content
-            assert "仙京制式剑" in content
+            assert "黄品·仙京制式剑" in content
             assert "小还丹" in content and "小回灵丹" in content
             assert "太玄仙城" in content
             assert _character_count(services) == 1
@@ -362,7 +362,7 @@ async def _main() -> None:
             assert "攻击: 10" in profile_plain
             assert "防御: 0" in profile_plain
             assert "速度: 100" in profile_plain
-            assert "仙京制式剑" in profile_plain
+            assert "黄品·仙京制式剑 | Lv1" in profile_plain
             assert "装备: 0/6 | 无" in profile_plain
             assert "太玄仙城" in profile_plain
             assert "灵石: 100" in profile_plain

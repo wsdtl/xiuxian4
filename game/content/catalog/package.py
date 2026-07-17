@@ -18,10 +18,22 @@ from .character.definitions import (
 )
 from .combat.definitions import (
     BASE_ABILITIES,
+    BASE_BATTLE_TARGETING,
     BASE_CONTROLS,
     BASE_DAMAGE_TYPES,
     BASE_EFFECTS,
     COMBAT_DISPLAY_CONTENT_IDS,
+)
+from .enemy import (
+    ENCOUNTER_SCOPES,
+    ENEMY_BEHAVIOR_CONTENT,
+    ENEMY_DEFINITIONS,
+    ENEMY_DISPLAY_CONTENT_IDS,
+    ENEMY_ENCOUNTERS,
+    ENEMY_LOOT_TABLES,
+    ENEMY_RANKS,
+    ENEMY_REWARD_PROFILES,
+    STANDARD_ENEMY_LEVEL_PROFILE,
 )
 from .item.definitions import ITEM_DISPLAY_CONTENT_IDS, MEDICINE_ITEMS
 from .equipment.definitions import EQUIPMENT_CATALOG_CONTENT
@@ -52,7 +64,7 @@ CATALOG_PACKAGE_ID = "content.catalog.base"
 CATALOG_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=CATALOG_PACKAGE_ID,
-        version=ContentVersion(3, 0, 0),
+        version=ContentVersion(3, 2, 0),
     ),
     display_definitions=CHARACTER_REALM_CONTENT_DEFINITIONS,
     currencies=BASE_CURRENCIES,
@@ -62,6 +74,13 @@ CATALOG_PACKAGE = ContentPackage(
     character_features=CHARACTER_FEATURES,
     progressions=(CHARACTER_LEVEL_PROGRESSION,),
     character_templates=(DEFAULT_CHARACTER_TEMPLATE,),
+    enemy_level_profiles=(STANDARD_ENEMY_LEVEL_PROFILE,),
+    enemy_ranks=ENEMY_RANKS,
+    enemy_behaviors=ENEMY_BEHAVIOR_CONTENT.behaviors,
+    enemy_reward_profiles=ENEMY_REWARD_PROFILES,
+    enemies=ENEMY_DEFINITIONS,
+    encounter_scopes=ENCOUNTER_SCOPES,
+    enemy_encounters=ENEMY_ENCOUNTERS,
     items=(
         *MEDICINE_ITEMS,
         STARTER_WEAPON_ITEM,
@@ -77,6 +96,7 @@ CATALOG_PACKAGE = ContentPackage(
         *BASE_REFERENCE_VALUATIONS,
         *WEAPON_MECHANIC_CONTENT.reference_valuations,
         *EQUIPMENT_PROPERTY_CONTENT.reference_valuations,
+        *ENEMY_BEHAVIOR_CONTENT.reference_valuations,
     ),
     random_properties=(
         *WEAPON_MECHANIC_CONTENT.properties,
@@ -94,14 +114,23 @@ CATALOG_PACKAGE = ContentPackage(
         *WEAPON_MECHANIC_CONTENT.effects,
         *EQUIPMENT_PROPERTY_CONTENT.effects,
     ),
-    abilities=(*BASE_ABILITIES, *WEAPON_MECHANIC_CONTENT.abilities),
-    battle_ability_targeting=WEAPON_MECHANIC_CONTENT.targeting,
+    abilities=(
+        *BASE_ABILITIES,
+        *WEAPON_MECHANIC_CONTENT.abilities,
+        *ENEMY_BEHAVIOR_CONTENT.abilities,
+    ),
+    battle_ability_targeting=(
+        *BASE_BATTLE_TARGETING,
+        *WEAPON_MECHANIC_CONTENT.targeting,
+        *ENEMY_BEHAVIOR_CONTENT.targeting,
+    ),
     triggers=(
         *WEAPON_MECHANIC_CONTENT.triggers,
         *EQUIPMENT_PROPERTY_CONTENT.triggers,
     ),
     interceptors=WEAPON_MECHANIC_CONTENT.interceptors,
     target_constraints=WEAPON_MECHANIC_CONTENT.constraints,
+    loot_tables=ENEMY_LOOT_TABLES,
     world_spaces=(PRIMARY_WORLD_SPACE,),
     world_locations=(STARTING_CITY,),
     display_content_ids=(
@@ -113,6 +142,7 @@ CATALOG_PACKAGE = ContentPackage(
         | WEAPON_DISPLAY_CONTENT_IDS
         | EQUIPMENT_CATALOG_CONTENT.display_ids
         | EQUIPMENT_PROPERTY_CONTENT.display_ids
+        | ENEMY_DISPLAY_CONTENT_IDS
         | WORLD_DISPLAY_CONTENT_IDS
     ),
 )

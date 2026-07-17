@@ -1,0 +1,23 @@
+"""基础修仙界的武器装备名称与评分格式。"""
+
+from ...presentation import EnemyPresentationStyle, GearPresentationStyle
+from .enemies import CULTIVATION_ENEMY_BEHAVIOR_NAMES, CULTIVATION_ENEMY_PREFIXES
+from .skin import CULTIVATION_SKIN_ID
+
+
+CULTIVATION_GEAR_PRESENTATION = GearPresentationStyle(
+    CULTIVATION_SKIN_ID,
+    9,
+    "{quality}品·{name}",
+    "器蕴评分",
+)
+
+CULTIVATION_ENEMY_PRESENTATION = EnemyPresentationStyle(
+    CULTIVATION_SKIN_ID,
+    9,
+    CULTIVATION_ENEMY_PREFIXES,
+    CULTIVATION_ENEMY_BEHAVIOR_NAMES,
+)
+
+
+__all__ = ["CULTIVATION_ENEMY_PRESENTATION", "CULTIVATION_GEAR_PRESENTATION"]

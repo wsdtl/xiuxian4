@@ -14,7 +14,6 @@ from game.content import (
     PRIMARY_CURRENCY_ID,
     SMALL_HEALTH_MEDICINE_ITEM_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
-    STARTER_WEAPON_ID,
     STARTING_CITY_ID,
 )
 from game.core.account import IdentityEvidence
@@ -26,6 +25,7 @@ from game.core.gameplay import (
     HEALTH_MAXIMUM,
     SPIRIT_CURRENT,
     SPIRIT_MAXIMUM,
+    equipment_state_from_instance,
     weapon_state_from_instance,
 )
 from game.app import (
@@ -217,6 +217,11 @@ def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
         for account in receipt.ledger.accounts.values()
         if account.owner_id == character.id and account.currency_id == PRIMARY_CURRENCY_ID
     )
+    starter_instance = receipt.inventory.instances[receipt.starter_weapon.asset_id]
+    starter_name = services.content.gear_projector.weapon(
+        receipt.starter_weapon,
+        starter_instance,
+    ).name
     return (
         M.document()
         .section("角色创建", icon="profile")
@@ -235,7 +240,7 @@ def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
             ),
         )
         .section("初始行囊", icon="inventory")
-        .field("武器", projector.name(STARTER_WEAPON_ID))
+        .field("武器", starter_name)
         .row(
             (projector.name(PRIMARY_CURRENCY_ID), wallet.balance),
             (
@@ -387,16 +392,28 @@ def _character_overview_message(overview: CharacterOverview) -> DocumentMessage:
             weapon = weapon_state_from_instance(instance)
             weapon_text = " | ".join(
                 (
-                    projector.name(weapon.definition_id),
-                    projector.name(weapon.quality_id),
+                    services.content.gear_projector.weapon(
+                        weapon,
+                        instance,
+                        inscription_preference=overview.inscription_preference,
+                    ).name,
                     f"Lv{weapon.level}",
                 )
             )
-    equipment_names = tuple(
-        projector.name(overview.inventory.instances[asset_id].definition_id)
-        for asset_id in overview.loadout.equipment_asset_ids
-        if asset_id in overview.inventory.instances
-    )
+    equipment_names = []
+    for asset_id in overview.loadout.equipment_asset_ids:
+        instance = overview.inventory.instances.get(asset_id)
+        if instance is None:
+            continue
+        equipment = equipment_state_from_instance(instance)
+        equipment_names.append(
+            services.content.gear_projector.equipment(
+                equipment,
+                instance,
+                inscription_preference=overview.inscription_preference,
+            ).name
+        )
+    equipment_names = tuple(equipment_names)
     equipment_text = "无" if not equipment_names else ", ".join(equipment_names)
     return (
         M.document()

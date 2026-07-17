@@ -18,18 +18,18 @@ from ...catalog.equipment.properties import equipment_property_id
 
 
 _FAMILY_DISPLAY = {
-    "mystic_sky": ("玄霄", "玄霄一脉的装备器型。"),
-    "crimson_cloud": ("赤霞", "赤霞一脉的装备器型。"),
-    "azure_tide": ("沧溟", "沧溟一脉的装备器型。"),
-    "verdant_void": ("青冥", "青冥一脉的装备器型。"),
-    "mountain_guard": ("镇岳", "镇岳一脉的装备器型。"),
-    "flowing_light": ("流光", "流光一脉的装备器型。"),
-    "shadow_bamboo": ("幽篁", "幽篁一脉的装备器型。"),
-    "star_array": ("星罗", "星罗一脉的装备器型。"),
+    "mystic_sky": ("昆仑", "昆仑一脉的装备器型。"),
+    "crimson_cloud": ("扶桑", "扶桑一脉的装备器型。"),
+    "azure_tide": ("归墟", "归墟一脉的装备器型。"),
+    "verdant_void": ("青丘", "青丘一脉的装备器型。"),
+    "mountain_guard": ("不周", "不周一脉的装备器型。"),
+    "flowing_light": ("瑶池", "瑶池一脉的装备器型。"),
+    "shadow_bamboo": ("幽都", "幽都一脉的装备器型。"),
+    "star_array": ("紫微", "紫微一脉的装备器型。"),
     "great_void": ("太虚", "太虚一脉的装备器型。"),
-    "startled_thunder": ("惊雷", "惊雷一脉的装备器型。"),
-    "ashen_plume": ("烬羽", "烬羽一脉的装备器型。"),
-    "returning_origin": ("归元", "归元一脉的装备器型。"),
+    "startled_thunder": ("雷泽", "雷泽一脉的装备器型。"),
+    "ashen_plume": ("丹穴", "丹穴一脉的装备器型。"),
+    "returning_origin": ("蓬莱", "蓬莱一脉的装备器型。"),
 }
 _SLOT_NAMES = {
     "head": "冠",
@@ -90,18 +90,18 @@ _PROPERTY_DISPLAY = {
     "healing_shield": ("愈后生盾", "获得有效治疗后生成护盾"),
 }
 _SET_DISPLAY = {
-    "army_breaker": ("破军套", "穿透与暴击回响协同"),
-    "everlife": ("长生套", "恢复与受疗协同"),
-    "myriad_venom": ("万毒套", "命中与周期毒伤协同"),
-    "mirror_sea": ("镜海套", "闪避与反击协同"),
-    "mystic_bastion": ("玄垒套", "格挡与护盾协同"),
-    "wind_walk": ("御风套", "速度与行动节奏协同"),
-    "spirit_well": ("聚灵套", "灵力循环与回复协同"),
-    "frost_prison": ("寒狱套", "控制与寒霜协同"),
-    "starfall": ("星落套", "命中与会心协同"),
-    "sky_burn": ("焚天套", "火焰与增伤协同"),
-    "void_realm": ("虚界套", "穿盾与真实回响协同"),
-    "samsara": ("轮回套", "残血生存与击败恢复协同"),
+    "army_breaker": ("七杀破军套", "穿透与暴击回响协同"),
+    "everlife": ("彭祖长生套", "恢复与受疗协同"),
+    "myriad_venom": ("神农百草套", "命中与周期毒伤协同"),
+    "mirror_sea": ("庄周梦蝶套", "闪避与反击协同"),
+    "mystic_bastion": ("玄武镇世套", "格挡与护盾协同"),
+    "wind_walk": ("列子御风套", "速度与行动节奏协同"),
+    "spirit_well": ("周天归元套", "灵力循环与回复协同"),
+    "frost_prison": ("玄冥寒狱套", "控制与寒霜协同"),
+    "starfall": ("北斗天罡套", "命中与会心协同"),
+    "sky_burn": ("金乌焚天套", "火焰与增伤协同"),
+    "void_realm": ("太虚无相套", "穿盾与真实回响协同"),
+    "samsara": ("凤凰涅槃套", "残血生存与击败恢复协同"),
 }
 
 
