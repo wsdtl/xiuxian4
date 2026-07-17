@@ -12,6 +12,7 @@ from ..events import RuleEvent
 from ..ids import StableId, stable_id
 from ..phases import ExecutionPhase
 from .definitions import ItemCatalog, ItemDefinition
+from .components import ITEM_STORAGE_COMPONENT_ID, ItemStorageComponent
 from .models import (
     AssetReservation,
     InventoryState,
@@ -140,6 +141,8 @@ class _Draft:
     stacks: dict[str, ItemStack]
     instances: dict[str, ItemInstance]
     reservations: dict[str, AssetReservation]
+    asset_references: dict[str, int]
+    next_reference_number: int
     events: list[RuleEvent]
 
 
@@ -164,6 +167,8 @@ class InventoryEngine:
             stacks=dict(state.stacks),
             instances=dict(state.instances),
             reservations=dict(state.reservations),
+            asset_references=dict(state.asset_references),
+            next_reference_number=state.next_reference_number,
             events=[],
         )
         try:
@@ -176,6 +181,8 @@ class InventoryEngine:
                 instances=draft.instances,
                 reservations=draft.reservations,
                 revision=state.revision + 1,
+                asset_references=draft.asset_references,
+                next_reference_number=draft.next_reference_number,
             )
             self._validate_state(result)
             return RuleOutcome.success(
@@ -232,6 +239,7 @@ class InventoryEngine:
             (ProvenanceLot(operation.receipt, operation.quantity),),
         )
         draft.stacks[stack.id] = stack
+        reference_number = self._allocate_reference(stack.id, draft)
         self._event(
             draft,
             transaction,
@@ -244,6 +252,7 @@ class InventoryEngine:
                 "quantity": stack.quantity,
                 "container_id": container.id,
                 "receipt_id": operation.receipt.id,
+                "reference_number": reference_number,
             },
         )
 
@@ -266,6 +275,7 @@ class InventoryEngine:
             operation.data,
         )
         draft.instances[instance.id] = instance
+        reference_number = self._allocate_reference(instance.id, draft)
         self._event(
             draft,
             transaction,
@@ -278,6 +288,7 @@ class InventoryEngine:
                 "quantity": 1,
                 "container_id": container.id,
                 "receipt_id": operation.receipt.id,
+                "reference_number": reference_number,
             },
         )
 
@@ -307,6 +318,7 @@ class InventoryEngine:
             )
         else:
             del draft.stacks[stack.id]
+            self._drop_reference(stack.id, draft)
             self._remove_asset_reservations(stack.id, draft)
         self._consume_reservation(
             operation.reservation_id,
@@ -344,6 +356,7 @@ class InventoryEngine:
             del draft.stacks[asset.id]
         else:
             del draft.instances[asset.id]
+        self._drop_reference(asset.id, draft)
         self._remove_asset_reservations(asset.id, draft)
         self._event(
             draft,
@@ -373,6 +386,7 @@ class InventoryEngine:
         self._authorize_quantity(instance.id, 1, operation.reservation_id, draft)
         owner_id = draft.containers[instance.container_id].owner_id
         del draft.instances[instance.id]
+        self._drop_reference(instance.id, draft)
         self._remove_asset_reservations(instance.id, draft)
         self._event(
             draft,
@@ -468,6 +482,7 @@ class InventoryEngine:
             source.container_id,
             moved,
         )
+        reference_number = self._allocate_reference(operation.new_asset_id, draft)
         owner_id = draft.containers[source.container_id].owner_id
         self._event(
             draft,
@@ -480,6 +495,7 @@ class InventoryEngine:
                 "source_asset_id": source.id,
                 "new_asset_id": operation.new_asset_id,
                 "quantity": operation.quantity,
+                "reference_number": reference_number,
             },
         )
 
@@ -578,6 +594,7 @@ class InventoryEngine:
             revision=target.revision + 1,
         )
         del draft.stacks[source.id]
+        self._drop_reference(source.id, draft)
         owner_id = draft.containers[target.container_id].owner_id
         self._event(
             draft,
@@ -705,6 +722,7 @@ class InventoryEngine:
 
     def _validate_state(self, state: InventoryState) -> None:
         counts: dict[str, int] = {}
+        occupied_space: dict[str, int] = {}
         for asset in (*state.stacks.values(), *state.instances.values()):
             definition = self.catalog.require(asset.definition_id)
             kind = ItemAssetKind.STACK if isinstance(asset, ItemStack) else ItemAssetKind.INSTANCE
@@ -714,15 +732,41 @@ class InventoryEngine:
             container = state.containers[asset.container_id]
             self._check_container(container, definition, kind, _Draft(
                 dict(state.containers), dict(state.stacks), dict(state.instances),
-                dict(state.reservations), []
+                dict(state.reservations), dict(state.asset_references),
+                state.next_reference_number, []
             ), adding=False)
             counts[container.id] = counts.get(container.id, 0) + 1
+            if container.maximum_space is not None:
+                try:
+                    storage = definition.component(
+                        ITEM_STORAGE_COMPONENT_ID,
+                        ItemStorageComponent,
+                    )
+                except KeyError:
+                    self._fail(
+                        "inventory.storage_space_undefined",
+                        "空间受限容器中的物品缺少空间占用定义",
+                        {"item_id": definition.id, "container_id": container.id},
+                    )
+                quantity = asset.quantity if isinstance(asset, ItemStack) else 1
+                occupied_space[container.id] = (
+                    occupied_space.get(container.id, 0)
+                    + storage.unit_space * quantity
+                )
             if isinstance(asset, ItemStack):
                 self._check_stack_limit(definition, asset.quantity)
         for container_id, count in counts.items():
             maximum = state.containers[container_id].maximum_assets
             if maximum is not None and count > maximum:
                 self._fail("inventory.container_full", "容器资产数量超过容量")
+        for container_id, used in occupied_space.items():
+            maximum = state.containers[container_id].maximum_space
+            if maximum is not None and used > maximum:
+                self._fail(
+                    "inventory.container_space_full",
+                    "容器空间占用超过上限",
+                    {"container_id": container_id, "used": used, "maximum": maximum},
+                )
 
     def _check_container(
         self,
@@ -763,6 +807,22 @@ class InventoryEngine:
             raise ValueError("物品资产 id 不能为空")
         if asset_id in draft.stacks or asset_id in draft.instances:
             InventoryEngine._fail("inventory.asset_exists", "物品资产 id 已经存在")
+
+    @staticmethod
+    def _allocate_reference(asset_id: str, draft: _Draft) -> int:
+        if asset_id in draft.asset_references:
+            InventoryEngine._fail("inventory.reference_exists", "物品资产已经分配编号")
+        number = draft.next_reference_number
+        draft.asset_references[asset_id] = number
+        draft.next_reference_number += 1
+        return number
+
+    @staticmethod
+    def _drop_reference(asset_id: str, draft: _Draft) -> None:
+        try:
+            del draft.asset_references[asset_id]
+        except KeyError:
+            InventoryEngine._fail("inventory.reference_unknown", "物品资产缺少稳定编号")
 
     @staticmethod
     def _require_container(container_id: str, draft: _Draft) -> ItemContainer:

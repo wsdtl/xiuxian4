@@ -118,6 +118,7 @@ def _facts(resolution: DamageResolution) -> tuple[EffectFact, ...]:
         "request_id": request.id,
         "damage_type": request.damage_type,
         "raw": breakdown.raw,
+        "is_proc": 1.0 if request.tags.has("damage.proc") else 0.0,
     }
     interception_facts = tuple(
         EffectFact(

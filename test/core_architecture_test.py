@@ -76,9 +76,53 @@ def _assert_physical_layout() -> None:
     assert (content / "__init__.py").is_file()
     assert (content / "official.py").is_file()
     assert not (content / "runtime.py").exists(), "官方内容装配不得再使用 runtime 名称"
-    assert (content / "catalog" / "__init__.py").is_file()
-    assert (content / "catalog" / "character_realms.py").is_file()
-    assert not (content / "catalog" / "realms.py").exists()
+    catalog = content / "catalog"
+    assert (catalog / "__init__.py").is_file()
+    assert {path.name for path in catalog.glob("*.py")} == {
+        "__init__.py",
+        "foundation.py",
+        "package.py",
+    }, "名录根目录只能保留公共入口、跨领域基础和内容包装配"
+    catalog_domains = {
+        "character": {"__init__.py", "definitions.py", "realms.py"},
+        "combat": {"__init__.py", "definitions.py", "stats.py", "valuation.py"},
+        "item": {"__init__.py", "definitions.py"},
+        "weapon": {
+            "__init__.py",
+            "balance.py",
+            "blueprints.py",
+            "definitions.py",
+            "mechanics.py",
+        },
+        "equipment": {
+            "__init__.py",
+            "balance.py",
+            "blueprints.py",
+            "definitions.py",
+            "properties.py",
+        },
+        "world": {"__init__.py", "definitions.py"},
+    }
+    for domain_name, expected_modules in catalog_domains.items():
+        domain = catalog / domain_name
+        assert domain.is_dir(), f"名录领域缺失：{domain_name}"
+        assert {path.name for path in domain.glob("*.py")} == expected_modules
+    display_tokens = (
+        "cultivation_name",
+        "magic_name",
+        "cultivation_suffix",
+        "magic_suffix",
+        "promise",
+        "description: str",
+        "equipment_name",
+    )
+    for blueprint_path in (
+        catalog / "weapon" / "blueprints.py",
+        catalog / "equipment" / "blueprints.py",
+    ):
+        source = blueprint_path.read_text(encoding="utf-8")
+        leaked = [token for token in display_tokens if token in source]
+        assert not leaked, f"规则蓝图泄漏世界皮肤展示字段：{blueprint_path.name}/{leaked}"
     world_skins = content / "world_skins"
     assert (world_skins / "__init__.py").is_file()
     assert (world_skins / "validation.py").is_file()
@@ -89,6 +133,7 @@ def _assert_physical_layout() -> None:
             "base.py",
             "character.py",
             "combat.py",
+            "equipment.py",
             "items.py",
             "skin.py",
             "weapons.py",
@@ -123,10 +168,10 @@ def _assert_physical_layout() -> None:
 
 
 def _assert_public_root() -> None:
-    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v7"
+    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v10"
     assert set(game.__all__) == {"PUBLIC_FOUNDATION_VERSION"}
     assert cmd.router is not None
-    assert core.GAME_CORE_VERSION == "game-core.v7"
+    assert core.GAME_CORE_VERSION == "game-core.v10"
     assert core.CORE_LAYERS == (
         "game.core.gameplay",
         "game.core.account",

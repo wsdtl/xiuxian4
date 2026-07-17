@@ -146,6 +146,21 @@ class ResourceMagnitude:
 
 
 @dataclass(frozen=True)
+class EffectStacksMagnitude:
+    """读取来源或目标当前指定 Effect 的总层数。"""
+
+    effect_id: StableId
+    owner: str = "target"
+    scale: float = 1.0
+    offset: float = 0.0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "effect_id", stable_id(self.effect_id, field="effect id"))
+        if self.owner not in {"source", "target"}:
+            raise ValueError("EffectStacksMagnitude.owner 只能是 source 或 target")
+
+
+@dataclass(frozen=True)
 class SumMagnitude:
     terms: tuple[Magnitude, ...]
 
@@ -212,6 +227,8 @@ class MagnitudeContext:
     parameters: Mapping[str, float] = field(default_factory=dict)
     source_resources: Mapping[StableId, float] = field(default_factory=dict)
     target_resources: Mapping[StableId, float] = field(default_factory=dict)
+    source_effect_stacks: Mapping[StableId, int] = field(default_factory=dict)
+    target_effect_stacks: Mapping[StableId, int] = field(default_factory=dict)
 
 
 MagnitudeT = TypeVar("MagnitudeT")
@@ -290,6 +307,18 @@ class MagnitudeEvaluators:
             + value.offset,
         )
         result.register(ResourceMagnitude, _resource_magnitude, _validate_resource_magnitude)
+        result.register(
+            EffectStacksMagnitude,
+            lambda value, context: float(
+                (
+                    context.source_effect_stacks
+                    if value.owner == "source"
+                    else context.target_effect_stacks
+                ).get(value.effect_id, 0)
+            )
+            * value.scale
+            + value.offset,
+        )
         result.register(
             SumMagnitude,
             lambda value, context: sum(result.evaluate(term, context) for term in value.terms),
@@ -571,6 +600,7 @@ __all__ = [
     "AttributeBreakdown",
     "AttributeDefinition",
     "AttributeMagnitude",
+    "EffectStacksMagnitude",
     "AttributeModifier",
     "AttributeResolver",
     "AttributeSnapshot",

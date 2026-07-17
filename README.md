@@ -1,6 +1,6 @@
 # xiuxian4
 
-`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v7`，
+`xiuxian4` 是聊天文字游戏服务的自下而上重建版本。当前公共底座版本为 `public-foundation.v10`，
 已经建立正式名录、双世界皮肤和第一个玩家命令。
 
 ## 当前地基
@@ -15,21 +15,21 @@
 - 协议与存储无关的 Gameplay 标签、属性、Effect、Ability、条件和 Trigger 规则内核
 - 显式规则版本、Ruleset、逻辑时间、确定性随机源和标准失败码
 - 任意数量、多历史版本的世界皮肤投影目录
-- 已封板的战斗底座 `combat.foundation.v2`
-- 已封板的物品与物资底座 `inventory.foundation.v1`
+- 已封板的战斗底座 `combat.foundation.v4`
+- 已封板的物品与物资底座 `inventory.foundation.v2`
 - 已封板的角色与成长底座 `character.foundation.v4`
 - 已封板的原子装配底座 `loadout.foundation.v2`
-- 已封板的武器底座 `weapon.foundation.v2`
-- 已封板的装备底座 `equipment.foundation.v1`
-- 已封板的价值评估底座 `valuation.foundation.v1`
-- 已封板的随机物品化底座 `itemization.foundation.v1`
+- 已封板的武器底座 `weapon.foundation.v3`
+- 已封板的装备底座 `equipment.foundation.v2`
+- 已封板的价值评估底座 `valuation.foundation.v2`
+- 已封板的随机物品化底座 `itemization.foundation.v2`
 - 已封板的临时队伍底座 `party.foundation.v1`
 - 已封板的账号与归属底座 `account.foundation.v1`
 - 已封板的经济账本底座 `economy.foundation.v1`
 - 已封板的统一奖励结算底座 `reward.foundation.v1`
 - 已封板的权益凭证与兑付底座 `grant.foundation.v1`
 - 已封板的持久化联合事务底座 `persistence.foundation.v6`
-- 已封板的内容包统一组装底座 `content.foundation.v3`
+- 已封板的内容包统一组装底座 `content.foundation.v5`
 - 已封板的时间与周期底座 `cycle.foundation.v1`
 - 异步行动槽与生命周期底座 `action.foundation.v1`
 - 已封板的铭刻底座 `inscription.foundation.v1`
@@ -61,6 +61,11 @@
 - 永久事实日志、可归零重建的投影检查点、通知收件箱和不可变排名快照
 - 掉落审计与保底、任意世界拓扑、交换冻结、活动参与和通用组织关系
 - 注册式全服活动目录、首尾热点窗口、统一活动通栏和只读活动入口
+- 黄玄地天圣五档品质，以及小中大三档血气药和灵力药
+- 七十二把双世界正式武器、独立战斗循环和统一目标白名单
+- 毫秒级武器静态估值与约四秒完成的 9216 实例品质分布巡检
+- 十二个装备底座族、六槽七十二个基础装备名和四十八种开放随机词条
+- 十二套 `2/3/4` 件可混搭套装，以及与品质独立的随机套装印记
 - QQ Markdown/按钮键盘与本地测试结果渲染器
 - 回调签名、时间窗、请求体限制、有界队列、事件去重和安全重试
 - 脱敏结构日志与真实 QQ 协议测试组件

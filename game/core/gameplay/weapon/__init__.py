@@ -1,6 +1,6 @@
 """单武器槽的品质、等级、经验和核心战斗贡献。"""
 
-WEAPON_FOUNDATION_VERSION = "weapon.foundation.v2"
+WEAPON_FOUNDATION_VERSION = "weapon.foundation.v3"
 
 from .models import (
     WeaponCatalog,

@@ -10,6 +10,20 @@ from ..ids import StableId, stable_id
 
 ComponentT = TypeVar("ComponentT")
 ComponentValidator = Callable[[object], None]
+ITEM_STORAGE_COMPONENT_ID = "item_component.storage"
+
+
+@dataclass(frozen=True)
+class ItemStorageComponent:
+    """物品进入空间受限容器时，每一件占用的整数空间。"""
+
+    unit_space: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.unit_space, int) or isinstance(self.unit_space, bool):
+            raise TypeError("ItemStorageComponent.unit_space 必须是整数")
+        if self.unit_space < 1:
+            raise ValueError("ItemStorageComponent.unit_space 必须大于 0")
 
 
 @dataclass(frozen=True)
@@ -64,4 +78,18 @@ class ItemComponentRegistry:
         return tuple(sorted(self._types))
 
 
-__all__ = ["ItemComponentRegistry", "ItemComponentType"]
+def register_item_storage_component(registry: ItemComponentRegistry) -> None:
+    """注册公共空间占用组件；重复注册仍由注册表拒绝。"""
+
+    registry.register(
+        ItemComponentType(ITEM_STORAGE_COMPONENT_ID, ItemStorageComponent)
+    )
+
+
+__all__ = [
+    "ITEM_STORAGE_COMPONENT_ID",
+    "ItemComponentRegistry",
+    "ItemComponentType",
+    "ItemStorageComponent",
+    "register_item_storage_component",
+]

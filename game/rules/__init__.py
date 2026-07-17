@@ -30,7 +30,7 @@ from .character import (
     CharacterIdentityViolation,
     CharacterNameSource,
     CharacterSettingsState,
-    INITIAL_BAG_CAPACITY,
+    INITIAL_BACKPACK_CAPACITY,
     INITIAL_CURRENCY_AMOUNT,
     INITIAL_MEDICINE_QUANTITY,
     INITIAL_CORE_ATTRIBUTES,
@@ -45,6 +45,19 @@ from .character import (
     REST_MINIMUM_SECONDS,
     character_level_milestone,
     character_level_milestones,
+)
+from .equipment import (
+    EQUIPMENT_GENERATION_PROTOCOL_VERSION,
+    EQUIPMENT_SET_MARK_CHANCE,
+    EquipmentGenerationRequest,
+    EquipmentGenerationResult,
+    EquipmentInstanceGenerator,
+)
+from .weapon import (
+    WEAPON_GENERATION_PROTOCOL_VERSION,
+    WeaponGenerationRequest,
+    WeaponGenerationResult,
+    WeaponInstanceGenerator,
 )
 
 
@@ -69,12 +82,21 @@ __all__ = [
     "CharacterIdentityViolation",
     "CharacterNameSource",
     "CharacterSettingsState",
+    "EQUIPMENT_GENERATION_PROTOCOL_VERSION",
+    "EQUIPMENT_SET_MARK_CHANCE",
+    "EquipmentGenerationRequest",
+    "EquipmentGenerationResult",
+    "EquipmentInstanceGenerator",
+    "WEAPON_GENERATION_PROTOCOL_VERSION",
+    "WeaponGenerationRequest",
+    "WeaponGenerationResult",
+    "WeaponInstanceGenerator",
     "GLOBAL_ACTIVITY_SCOPE_ID",
     "GlobalActivityCatalog",
     "GlobalActivityRegistration",
     "GlobalActivitySelection",
     "GlobalActivityView",
-    "INITIAL_BAG_CAPACITY",
+    "INITIAL_BACKPACK_CAPACITY",
     "INITIAL_CURRENCY_AMOUNT",
     "INITIAL_MEDICINE_QUANTITY",
     "INITIAL_CORE_ATTRIBUTES",

@@ -128,6 +128,7 @@ class ItemContainer:
     required_item_tags: TagSet = EMPTY_TAGS
     blocked_item_tags: TagSet = EMPTY_TAGS
     maximum_assets: int | None = None
+    maximum_space: int | None = None
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -141,6 +142,8 @@ class ItemContainer:
         object.__setattr__(self, "accepted_kinds", kinds)
         if self.maximum_assets is not None and self.maximum_assets < 1:
             raise ValueError("ItemContainer.maximum_assets 必须大于 0")
+        if self.maximum_space is not None and self.maximum_space < 1:
+            raise ValueError("ItemContainer.maximum_space 必须大于 0")
 
 
 @dataclass(frozen=True)
@@ -190,14 +193,24 @@ class InventoryState:
     instances: Mapping[str, ItemInstance] = field(default_factory=dict)
     reservations: Mapping[str, AssetReservation] = field(default_factory=dict)
     revision: int = 0
+    asset_references: Mapping[str, int] = field(default_factory=dict)
+    next_reference_number: int = 1
 
     def __post_init__(self) -> None:
         containers = dict(self.containers)
         stacks = dict(self.stacks)
         instances = dict(self.instances)
         reservations = dict(self.reservations)
+        asset_references = dict(self.asset_references)
         if self.revision < 0:
             raise ValueError("InventoryState.revision 不能小于 0")
+        if isinstance(self.next_reference_number, bool) or not isinstance(
+            self.next_reference_number,
+            int,
+        ):
+            raise TypeError("InventoryState.next_reference_number 必须是整数")
+        if self.next_reference_number < 1:
+            raise ValueError("InventoryState.next_reference_number 必须大于 0")
         for key, value in containers.items():
             if key != value.id:
                 raise ValueError(f"容器映射键与 id 不一致：{key}")
@@ -209,6 +222,24 @@ class InventoryState:
         duplicated = set(stacks) & set(instances)
         if duplicated:
             raise ValueError(f"资产 id 在堆叠物与实例物中重复：{sorted(duplicated)[0]}")
+        asset_ids = set(stacks) | set(instances)
+        if not asset_references and asset_ids:
+            asset_references = {
+                asset_id: number
+                for number, asset_id in enumerate(sorted(asset_ids), start=1)
+            }
+        if set(asset_references) != asset_ids:
+            raise ValueError("物品编号映射必须完整覆盖当前全部资产")
+        reference_numbers = tuple(asset_references.values())
+        if any(
+            isinstance(number, bool) or not isinstance(number, int) or number < 1
+            for number in reference_numbers
+        ):
+            raise ValueError("物品编号必须是大于 0 的整数")
+        if len(set(reference_numbers)) != len(reference_numbers):
+            raise ValueError("同一库存中的物品编号不能重复")
+        required_next = max(reference_numbers, default=0) + 1
+        next_reference_number = max(self.next_reference_number, required_next)
         reserved_totals: dict[str, int] = {}
         for key, value in reservations.items():
             if key != value.id:
@@ -231,6 +262,8 @@ class InventoryState:
         object.__setattr__(self, "stacks", MappingProxyType(stacks))
         object.__setattr__(self, "instances", MappingProxyType(instances))
         object.__setattr__(self, "reservations", MappingProxyType(reservations))
+        object.__setattr__(self, "asset_references", MappingProxyType(asset_references))
+        object.__setattr__(self, "next_reference_number", next_reference_number)
 
     def asset(self, asset_id: str) -> ItemStack | ItemInstance:
         if asset_id in self.stacks:
@@ -242,6 +275,22 @@ class InventoryState:
 
     def owner_of(self, asset_id: str) -> str:
         return self.containers[self.asset(asset_id).container_id].owner_id
+
+    def reference_number(self, asset_id: str) -> int:
+        """返回账号库存内稳定、永久不复用的物品编号。"""
+
+        try:
+            return self.asset_references[asset_id]
+        except KeyError as exc:
+            raise KeyError(f"未知物品资产：{asset_id}") from exc
+
+    def asset_id_for_reference(self, reference_number: int) -> str:
+        """由玩家编号反查当前仍存在的资产。"""
+
+        for asset_id, number in self.asset_references.items():
+            if number == reference_number:
+                return asset_id
+        raise KeyError(f"未知物品编号：{reference_number}")
 
     def reservations_for(self, asset_id: str) -> tuple[AssetReservation, ...]:
         return tuple(

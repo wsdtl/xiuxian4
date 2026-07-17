@@ -51,8 +51,8 @@ TIME = datetime(2026, 7, 14, 12, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
 def main() -> None:
-    assert ITEMIZATION_FOUNDATION_VERSION == "itemization.foundation.v1"
-    assert VALUATION_FOUNDATION_VERSION == "valuation.foundation.v1"
+    assert ITEMIZATION_FOUNDATION_VERSION == "itemization.foundation.v2"
+    assert VALUATION_FOUNDATION_VERSION == "valuation.foundation.v2"
     valuation = _valuation()
     engine = _itemization(valuation)
     _assert_curves_and_marginal(valuation)

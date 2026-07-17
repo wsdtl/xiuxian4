@@ -1,4 +1,4 @@
-"""六槽装备的流派、品质和实例状态。"""
+"""六槽装备的底座族、品质、套装印记和实例状态。"""
 
 from __future__ import annotations
 
@@ -25,14 +25,14 @@ EQUIPMENT_STATE_DATA_KEY = "equipment.state"
 
 
 @dataclass(frozen=True)
-class EquipmentStyleDefinition:
-    """装备流派的稳定身份和规则标签，不包含玩家可见名称。"""
+class EquipmentFamilyDefinition:
+    """有限装备底座族的稳定身份，不限制随机属性或套装。"""
 
     id: StableId
     tags: TagSet = EMPTY_TAGS
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "id", stable_id(self.id, field="equipment style id"))
+        object.__setattr__(self, "id", stable_id(self.id, field="equipment family id"))
 
 
 @dataclass(frozen=True)
@@ -72,16 +72,15 @@ class EquipmentSetDefinition:
 
 @dataclass(frozen=True)
 class EquipmentDefinition:
-    """槽位和流派固定，品质只选择对应的明确贡献参数。"""
+    """槽位和底座族固定；随机属性与套装印记属于具体实例。"""
 
     id: StableId
     item_definition_id: StableId
     slot_id: StableId
-    style_id: StableId
+    family_id: StableId
     base_contribution: ContributionSpec = ContributionSpec()
     quality_profiles: Mapping[StableId, EquipmentQualityProfile] = field(default_factory=dict)
     generation_profile_id: StableId | None = None
-    set_id: StableId | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "id", stable_id(self.id, field="equipment id"))
@@ -91,7 +90,11 @@ class EquipmentDefinition:
             stable_id(self.item_definition_id, field="item id"),
         )
         object.__setattr__(self, "slot_id", stable_id(self.slot_id, field="equipment slot id"))
-        object.__setattr__(self, "style_id", stable_id(self.style_id, field="equipment style id"))
+        object.__setattr__(
+            self,
+            "family_id",
+            stable_id(self.family_id, field="equipment family id"),
+        )
         if self.slot_id not in EQUIPMENT_SLOT_IDS:
             raise ValueError(f"装备定义不能使用非装备槽：{self.slot_id}")
         profiles = dict(self.quality_profiles)
@@ -101,13 +104,12 @@ class EquipmentDefinition:
             if stable_id(key, field="quality id") != profile.quality_id:
                 raise ValueError("装备品质档案映射键与 quality_id 不一致")
         object.__setattr__(self, "quality_profiles", MappingProxyType(profiles))
-        for field_name, label in (
-            ("generation_profile_id", "generation profile id"),
-            ("set_id", "equipment set id"),
-        ):
-            value = getattr(self, field_name)
-            if value is not None:
-                object.__setattr__(self, field_name, stable_id(value, field=label))
+        if self.generation_profile_id is not None:
+            object.__setattr__(
+                self,
+                "generation_profile_id",
+                stable_id(self.generation_profile_id, field="generation profile id"),
+            )
 
 
 @dataclass(frozen=True)
@@ -118,12 +120,15 @@ class EquipmentState:
     definition_id: StableId
     quality_id: StableId
     roll: ItemRollState | None = None
+    set_id: StableId | None = None
 
     def __post_init__(self) -> None:
         if not self.asset_id.strip():
             raise ValueError("EquipmentState 缺少 asset_id")
         object.__setattr__(self, "definition_id", stable_id(self.definition_id, field="equipment id"))
         object.__setattr__(self, "quality_id", stable_id(self.quality_id, field="quality id"))
+        if self.set_id is not None:
+            object.__setattr__(self, "set_id", stable_id(self.set_id, field="equipment set id"))
 
 
 class EquipmentCatalog:
@@ -138,15 +143,15 @@ class EquipmentCatalog:
         self.slots = slots
         self.items = items
         self.itemization = itemization
-        self.styles = DefinitionRegistry[EquipmentStyleDefinition]("EquipmentStyle")
+        self.families = DefinitionRegistry[EquipmentFamilyDefinition]("EquipmentFamily")
         self.sets = DefinitionRegistry[EquipmentSetDefinition]("EquipmentSet")
         self.definitions = DefinitionRegistry[EquipmentDefinition]("Equipment")
         self._finalized = False
 
-    def register_style(self, definition: EquipmentStyleDefinition) -> EquipmentStyleDefinition:
+    def register_family(self, definition: EquipmentFamilyDefinition) -> EquipmentFamilyDefinition:
         if self._finalized:
             raise RuntimeError("装备目录已经完成组装")
-        return self.styles.register(definition)
+        return self.families.register(definition)
 
     def register(self, definition: EquipmentDefinition) -> EquipmentDefinition:
         if self._finalized:
@@ -171,26 +176,23 @@ class EquipmentCatalog:
         if not self.items.finalized:
             self.items.finalize()
         quality_ids = set(self.qualities.definitions.ids())
-        style_ids = set(self.styles.ids())
-        set_ids = set(self.sets.ids())
+        family_ids = set(self.families.ids())
         used_items: set[StableId] = set()
         combinations: set[tuple[StableId, StableId]] = set()
         for definition in self.definitions:
-            if definition.style_id not in style_ids:
+            if definition.family_id not in family_ids:
                 raise KeyError(
-                    f"装备 {definition.id} 引用了未知流派：{definition.style_id}"
+                    f"装备 {definition.id} 引用了未知底座族：{definition.family_id}"
                 )
-            if definition.set_id is not None and definition.set_id not in set_ids:
-                raise KeyError(f"装备 {definition.id} 引用了未知套装：{definition.set_id}")
             unknown = set(definition.quality_profiles) - quality_ids
             if unknown:
                 raise KeyError(
                     f"装备 {definition.id} 引用了未知品质：{', '.join(sorted(unknown))}"
                 )
-            combination = (definition.slot_id, definition.style_id)
+            combination = (definition.slot_id, definition.family_id)
             if combination in combinations:
                 raise ValueError(
-                    f"装备槽位与流派组合重复：{definition.slot_id} + {definition.style_id}"
+                    f"装备槽位与底座族组合重复：{definition.slot_id} + {definition.family_id}"
                 )
             combinations.add(combination)
             if definition.item_definition_id in used_items:
@@ -220,7 +222,7 @@ class EquipmentCatalog:
                         f"装备 {definition.id} 的生成策略产出未配置品质："
                         + ", ".join(sorted(unknown_qualities))
                     )
-        self.styles.freeze()
+        self.families.freeze()
         self.sets.freeze()
         self.definitions.freeze()
         self._finalized = True
@@ -236,6 +238,7 @@ class EquipmentCatalog:
         definition_id: StableId,
         quality_id: StableId,
         roll: ItemRollState | None = None,
+        set_id: StableId | None = None,
     ) -> EquipmentState:
         if not self._finalized:
             self.finalize()
@@ -254,7 +257,9 @@ class EquipmentCatalog:
                 raise ValueError("装备随机属性品质与实例品质不一致")
             assert self.itemization is not None
             self.itemization.validate_roll(roll)
-        return EquipmentState(asset_id, definition.id, quality_id, roll)
+        if set_id is not None:
+            self.sets.require(set_id)
+        return EquipmentState(asset_id, definition.id, quality_id, roll, set_id)
 
 
 class EquipmentContributionProvider:
@@ -269,14 +274,14 @@ class EquipmentContributionProvider:
             profile = definition.quality_profiles[state.quality_id]
         except KeyError as exc:
             raise KeyError(f"装备 {definition.id} 不支持品质：{state.quality_id}") from exc
-        style = self.catalog.styles.require(definition.style_id)
-        style_spec = ContributionSpec(tags=style.tags)
+        family = self.catalog.families.require(definition.family_id)
+        family_spec = ContributionSpec(tags=family.tags)
         return CharacterContribution(
             definition.id,
             "source.equipment_instance",
             state.asset_id,
             merge_contribution_specs(
-                style_spec,
+                family_spec,
                 definition.base_contribution,
                 profile.contribution,
                 self._random_contribution(definition, state),
@@ -303,9 +308,10 @@ class EquipmentContributionProvider:
             raise ValueError("套装统计不能在同一装备槽传入多个实例")
         counts: dict[StableId, int] = {}
         for state in states:
-            definition = self.catalog.require(state.definition_id)
-            if definition.set_id is not None:
-                counts[definition.set_id] = counts.get(definition.set_id, 0) + 1
+            self.catalog.require(state.definition_id)
+            if state.set_id is not None:
+                self.catalog.sets.require(state.set_id)
+                counts[state.set_id] = counts.get(state.set_id, 0) + 1
         result = []
         for set_id, count in sorted(counts.items()):
             definition = self.catalog.sets.require(set_id)
@@ -370,7 +376,7 @@ __all__ = [
     "EquipmentSetBonus",
     "EquipmentSetDefinition",
     "EquipmentState",
-    "EquipmentStyleDefinition",
+    "EquipmentFamilyDefinition",
     "EQUIPMENT_STATE_DATA_KEY",
     "equipment_state_data",
     "equipment_state_from_data",

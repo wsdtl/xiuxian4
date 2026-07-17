@@ -23,10 +23,31 @@ from game.content import (  # noqa: E402
     CULTIVATION_SKIN,
     CULTIVATION_SKIN_ID,
     DEFAULT_SKIN_ID,
+    EPIC_QUALITY_ID,
+    FINE_QUALITY_ID,
+    LARGE_HEALTH_MEDICINE_ABILITY_ID,
+    LARGE_HEALTH_MEDICINE_ITEM_ID,
+    LARGE_MEDICINE_RECOVERY_RATIO,
+    LARGE_SPIRIT_MEDICINE_ABILITY_ID,
+    LARGE_SPIRIT_MEDICINE_ITEM_ID,
+    LEGENDARY_QUALITY_ID,
     MAGIC_SKIN,
     MAGIC_SKIN_ID,
+    MEDIUM_HEALTH_MEDICINE_ABILITY_ID,
+    MEDIUM_HEALTH_MEDICINE_ITEM_ID,
+    MEDIUM_MEDICINE_RECOVERY_RATIO,
+    MEDIUM_SPIRIT_MEDICINE_ABILITY_ID,
+    MEDIUM_SPIRIT_MEDICINE_ITEM_ID,
     PRIMARY_CURRENCY_ID,
+    QUALITY_IDS,
+    RARE_QUALITY_ID,
+    SMALL_HEALTH_MEDICINE_ABILITY_ID,
+    SMALL_HEALTH_MEDICINE_ITEM_ID,
+    SMALL_MEDICINE_RECOVERY_RATIO,
+    SMALL_SPIRIT_MEDICINE_ABILITY_ID,
+    SMALL_SPIRIT_MEDICINE_ITEM_ID,
     STARTING_CITY_ID,
+    STARTER_WEAPON_ITEM_ID,
     coordinate_token,
     validate_location_coordinate_id,
     WORLD_SKIN_PACKAGE_ID,
@@ -36,8 +57,13 @@ from game.content import (  # noqa: E402
     select_world_skin,
 )
 from game.core.gameplay import (  # noqa: E402
+    AttributeMagnitude,
     ContentAssembler,
     CurrencyDefinition,
+    ITEM_ABILITY_COMPONENT_ID,
+    ITEM_STORAGE_COMPONENT_ID,
+    ItemAbilityComponent,
+    ItemStorageComponent,
     LoadoutState,
     WorldLocationDefinition,
     character_name_display_width,
@@ -51,6 +77,8 @@ def main() -> None:
         CATALOG_PACKAGE_ID,
         WORLD_SKIN_PACKAGE_ID,
     )
+    assert str(CATALOG_PACKAGE.manifest.version) == "3.0.0"
+    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.1.0"
     assert len(catalog.report.content_fingerprint) == 64
     assert catalog.report.display_content_ids == CATALOG_PACKAGE.display_content_ids
     progression = catalog.characters.progressions.require("progression.character_level")
@@ -67,6 +95,18 @@ def main() -> None:
     assert progression.required_for_next_level(99) == 13_380_764
     assert sum(progression.experience_requirements) == 270_305_413
     assert catalog.characters.templates.require(DEFAULT_CHARACTER_TEMPLATE_ID)
+    assert QUALITY_IDS == (
+        COMMON_QUALITY_ID,
+        FINE_QUALITY_ID,
+        RARE_QUALITY_ID,
+        EPIC_QUALITY_ID,
+        LEGENDARY_QUALITY_ID,
+    )
+    assert tuple(catalog.qualities.require(value).rank for value in QUALITY_IDS) == tuple(
+        range(5)
+    )
+    _assert_medicine_catalog(catalog)
+    assert catalog.items.require(STARTER_WEAPON_ITEM_ID).tags.has("item.armament")
     basic_combat = catalog.characters.features.require(BASIC_COMBAT_FEATURE_ID)
     assert BASIC_ATTACK_ABILITY_ID in basic_combat.contribution.abilities
     city = catalog.world.locations.require(STARTING_CITY_ID)
@@ -94,13 +134,39 @@ def main() -> None:
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
     assert cultivation.catalog is magic.catalog
     assert cultivation.skin.name == "基础修仙界"
+    assert cultivation.skin.version == 5
     assert cultivation.skin.icon == "☯"
     assert cultivation.projector.name(PRIMARY_CURRENCY_ID) == "灵石"
-    assert cultivation.projector.name(COMMON_QUALITY_ID) == "凡品"
+    assert tuple(cultivation.projector.name(value) for value in QUALITY_IDS) == (
+        "黄",
+        "玄",
+        "地",
+        "天",
+        "圣",
+    )
     assert magic.skin.name == "魔法世界"
+    assert magic.skin.version == 5
     assert magic.skin.icon == "✦"
     assert magic.projector.name(PRIMARY_CURRENCY_ID) == "魔晶"
     assert magic.projector.name(COMMON_QUALITY_ID) == "普通"
+    assert tuple(magic.projector.name(value) for value in QUALITY_IDS) == (
+        "普通",
+        "精良",
+        "稀有",
+        "史诗",
+        "传说",
+    )
+    assert tuple(
+        cultivation.projector.name(value)
+        for value in (
+            SMALL_HEALTH_MEDICINE_ITEM_ID,
+            MEDIUM_HEALTH_MEDICINE_ITEM_ID,
+            LARGE_HEALTH_MEDICINE_ITEM_ID,
+            SMALL_SPIRIT_MEDICINE_ITEM_ID,
+            MEDIUM_SPIRIT_MEDICINE_ITEM_ID,
+            LARGE_SPIRIT_MEDICINE_ITEM_ID,
+        )
+    ) == ("小还丹", "中还丹", "大还丹", "小回灵丹", "中回灵丹", "大回灵丹")
     assert cultivation.projector.name(STARTING_CITY_ID) == "太玄仙城"
     assert magic.projector.name(STARTING_CITY_ID) == "星辉王城"
     first_realm = character_realm_for_level(1).id
@@ -121,6 +187,55 @@ def main() -> None:
 
     _assert_new_display_content_requires_both_skins()
     print("official content tests passed")
+
+
+def _assert_medicine_catalog(catalog) -> None:
+    medicines = (
+        (
+            SMALL_HEALTH_MEDICINE_ITEM_ID,
+            SMALL_HEALTH_MEDICINE_ABILITY_ID,
+            SMALL_MEDICINE_RECOVERY_RATIO,
+        ),
+        (
+            MEDIUM_HEALTH_MEDICINE_ITEM_ID,
+            MEDIUM_HEALTH_MEDICINE_ABILITY_ID,
+            MEDIUM_MEDICINE_RECOVERY_RATIO,
+        ),
+        (
+            LARGE_HEALTH_MEDICINE_ITEM_ID,
+            LARGE_HEALTH_MEDICINE_ABILITY_ID,
+            LARGE_MEDICINE_RECOVERY_RATIO,
+        ),
+        (
+            SMALL_SPIRIT_MEDICINE_ITEM_ID,
+            SMALL_SPIRIT_MEDICINE_ABILITY_ID,
+            SMALL_MEDICINE_RECOVERY_RATIO,
+        ),
+        (
+            MEDIUM_SPIRIT_MEDICINE_ITEM_ID,
+            MEDIUM_SPIRIT_MEDICINE_ABILITY_ID,
+            MEDIUM_MEDICINE_RECOVERY_RATIO,
+        ),
+        (
+            LARGE_SPIRIT_MEDICINE_ITEM_ID,
+            LARGE_SPIRIT_MEDICINE_ABILITY_ID,
+            LARGE_MEDICINE_RECOVERY_RATIO,
+        ),
+    )
+    for item_id, ability_id, recovery_ratio in medicines:
+        item = catalog.items.require(item_id)
+        assert item.tags.has("storage.special")
+        component = item.component(ITEM_ABILITY_COMPONENT_ID, ItemAbilityComponent)
+        storage = item.component(ITEM_STORAGE_COMPONENT_ID, ItemStorageComponent)
+        assert storage.unit_space == 1
+        assert component.ability_id == ability_id and component.consume_quantity == 1
+        ability = catalog.abilities.require(ability_id)
+        assert len(ability.effects) == 1
+        effect = catalog.effects.require(ability.effects[0].effect_id)
+        assert len(effect.operations) == 1
+        magnitude = effect.operations[0].magnitude
+        assert isinstance(magnitude, AttributeMagnitude)
+        assert magnitude.scale == recovery_ratio
 
 
 def _assert_new_display_content_requires_both_skins() -> None:

@@ -20,6 +20,7 @@ from ..character import (
     ProgressionDefinition,
 )
 from ..combat import (
+    BattleAbilityTargeting,
     CombatStats,
     ControlDefinition,
     ControlStats,
@@ -43,7 +44,7 @@ from ..effects import (
 from ..equipment import (
     EquipmentDefinition,
     EquipmentSetDefinition,
-    EquipmentStyleDefinition,
+    EquipmentFamilyDefinition,
 )
 from ..ids import StableId, stable_id
 from ..registry import ContentDefinition
@@ -199,7 +200,7 @@ class ContentPackage:
     progressions: tuple[ProgressionDefinition, ...] = ()
     character_templates: tuple[CharacterTemplateDefinition, ...] = ()
     items: tuple[ItemDefinition, ...] = ()
-    equipment_styles: tuple[EquipmentStyleDefinition, ...] = ()
+    equipment_families: tuple[EquipmentFamilyDefinition, ...] = ()
     equipment_sets: tuple[EquipmentSetDefinition, ...] = ()
     weapons: tuple[WeaponDefinition, ...] = ()
     equipment: tuple[EquipmentDefinition, ...] = ()
@@ -216,6 +217,7 @@ class ContentPackage:
     effects: tuple[EffectDefinition, ...] = ()
     abilities: tuple[AbilityDefinition, ...] = ()
     triggers: tuple[TriggerDefinition, ...] = ()
+    battle_ability_targeting: tuple[BattleAbilityTargeting, ...] = ()
     cycles: tuple[CycleDefinition, ...] = ()
     actions: tuple[ActionDefinition, ...] = ()
     activities: tuple[ActivityDefinition, ...] = ()
@@ -253,7 +255,7 @@ class ContentPackage:
             "progressions",
             "character_templates",
             "items",
-            "equipment_styles",
+            "equipment_families",
             "equipment_sets",
             "weapons",
             "equipment",
@@ -270,6 +272,7 @@ class ContentPackage:
             "effects",
             "abilities",
             "triggers",
+            "battle_ability_targeting",
             "cycles",
             "actions",
             "activities",

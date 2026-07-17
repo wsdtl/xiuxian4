@@ -18,12 +18,12 @@ WORLD_SKIN_PACKAGE_ID = "content.world_skins.official"
 WORLD_SKIN_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=WORLD_SKIN_PACKAGE_ID,
-        version=ContentVersion(1, 0, 0),
+        version=ContentVersion(3, 1, 0),
         dependencies=(
             PackageRequirement(
                 package_id=CATALOG_PACKAGE_ID,
-                minimum_version=ContentVersion(1, 0, 0),
-                maximum_exclusive=ContentVersion(2, 0, 0),
+                minimum_version=ContentVersion(3, 0, 0),
+                maximum_exclusive=ContentVersion(4, 0, 0),
             ),
         ),
     ),

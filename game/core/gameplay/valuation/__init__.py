@@ -1,6 +1,6 @@
 """协议、存储和具体玩法无关的快速价值评估底座。"""
 
-VALUATION_FOUNDATION_VERSION = "valuation.foundation.v1"
+VALUATION_FOUNDATION_VERSION = "valuation.foundation.v2"
 
 from .engine import ValuationCatalog, ValuationEngine
 from .models import (

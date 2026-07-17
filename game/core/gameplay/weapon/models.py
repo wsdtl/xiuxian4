@@ -160,6 +160,7 @@ class WeaponCatalog:
             self.items.finalize()
         quality_ids = set(self.qualities.definitions.ids())
         used_items: set[StableId] = set()
+        core_owners: dict[StableId, StableId] = {}
         for definition in self.definitions:
             unknown = set(definition.quality_profiles) - quality_ids
             if unknown:
@@ -183,6 +184,16 @@ class WeaponCatalog:
                 )
                 if generation.kind is not ItemizationKind.WEAPON:
                     raise ValueError(f"武器 {definition.id} 引用了非武器生成策略")
+                if len(generation.core_property_ids) != 1:
+                    raise ValueError(f"武器 {definition.id} 必须绑定唯一核心特色")
+                core_property_id = next(iter(generation.core_property_ids))
+                previous = core_owners.get(core_property_id)
+                if previous is not None:
+                    raise ValueError(
+                        f"武器核心特色不能复用：{core_property_id} 同时属于 "
+                        f"{previous} 和 {definition.id}"
+                    )
+                core_owners[core_property_id] = definition.id
                 unknown_qualities = {
                     band.quality_id for band in generation.quality_bands
                 } - set(definition.quality_profiles)

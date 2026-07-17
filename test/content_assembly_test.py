@@ -58,8 +58,8 @@ from game.core.gameplay.cycles import CalendarSchedule, CalendarUnit, CycleDefin
 from game.core.gameplay.economy import CurrencyDefinition  # noqa: E402
 from game.core.gameplay.equipment import (  # noqa: E402
     EquipmentDefinition,
+    EquipmentFamilyDefinition,
     EquipmentQualityProfile,
-    EquipmentStyleDefinition,
 )
 from game.core.gameplay.inventory import ItemAssetKind, ItemDefinition  # noqa: E402
 from game.core.gameplay.itemization import (  # noqa: E402
@@ -73,6 +73,7 @@ from game.core.gameplay.itemization import (  # noqa: E402
 )
 from game.core.gameplay.loadout import (  # noqa: E402
     HEAD_SLOT_ID,
+    LOADOUT_ITEM_COMPONENT_ID,
     WEAPON_SLOT_ID,
     LoadoutItemComponent,
     QualityDefinition,
@@ -121,9 +122,71 @@ def main() -> None:
     runtime = _assert_complete_runtime(packages)
     _assert_runtime_is_frozen(runtime)
     _assert_dependency_and_reference_failures(packages)
+    _assert_weapon_core_contract(packages)
     _assert_fingerprint_is_deterministic(packages, runtime.report.content_fingerprint)
     _assert_persisted_activation(runtime)
     print("content assembly tests passed")
+
+
+def _assert_weapon_core_contract(packages) -> None:
+    core, *others = packages
+    weapon = core.weapons[0]
+    profile = next(
+        value
+        for value in core.generation_profiles
+        if value.kind is ItemizationKind.WEAPON
+    )
+    duplicate_item = ItemDefinition(
+        "item.weapon.training_blade_second",
+        ItemAssetKind.INSTANCE,
+        TagSet.of("item.weapon"),
+        components={
+            LOADOUT_ITEM_COMPONENT_ID: LoadoutItemComponent(
+                frozenset({WEAPON_SLOT_ID})
+            )
+        },
+    )
+    duplicate_profile = replace(profile, id="generation.training_weapon_second")
+    duplicate_weapon = replace(
+        weapon,
+        id="weapon.training_blade_second",
+        item_definition_id=duplicate_item.id,
+        generation_profile_id=duplicate_profile.id,
+    )
+    duplicated_core = replace(
+        core,
+        items=(*core.items, duplicate_item),
+        generation_profiles=(*core.generation_profiles, duplicate_profile),
+        weapons=(*core.weapons, duplicate_weapon),
+    )
+    try:
+        ContentAssembler().assemble((duplicated_core, *others))
+        raise AssertionError("两把武器不能复用同一个核心特色")
+    except ValueError as exc:
+        assert "武器核心特色不能复用" in str(exc)
+
+    second_property = replace(
+        core.random_properties[0],
+        id="property.training_attack_second",
+    )
+    multi_core_profile = replace(
+        profile,
+        property_ids=profile.property_ids | {second_property.id},
+        core_property_ids=profile.core_property_ids | {second_property.id},
+    )
+    multi_core = replace(
+        core,
+        random_properties=(*core.random_properties, second_property),
+        generation_profiles=tuple(
+            multi_core_profile if value.id == profile.id else value
+            for value in core.generation_profiles
+        ),
+    )
+    try:
+        ContentAssembler().assemble((multi_core, *others))
+        raise AssertionError("一把武器不能声明多个核心特色")
+    except ValueError as exc:
+        assert "必须绑定唯一核心特色" in str(exc)
 
 
 def _manifest(package_id: str, *dependencies: str, version=(1, 0, 0)):
@@ -212,7 +275,7 @@ def _core_package() -> ContentPackage:
         1,
         quality_bands,
     )
-    style = EquipmentStyleDefinition("style.training")
+    family = EquipmentFamilyDefinition("family.training")
     weapon = WeaponDefinition(
         "weapon.training_blade",
         weapon_item.id,
@@ -229,7 +292,7 @@ def _core_package() -> ContentPackage:
         "equipment.training_head",
         equipment_item.id,
         HEAD_SLOT_ID,
-        style.id,
+        family.id,
         quality_profiles={
             quality.id: EquipmentQualityProfile(quality.id, ContributionSpec())
         },
@@ -249,7 +312,7 @@ def _core_package() -> ContentPackage:
         progressions=(progression,),
         character_templates=(template,),
         items=(weapon_item, equipment_item),
-        equipment_styles=(style,),
+        equipment_families=(family,),
         party_types=(PartyDefinition("party_type.standard", 3),),
         attribute_valuations=(attack_value,),
         random_properties=(attack_property,),
@@ -279,7 +342,7 @@ def _core_package() -> ContentPackage:
                 template.id,
                 weapon_item.id,
                 equipment_item.id,
-                style.id,
+                family.id,
                 weapon.id,
                 equipment.id,
                 damage_type.id,
@@ -395,7 +458,7 @@ def _assert_dependency_resolution(packages) -> None:
 
 def _assert_complete_runtime(packages):
     runtime = ContentAssembler().assemble(tuple(reversed(packages)))
-    assert CONTENT_FOUNDATION_VERSION == "content.foundation.v3"
+    assert CONTENT_FOUNDATION_VERSION == "content.foundation.v5"
     assert runtime.report.active_combat_profile_id == "combat_profile.standard"
     assert runtime.report.packages[-1].id == "content.world_skins"
     assert len(runtime.report.content_fingerprint) == 64

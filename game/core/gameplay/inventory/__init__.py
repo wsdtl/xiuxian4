@@ -1,8 +1,14 @@
 """协议、数据库与具体玩法无关的物品资产底座。"""
 
-INVENTORY_FOUNDATION_VERSION = "inventory.foundation.v1"
+INVENTORY_FOUNDATION_VERSION = "inventory.foundation.v2"
 
-from .components import ItemComponentRegistry, ItemComponentType
+from .components import (
+    ITEM_STORAGE_COMPONENT_ID,
+    ItemComponentRegistry,
+    ItemComponentType,
+    ItemStorageComponent,
+    register_item_storage_component,
+)
 from .definitions import ItemCatalog, ItemDefinition
 from .models import (
     AssetAvailability,
@@ -62,6 +68,7 @@ __all__ = [
     "GrantStack",
     "INVENTORY_FOUNDATION_VERSION",
     "ITEM_ABILITY_COMPONENT_ID",
+    "ITEM_STORAGE_COMPONENT_ID",
     "InventoryAbilityExecution",
     "InventoryAbilityExecutor",
     "InventoryState",
@@ -79,6 +86,7 @@ __all__ = [
     "ItemDefinition",
     "ItemInstance",
     "ItemStack",
+    "ItemStorageComponent",
     "ItemUseReceipt",
     "MergeStacks",
     "MoveAsset",
@@ -91,4 +99,5 @@ __all__ = [
     "SwapAssetContainers",
     "item_use_fingerprint",
     "register_item_ability_component",
+    "register_item_storage_component",
 ]

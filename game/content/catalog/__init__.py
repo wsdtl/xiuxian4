@@ -1,39 +1,62 @@
-"""官方稳定名录入口；分类定义由 package 模块统一汇总。"""
+"""官方稳定名录入口；领域内部蓝图、机制编译和审计器不从这里导出。"""
 
-from .base import (
-    COMMON_QUALITY_ID,
-    PRIMARY_CURRENCY_ID,
-    STANDARD_COMBAT_PROFILE_ID,
-)
-from .package import CATALOG_PACKAGE, CATALOG_PACKAGE_ID
-from .character_realms import (
+from .character import (
+    BASIC_COMBAT_FEATURE_ID,
+    CHARACTER_LEVEL_EXPERIENCE_REQUIREMENTS,
+    CHARACTER_LEVEL_PROGRESSION_ID,
     CHARACTER_REALMS,
     CHARACTER_REALM_CONTENT_DEFINITIONS,
     CHARACTER_REALM_DISPLAY_IDS,
     CharacterRealmDefinition,
-    character_realm_for_level,
-)
-from .characters import (
-    BASIC_COMBAT_FEATURE_ID,
-    CHARACTER_LEVEL_EXPERIENCE_REQUIREMENTS,
-    CHARACTER_LEVEL_PROGRESSION_ID,
     DEFAULT_CHARACTER_TEMPLATE_ID,
     MORTAL_PHYSIQUE_FEATURE_ID,
     ORIGIN_HUMAN_FEATURE_ID,
+    character_realm_for_level,
 )
 from .combat import (
     BASIC_ATTACK_ABILITY_ID,
     BREAKING_STRIKE_ABILITY_ID,
+    LARGE_HEALTH_MEDICINE_ABILITY_ID,
+    LARGE_MEDICINE_RECOVERY_RATIO,
+    LARGE_SPIRIT_MEDICINE_ABILITY_ID,
+    MEDIUM_HEALTH_MEDICINE_ABILITY_ID,
+    MEDIUM_MEDICINE_RECOVERY_RATIO,
+    MEDIUM_SPIRIT_MEDICINE_ABILITY_ID,
     PHYSICAL_DAMAGE_ID,
     SMALL_HEALTH_MEDICINE_ABILITY_ID,
+    SMALL_MEDICINE_RECOVERY_RATIO,
     SMALL_SPIRIT_MEDICINE_ABILITY_ID,
 )
-from .items import (
+from .equipment import (
+    EQUIPMENT_GENERATION_PROFILE_ID,
+    equipment_definition_id,
+    equipment_family_id,
+    equipment_item_id,
+    equipment_property_id,
+    equipment_set_id,
+    equipment_trigger_id,
+)
+from .foundation import (
+    COMMON_QUALITY_ID,
+    EPIC_QUALITY_ID,
+    FINE_QUALITY_ID,
+    LEGENDARY_QUALITY_ID,
+    PRIMARY_CURRENCY_ID,
+    QUALITY_IDS,
+    RARE_QUALITY_ID,
+    STANDARD_COMBAT_PROFILE_ID,
+)
+from .item import (
+    LARGE_HEALTH_MEDICINE_ITEM_ID,
+    LARGE_SPIRIT_MEDICINE_ITEM_ID,
+    MEDIUM_HEALTH_MEDICINE_ITEM_ID,
+    MEDIUM_SPIRIT_MEDICINE_ITEM_ID,
     SMALL_HEALTH_MEDICINE_ITEM_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
     STARTER_WEAPON_ITEM_ID,
 )
-from .weapons import STARTER_WEAPON_ID
+from .package import CATALOG_PACKAGE, CATALOG_PACKAGE_ID
+from .weapon import STARTER_WEAPON_ID
 from .world import (
     CHARACTER_PRESENCE_KIND_ID,
     PRIMARY_WORLD_SPACE_ID,
@@ -43,35 +66,4 @@ from .world import (
 )
 
 
-__all__ = [
-    "CATALOG_PACKAGE",
-    "CATALOG_PACKAGE_ID",
-    "BASIC_ATTACK_ABILITY_ID",
-    "BASIC_COMBAT_FEATURE_ID",
-    "BREAKING_STRIKE_ABILITY_ID",
-    "CHARACTER_LEVEL_EXPERIENCE_REQUIREMENTS",
-    "CHARACTER_LEVEL_PROGRESSION_ID",
-    "CHARACTER_REALMS",
-    "CHARACTER_REALM_CONTENT_DEFINITIONS",
-    "CHARACTER_REALM_DISPLAY_IDS",
-    "CHARACTER_PRESENCE_KIND_ID",
-    "CharacterRealmDefinition",
-    "COMMON_QUALITY_ID",
-    "DEFAULT_CHARACTER_TEMPLATE_ID",
-    "MORTAL_PHYSIQUE_FEATURE_ID",
-    "ORIGIN_HUMAN_FEATURE_ID",
-    "PHYSICAL_DAMAGE_ID",
-    "PRIMARY_CURRENCY_ID",
-    "PRIMARY_WORLD_SPACE_ID",
-    "SMALL_HEALTH_MEDICINE_ABILITY_ID",
-    "SMALL_HEALTH_MEDICINE_ITEM_ID",
-    "SMALL_SPIRIT_MEDICINE_ABILITY_ID",
-    "SMALL_SPIRIT_MEDICINE_ITEM_ID",
-    "STANDARD_COMBAT_PROFILE_ID",
-    "STARTER_WEAPON_ID",
-    "STARTER_WEAPON_ITEM_ID",
-    "STARTING_CITY_ID",
-    "coordinate_token",
-    "character_realm_for_level",
-    "validate_location_coordinate_id",
-]
+__all__ = [name for name in globals() if not name.startswith("_")]

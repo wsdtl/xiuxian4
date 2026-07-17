@@ -23,7 +23,7 @@ from .models import (
 )
 
 
-GENERATOR_VERSION = "itemization.generator.v1"
+GENERATOR_VERSION = "itemization.generator.v2"
 
 
 class _GenerationRejected(Exception):
@@ -297,13 +297,14 @@ def _tier(definition: PropertyDefinition, tier_number: int) -> PropertyTierDefin
 
 def _roll_parameter(parameter, context) -> float:
     steps = round((parameter.maximum - parameter.minimum) / parameter.step)
-    return parameter.minimum + context.random.randint(0, steps) * parameter.step
+    value = parameter.minimum + context.random.randint(0, steps) * parameter.step
+    return round(value, 12)
 
 
 def _valid_parameter_roll(minimum, maximum, step, value) -> bool:
     if not isfinite(value):
         return False
-    if not minimum <= value <= maximum:
+    if value < minimum - 1e-9 or value > maximum + 1e-9:
         return False
     steps = (value - minimum) / step
     return abs(steps - round(steps)) <= 1e-9

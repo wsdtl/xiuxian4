@@ -152,6 +152,22 @@ class ModifyCooldown:
 
 
 @dataclass(frozen=True)
+class ModifyCurrentCooldowns:
+    """调整目标当前已有冷却，避免内容提前知道对方 Ability ID。"""
+
+    id: StableId
+    turns: int
+    selection: str = "longest"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "id", stable_id(self.id, field="operation id"))
+        if self.turns == 0:
+            raise ValueError("ModifyCurrentCooldowns.turns 不能为 0")
+        if self.selection not in {"longest", "all"}:
+            raise ValueError("ModifyCurrentCooldowns.selection 只能是 longest 或 all")
+
+
+@dataclass(frozen=True)
 class GrantTag:
     """在 Effect 有效期间授予规则标签。"""
 
@@ -224,6 +240,24 @@ class EffectOperation(Protocol):
     """自定义 Effect 原子操作必须携带稳定 id。"""
 
     id: StableId
+
+
+@dataclass(frozen=True)
+class ChooseOne:
+    """按确定性随机源从多个操作分支中选择一个执行。"""
+
+    id: StableId
+    branches: tuple[tuple[EffectOperation, ...], ...]
+    weights: tuple[int, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "id", stable_id(self.id, field="operation id"))
+        if len(self.branches) < 2 or any(not branch for branch in self.branches):
+            raise ValueError("ChooseOne 至少需要两个非空分支")
+        weights = self.weights or tuple(1 for _ in self.branches)
+        if len(weights) != len(self.branches) or any(value < 1 for value in weights):
+            raise ValueError("ChooseOne.weights 必须与分支数量一致且全部大于 0")
+        object.__setattr__(self, "weights", tuple(int(value) for value in weights))
 
 
 @dataclass(frozen=True)
@@ -416,6 +450,7 @@ class EffectOperationHandlers:
             _validate_effect_selector_operation,
         )
         result.register(ModifyCooldown, _modify_cooldown, _validate_cooldown_operation)
+        result.register(ModifyCurrentCooldowns, _modify_current_cooldowns)
         result.register(GrantTag, _grant_tag)
         result.register(GrantAbility, _grant_ability, _validate_ability_operation)
         result.register(GrantTrigger, _grant_trigger, _validate_trigger_operation)
@@ -424,6 +459,10 @@ class EffectOperationHandlers:
             GrantTargetConstraint,
             _grant_target_constraint,
             _validate_target_constraint_operation,
+        )
+        result.register(
+            ChooseOne,
+            lambda operation, context: _choose_one(operation, context, result),
         )
         return result
 
@@ -489,28 +528,29 @@ class EffectEngine:
         for definition in self.definitions:
             self.conditions.validate(definition.conditions, condition_references)
             for operation in definition.operations:
-                self.operations.validate(operation, references)
-                magnitude = getattr(operation, "magnitude", None)
-                if magnitude is not None:
-                    self.magnitudes.validate(
-                        magnitude,
-                        references.attributes,
-                        references.resources,
-                    )
-                if definition.duration_turns == 0 and isinstance(
-                    operation,
-                    (
-                        ModifyAttribute,
-                        GrantTag,
-                        GrantAbility,
-                        GrantTrigger,
-                        GrantInterceptor,
-                        GrantTargetConstraint,
-                    ),
-                ):
-                    raise ValueError(
-                        f"瞬时 Effect {definition.id} 不能包含持续型操作：{operation.id}"
-                    )
+                for nested in _walk_operations(operation):
+                    self.operations.validate(nested, references)
+                    magnitude = getattr(nested, "magnitude", None)
+                    if magnitude is not None:
+                        self.magnitudes.validate(
+                            magnitude,
+                            references.attributes,
+                            references.resources,
+                        )
+                    if definition.duration_turns == 0 and isinstance(
+                        nested,
+                        (
+                            ModifyAttribute,
+                            GrantTag,
+                            GrantAbility,
+                            GrantTrigger,
+                            GrantInterceptor,
+                            GrantTargetConstraint,
+                        ),
+                    ):
+                        raise ValueError(
+                            f"瞬时 Effect {definition.id} 不能包含持续型操作：{nested.id}"
+                        )
         self.definitions.freeze()
 
     def apply(
@@ -554,6 +594,8 @@ class EffectEngine:
                 spec.parameters,
                 source.resources,
                 target.resources,
+                _effect_stacks(source),
+                _effect_stacks(target),
             ),
             magnitudes=self.magnitudes,
             resources=self.resources,
@@ -617,7 +659,8 @@ class EffectEngine:
             context,
         )
         has_persistent = bool(
-            modifiers
+            duration_turns != 0
+            or modifiers
             or tags.values
             or abilities
             or triggers
@@ -1095,6 +1138,13 @@ def _transfer_resource(
     )
 
 
+def _effect_stacks(entity: RuleEntity) -> Mapping[StableId, int]:
+    totals: dict[StableId, int] = {}
+    for effect in entity.active_effects:
+        totals[effect.definition_id] = totals.get(effect.definition_id, 0) + effect.stacks
+    return totals
+
+
 def _dispel_effects(
     operation: DispelEffects,
     _context: EffectOperationContext,
@@ -1164,6 +1214,25 @@ def _modify_cooldown(
     )
 
 
+def _modify_current_cooldowns(
+    operation: ModifyCurrentCooldowns,
+    context: EffectOperationContext,
+) -> EffectContribution:
+    cooldowns = context.target.cooldowns
+    if not cooldowns:
+        return EffectContribution()
+    ability_ids = tuple(sorted(cooldowns))
+    if operation.selection == "longest":
+        longest = max(cooldowns.values())
+        ability_ids = (next(value for value in ability_ids if cooldowns[value] == longest),)
+    return EffectContribution(
+        cooldown_mutations=tuple(
+            CooldownMutation(operation.id, ability_id, turns=operation.turns)
+            for ability_id in ability_ids
+        )
+    )
+
+
 def _grant_tag(operation: GrantTag, _context: EffectOperationContext) -> EffectContribution:
     return EffectContribution(granted_tags=TagSet.of(operation.tag))
 
@@ -1189,6 +1258,82 @@ def _grant_target_constraint(
 ) -> EffectContribution:
     return EffectContribution(
         granted_target_constraints=frozenset({operation.constraint_id})
+    )
+
+
+def _choose_one(
+    operation: ChooseOne,
+    context: EffectOperationContext,
+    handlers: EffectOperationHandlers,
+) -> EffectContribution:
+    ticket = context.rule.random.randint(1, sum(operation.weights))
+    selected = 0
+    boundary = 0
+    for index, weight in enumerate(operation.weights):
+        boundary += weight
+        if ticket <= boundary:
+            selected = index
+            break
+    contributions = tuple(
+        handlers.execute(nested, context)
+        for nested in operation.branches[selected]
+    )
+    return _merge_contributions(
+        contributions,
+        extra_facts=(
+            EffectFact(
+                "effect.choice.selected",
+                operation.id,
+                {"branch": selected, "branches": len(operation.branches)},
+            ),
+        ),
+    )
+
+
+def _walk_operations(operation: object):
+    yield operation
+    if isinstance(operation, ChooseOne):
+        for branch in operation.branches:
+            for nested in branch:
+                yield from _walk_operations(nested)
+
+
+def _merge_contributions(
+    contributions: tuple[EffectContribution, ...],
+    *,
+    extra_facts: tuple[EffectFact, ...] = (),
+) -> EffectContribution:
+    resource_deltas: dict[StableId, float] = {}
+    source_resource_deltas: dict[StableId, float] = {}
+    for contribution in contributions:
+        for key, value in contribution.resource_deltas.items():
+            resource_deltas[key] = resource_deltas.get(key, 0.0) + value
+        for key, value in contribution.source_resource_deltas.items():
+            source_resource_deltas[key] = source_resource_deltas.get(key, 0.0) + value
+    duration_overrides = {
+        contribution.duration_override
+        for contribution in contributions
+        if contribution.duration_override
+    }
+    if len(duration_overrides) > 1:
+        raise ValueError("随机分支内的持续时间覆盖发生冲突")
+    return EffectContribution(
+        modifiers=tuple(value for item in contributions for value in item.modifiers),
+        resource_deltas=resource_deltas,
+        source_resource_deltas=source_resource_deltas,
+        granted_tags=EMPTY_TAGS.merged(*(item.granted_tags for item in contributions)),
+        granted_abilities=frozenset(value for item in contributions for value in item.granted_abilities),
+        granted_triggers=frozenset(value for item in contributions for value in item.granted_triggers),
+        granted_interceptors=frozenset(value for item in contributions for value in item.granted_interceptors),
+        granted_target_constraints=frozenset(
+            value for item in contributions for value in item.granted_target_constraints
+        ),
+        facts=tuple(value for item in contributions for value in item.facts) + extra_facts,
+        mutations=tuple(value for item in contributions for value in item.mutations),
+        cooldown_mutations=tuple(
+            value for item in contributions for value in item.cooldown_mutations
+        ),
+        duration_override=next(iter(duration_overrides), 0),
     )
 
 
@@ -1253,6 +1398,7 @@ def _validate_target_constraint_operation(
 
 
 __all__ = [
+    "ChooseOne",
     "ChangeResource",
     "ConsumeEffectStacks",
     "CooldownMutation",
@@ -1273,6 +1419,7 @@ __all__ = [
     "GrantTrigger",
     "ModifyAttribute",
     "ModifyCooldown",
+    "ModifyCurrentCooldowns",
     "ModifyEffectDuration",
     "RuleReferences",
     "StackingPolicy",

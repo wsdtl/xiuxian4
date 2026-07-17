@@ -43,6 +43,7 @@ from game.core.gameplay import (
     Ruleset,
     SeededRandomSource,
     SourceReceipt,
+    TagSet,
     WeaponState,
     WorldPosition,
     WorldPresence,
@@ -65,7 +66,7 @@ from .settings import CharacterSettingsState
 
 
 INITIAL_CURRENCY_AMOUNT = 100
-INITIAL_BAG_CAPACITY = 40
+INITIAL_BACKPACK_CAPACITY = 40
 INITIAL_MEDICINE_QUANTITY = 2
 LOADOUT_PRESET_IDS = tuple(f"loadout_preset.p{index}" for index in range(6))
 PRIMARY_LEDGER_ID = "ledger.primary"
@@ -98,7 +99,9 @@ class CharacterCreationViolation(ValueError):
 class CharacterCreationIds:
     character_id: str
     inventory_id: str
-    bag_container_id: str
+    special_container_id: str
+    armory_container_id: str
+    backpack_container_id: str
     equipped_container_id: str
     health_stack_id: str
     spirit_stack_id: str
@@ -162,17 +165,32 @@ class CharacterCreationPlanner:
         )
         inventory = InventoryState(
             containers={
-                ids.bag_container_id: ItemContainer(
-                    ids.bag_container_id,
-                    "container.inventory",
+                ids.special_container_id: ItemContainer(
+                    ids.special_container_id,
+                    "container.special",
                     character.id,
-                    maximum_assets=INITIAL_BAG_CAPACITY,
+                    required_item_tags=TagSet.of("storage.special"),
+                ),
+                ids.armory_container_id: ItemContainer(
+                    ids.armory_container_id,
+                    "container.armory",
+                    character.id,
+                    accepted_kinds=frozenset({ItemAssetKind.INSTANCE}),
+                    required_item_tags=TagSet.of("item.armament"),
+                ),
+                ids.backpack_container_id: ItemContainer(
+                    ids.backpack_container_id,
+                    "container.backpack",
+                    character.id,
+                    required_item_tags=TagSet.of("storage.backpack"),
+                    maximum_space=INITIAL_BACKPACK_CAPACITY,
                 ),
                 ids.equipped_container_id: ItemContainer(
                     ids.equipped_container_id,
                     "container.equipped",
                     character.id,
                     accepted_kinds=frozenset({ItemAssetKind.INSTANCE}),
+                    required_item_tags=TagSet.of("item.armament"),
                     maximum_assets=7,
                 ),
             },
@@ -180,13 +198,13 @@ class CharacterCreationPlanner:
                 ids.health_stack_id: ItemStack(
                     ids.health_stack_id,
                     SMALL_HEALTH_MEDICINE_ITEM_ID,
-                    ids.bag_container_id,
+                    ids.special_container_id,
                     (ProvenanceLot(receipt, INITIAL_MEDICINE_QUANTITY),),
                 ),
                 ids.spirit_stack_id: ItemStack(
                     ids.spirit_stack_id,
                     SMALL_SPIRIT_MEDICINE_ITEM_ID,
-                    ids.bag_container_id,
+                    ids.special_container_id,
                     (ProvenanceLot(receipt, INITIAL_MEDICINE_QUANTITY),),
                 ),
             },
@@ -522,7 +540,9 @@ class CharacterCreationWorkflow:
         return CharacterCreationIds(
             character_id,
             character_id,
-            self.id_factory("bag"),
+            self.id_factory("special"),
+            self.id_factory("armory"),
+            self.id_factory("backpack"),
             self.id_factory("equipped"),
             self.id_factory("health_stack"),
             self.id_factory("spirit_stack"),
@@ -559,7 +579,7 @@ __all__ = [
     "CharacterCreationViolation",
     "CharacterCreationWorkflow",
     "character_creation_context",
-    "INITIAL_BAG_CAPACITY",
+    "INITIAL_BACKPACK_CAPACITY",
     "INITIAL_CURRENCY_AMOUNT",
     "INITIAL_MEDICINE_QUANTITY",
     "LOADOUT_PRESET_IDS",

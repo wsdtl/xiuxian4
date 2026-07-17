@@ -44,8 +44,8 @@ from game.core.gameplay.inventory import (  # noqa: E402
 from game.core.gameplay.equipment import (  # noqa: E402
     EquipmentCatalog,
     EquipmentDefinition,
+    EquipmentFamilyDefinition,
     EquipmentQualityProfile,
-    EquipmentStyleDefinition,
 )
 from game.core.gameplay.loadout import (  # noqa: E402
     HEAD_SLOT_ID,
@@ -151,13 +151,13 @@ def _catalogs():
         standard_loadout_slot_catalog(),
         items,
     )
-    style = equipment.register_style(EquipmentStyleDefinition("style.training"))
+    family = equipment.register_family(EquipmentFamilyDefinition("family.training"))
     equipment.register(
         EquipmentDefinition(
             "equipment.training_head",
             "item.equipment.training_head",
             HEAD_SLOT_ID,
-            style.id,
+            family.id,
             quality_profiles={
                 quality.id: EquipmentQualityProfile(
                     quality.id,

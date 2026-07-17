@@ -21,6 +21,7 @@ from ..abilities import AbilityDefinition, AbilityEngine
 from ..attributes import AttributeDefinition, AttributeResolver, MagnitudeEvaluators, ResourceDefinition
 from ..character import CharacterCatalog
 from ..combat import (
+    BattleAbilityTargeting,
     ControlDefinition,
     ControlEngine,
     DamageEngine,
@@ -45,6 +46,7 @@ from ..ids import StableId, stable_id
 from ..inventory import (
     ItemCatalog,
     ItemComponentRegistry,
+    register_item_storage_component,
     register_item_ability_component,
 )
 from ..itemization import ItemizationCatalog, ItemizationEngine, RolledProperty
@@ -61,7 +63,7 @@ from ..weapon import WeaponCatalog, weapon_level_contribution
 from .models import CombatProfileDefinition, ContentPackage, ContentVersion
 
 
-CONTENT_FOUNDATION_VERSION = "content.foundation.v3"
+CONTENT_FOUNDATION_VERSION = "content.foundation.v5"
 
 
 @dataclass(frozen=True)
@@ -150,6 +152,7 @@ class ContentRuntime:
     effects: DefinitionRegistry[EffectDefinition]
     abilities: DefinitionRegistry[AbilityDefinition]
     triggers: DefinitionRegistry[TriggerDefinition]
+    battle_ability_targeting: Mapping[StableId, BattleAbilityTargeting]
     cycles: DefinitionRegistry[CycleDefinition]
     actions: ActionCatalog
     activities: ActivityCatalog
@@ -175,6 +178,11 @@ class ContentRuntime:
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", MappingProxyType(dict(self.attributes)))
         object.__setattr__(self, "resources", MappingProxyType(dict(self.resources)))
+        object.__setattr__(
+            self,
+            "battle_ability_targeting",
+            MappingProxyType(dict(self.battle_ability_targeting)),
+        )
 
 
 class ContentAssembler:
@@ -192,6 +200,7 @@ class ContentAssembler:
 
         item_components = ItemComponentRegistry()
         register_item_ability_component(item_components)
+        register_item_storage_component(item_components)
         register_loadout_item_component(item_components)
         currencies = CurrencyCatalog()
         qualities = QualityCatalog()
@@ -206,6 +215,7 @@ class ContentAssembler:
         effects = DefinitionRegistry[EffectDefinition]("Effect")
         abilities = DefinitionRegistry[AbilityDefinition]("Ability")
         triggers = DefinitionRegistry[TriggerDefinition]("Trigger")
+        battle_ability_targeting: dict[StableId, BattleAbilityTargeting] = {}
         cycles = DefinitionRegistry[CycleDefinition]("Cycle")
         actions = ActionCatalog()
         activities = ActivityCatalog()
@@ -297,6 +307,12 @@ class ContentAssembler:
                 ownership,
                 known_displayable,
             )
+            for targeting in package.battle_ability_targeting:
+                if targeting.ability_id in battle_ability_targeting:
+                    raise ValueError(
+                        f"战斗 Ability 目标规则重复：{targeting.ability_id}"
+                    )
+                battle_ability_targeting[targeting.ability_id] = targeting
             self._register_many(
                 package,
                 "cycle",
@@ -588,9 +604,9 @@ class ContentAssembler:
         for package in ordered:
             self._register_many(
                 package,
-                "equipment_style",
-                package.equipment_styles,
-                equipment.register_style,
+                "equipment_family",
+                package.equipment_families,
+                equipment.register_family,
                 ownership,
                 known_displayable,
             )
@@ -696,6 +712,18 @@ class ContentAssembler:
             for registration in package.target_selector_registrations:
                 selectors.register(registration.id, registration.selector)
 
+        known_ability_ids = set(abilities.ids())
+        known_selector_ids = set(selectors.ids())
+        for ability_id, targeting in battle_ability_targeting.items():
+            if ability_id not in known_ability_ids:
+                raise KeyError(f"战斗目标规则引用未知 Ability：{ability_id}")
+            unknown_selectors = set(targeting.allowed_selectors) - known_selector_ids
+            if unknown_selectors:
+                raise KeyError(
+                    f"Ability {ability_id} 引用了未知目标选择器："
+                    + ", ".join(sorted(unknown_selectors))
+                )
+
         ability_engine = AbilityEngine(
             abilities,
             effect_engine,
@@ -755,6 +783,7 @@ class ContentAssembler:
             effects,
             abilities,
             triggers,
+            battle_ability_targeting,
             cycles,
             actions,
             activities,

@@ -1,4 +1,4 @@
-"""一武器槽、六装备槽、武器成长和装备流派品质联合测试。"""
+"""一武器槽、六装备槽、武器成长和装备随机品质联合测试。"""
 
 from __future__ import annotations
 
@@ -43,11 +43,11 @@ from game.core.gameplay.equipment import (  # noqa: E402
     EquipmentCatalog,
     EquipmentContributionProvider,
     EquipmentDefinition,
+    EquipmentFamilyDefinition,
     EquipmentQualityProfile,
     EquipmentSetBonus,
     EquipmentSetDefinition,
     EquipmentState,
-    EquipmentStyleDefinition,
 )
 from game.core.gameplay.inventory import (  # noqa: E402
     GrantInstance,
@@ -226,11 +226,11 @@ def _environment() -> dict[str, object]:
     weapons.finalize()
 
     equipment = EquipmentCatalog(qualities, slots, items)
-    equipment.register_style(
-        EquipmentStyleDefinition("style.combo", TagSet.of("equipment.style.combo"))
+    equipment.register_family(
+        EquipmentFamilyDefinition("family.combo", TagSet.of("equipment.family.combo"))
     )
-    equipment.register_style(
-        EquipmentStyleDefinition("style.sustain", TagSet.of("equipment.style.sustain"))
+    equipment.register_family(
+        EquipmentFamilyDefinition("family.sustain", TagSet.of("equipment.family.sustain"))
     )
     equipment.register_set(
         EquipmentSetDefinition(
@@ -248,7 +248,7 @@ def _environment() -> dict[str, object]:
             "equipment.combo_head",
             "item.equipment.combo_head",
             HEAD_SLOT_ID,
-            "style.combo",
+            "family.combo",
             quality_profiles={
                 "quality.common": EquipmentQualityProfile(
                     "quality.common",
@@ -275,7 +275,6 @@ def _environment() -> dict[str, object]:
                     ),
                 ),
             },
-            set_id="equipment_set.combo",
         )
     )
     equipment.register(
@@ -283,7 +282,7 @@ def _environment() -> dict[str, object]:
             "equipment.combo_body",
             "item.equipment.combo_body",
             BODY_SLOT_ID,
-            "style.combo",
+            "family.combo",
             quality_profiles={
                 "quality.common": EquipmentQualityProfile(
                     "quality.common",
@@ -294,7 +293,6 @@ def _environment() -> dict[str, object]:
                     ContributionSpec(),
                 ),
             },
-            set_id="equipment_set.combo",
         )
     )
     equipment.register(
@@ -302,7 +300,7 @@ def _environment() -> dict[str, object]:
             "equipment.sustain_head",
             "item.equipment.sustain_head",
             HEAD_SLOT_ID,
-            "style.sustain",
+            "family.sustain",
             quality_profiles={
                 "quality.common": EquipmentQualityProfile(
                     "quality.common",
@@ -467,8 +465,8 @@ def _prepared_loadout(env: dict[str, object]):
 
 def _assert_foundation_shapes(env: dict[str, object]) -> None:
     assert LOADOUT_FOUNDATION_VERSION == "loadout.foundation.v2"
-    assert WEAPON_FOUNDATION_VERSION == "weapon.foundation.v2"
-    assert EQUIPMENT_FOUNDATION_VERSION == "equipment.foundation.v1"
+    assert WEAPON_FOUNDATION_VERSION == "weapon.foundation.v3"
+    assert EQUIPMENT_FOUNDATION_VERSION == "equipment.foundation.v2"
     slots = env["slots"]
     assert len(slots.definitions.ids()) == 7  # type: ignore[union-attr]
 
@@ -594,8 +592,18 @@ def _assert_set_bonuses_are_separate(env: dict[str, object]) -> None:
     equipment = env["equipment"]
     assert isinstance(equipment, EquipmentCatalog)
     provider = EquipmentContributionProvider(equipment)
-    head = EquipmentState("set-head", "equipment.combo_head", "quality.common")
-    body = EquipmentState("set-body", "equipment.combo_body", "quality.common")
+    head = EquipmentState(
+        "set-head",
+        "equipment.combo_head",
+        "quality.common",
+        set_id="equipment_set.combo",
+    )
+    body = EquipmentState(
+        "set-body",
+        "equipment.combo_body",
+        "quality.common",
+        set_id="equipment_set.combo",
+    )
     assert provider.set_contributions((head,)) == ()
     bonuses = provider.set_contributions((head, body))
     assert len(bonuses) == 1
@@ -704,7 +712,7 @@ def _assert_equipment_has_no_growth_axis(env: dict[str, object]) -> None:
         if value.attribute_id == HEALTH_MAXIMUM
     )
     assert health.value == 40
-    assert contribution.contribution.tags.has("equipment.style.sustain")
+    assert contribution.contribution.tags.has("equipment.family.sustain")
 
 
 def _assert_only_equipped_assets_are_projected(env: dict[str, object]) -> None:
@@ -803,7 +811,7 @@ def _assert_only_equipped_assets_are_projected(env: dict[str, object]) -> None:
     assert snapshot.value(HEALTH_MAXIMUM) == 140
     assert snapshot.value(CRITICAL_CHANCE) == 0
     assert projection.entity.tags.has("weapon.tempo.fast")
-    assert projection.entity.tags.has("equipment.style.sustain")
+    assert projection.entity.tags.has("equipment.family.sustain")
 
 
 if __name__ == "__main__":

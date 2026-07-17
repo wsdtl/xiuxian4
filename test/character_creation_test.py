@@ -67,7 +67,7 @@ from game.rules.character import (  # noqa: E402
     CharacterSettingsState,
 )
 from game.rules.character.creation import (  # noqa: E402
-    INITIAL_BAG_CAPACITY,
+    INITIAL_BACKPACK_CAPACITY,
     INITIAL_CURRENCY_AMOUNT,
     INITIAL_MEDICINE_QUANTITY,
     LOADOUT_PRESET_IDS,
@@ -187,12 +187,21 @@ def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> 
     progression = next(iter(character.progressions.values()))
     assert (progression.level, progression.experience, progression.total_experience) == (1, 0, 0)
 
-    bag = next(
-        container
+    containers = {
+        container.kind: container
         for container in receipt.inventory.containers.values()
-        if container.kind == "container.inventory"
-    )
-    assert bag.maximum_assets == INITIAL_BAG_CAPACITY
+    }
+    assert set(containers) == {
+        "container.special",
+        "container.armory",
+        "container.backpack",
+        "container.equipped",
+    }
+    assert containers["container.special"].required_item_tags.has("storage.special")
+    assert containers["container.armory"].required_item_tags.has("item.armament")
+    assert containers["container.backpack"].maximum_space == INITIAL_BACKPACK_CAPACITY
+    assert containers["container.backpack"].maximum_assets is None
+    assert containers["container.equipped"].maximum_assets == 7
     quantities = {
         stack.definition_id: stack.quantity
         for stack in receipt.inventory.stacks.values()
@@ -203,6 +212,15 @@ def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> 
     }
     weapon_instance = receipt.inventory.instances[receipt.starter_weapon.asset_id]
     assert weapon_state_from_instance(weapon_instance) == receipt.starter_weapon
+    assert weapon_instance.container_id == containers["container.equipped"].id
+    assert all(
+        stack.container_id == containers["container.special"].id
+        for stack in receipt.inventory.stacks.values()
+    )
+    assert set(receipt.inventory.asset_references) == {
+        *receipt.inventory.stacks,
+        *receipt.inventory.instances,
+    }
 
     assert tuple(receipt.loadout.presets) == LOADOUT_PRESET_IDS
     assert receipt.loadout.active_preset_id == LOADOUT_PRESET_IDS[0]

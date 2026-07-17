@@ -52,6 +52,7 @@ from game.core.gameplay.inventory import (  # noqa: E402
     ItemComponentRegistry,
     ItemContainer,
     ItemDefinition,
+    ItemStorageComponent,
     MergeStacks,
     MoveAsset,
     ReleaseReservation,
@@ -60,6 +61,7 @@ from game.core.gameplay.inventory import (  # noqa: E402
     SourceReceipt,
     SplitStack,
     register_item_ability_component,
+    register_item_storage_component,
 )
 
 
@@ -92,6 +94,7 @@ def _receipt(receipt_id: str, source_id: str = "reward-1") -> SourceReceipt:
 
 def _catalog(*, with_ability: bool = False) -> ItemCatalog:
     components = ItemComponentRegistry()
+    register_item_storage_component(components)
     if with_ability:
         register_item_ability_component(components)
     catalog = ItemCatalog(components)
@@ -101,6 +104,7 @@ def _catalog(*, with_ability: bool = False) -> ItemCatalog:
             ItemAssetKind.STACK,
             tags=TagSet.of("item.material"),
             stack_limit=100,
+            components={"item_component.storage": ItemStorageComponent(2)},
         )
     )
     catalog.register(
@@ -108,6 +112,7 @@ def _catalog(*, with_ability: bool = False) -> ItemCatalog:
             "item.training_sword",
             ItemAssetKind.INSTANCE,
             tags=TagSet.of("item.equipment"),
+            components={"item_component.storage": ItemStorageComponent(3)},
         )
     )
     if with_ability:
@@ -120,7 +125,8 @@ def _catalog(*, with_ability: bool = False) -> ItemCatalog:
                 components={
                     "item_component.use_ability": ItemAbilityComponent(
                         "ability.use_healing_pill"
-                    )
+                    ),
+                    "item_component.storage": ItemStorageComponent(1),
                 },
             )
         )
@@ -133,7 +139,8 @@ def _catalog(*, with_ability: bool = False) -> ItemCatalog:
                     "item_component.use_ability": ItemAbilityComponent(
                         "ability.use_healing_pill",
                         consume_quantity=0,
-                    )
+                    ),
+                    "item_component.storage": ItemStorageComponent(1),
                 },
             )
         )
@@ -158,6 +165,12 @@ def _containers() -> dict[str, ItemContainer]:
             "container.inventory",
             "player-a",
             maximum_assets=1,
+        ),
+        "space-bag": ItemContainer(
+            "space-bag",
+            "container.backpack",
+            "player-a",
+            maximum_space=8,
         ),
     }
 
@@ -187,7 +200,7 @@ def _assert_definition_and_container_boundaries() -> None:
     catalog = _catalog()
     engine = InventoryEngine(catalog)
     assert catalog.finalized
-    assert INVENTORY_FOUNDATION_VERSION == "inventory.foundation.v1"
+    assert INVENTORY_FOUNDATION_VERSION == "inventory.foundation.v2"
     state = InventoryState(containers=_containers())
     rejected = engine.execute(
         InventoryTransaction(
@@ -235,6 +248,12 @@ def _base_assets() -> tuple[InventoryEngine, InventoryState]:
         ),
     )
     assert [event.kind for event in result.events] == ["inventory.item.granted"] * 3
+    assert result.state.asset_references == {
+        "ore-a": 1,
+        "ore-b": 2,
+        "sword-a": 3,
+    }
+    assert result.state.next_reference_number == 4
     return engine, result.state
 
 
@@ -247,6 +266,8 @@ def _assert_asset_transactions_and_provenance() -> None:
         MergeStacks("ore-b", "ore-a"),
     ).state
     assert merged.stacks["ore-a"].quantity == 50
+    assert merged.reference_number("ore-a") == 1
+    assert "ore-b" not in merged.asset_references
     assert [lot.receipt.id for lot in merged.stacks["ore-a"].lots] == [
         "receipt-a",
         "receipt-b",
@@ -259,6 +280,8 @@ def _assert_asset_transactions_and_provenance() -> None:
     ).state
     assert split.stacks["ore-a"].quantity == 15
     assert split.stacks["ore-transfer"].quantity == 35
+    assert split.reference_number("ore-transfer") == 4
+    assert split.asset_id_for_reference(4) == "ore-transfer"
     assert [(lot.receipt.id, lot.quantity) for lot in split.stacks["ore-transfer"].lots] == [
         ("receipt-a", 30),
         ("receipt-b", 5),
@@ -270,6 +293,7 @@ def _assert_asset_transactions_and_provenance() -> None:
         MoveAsset("ore-transfer", "bag-b"),
     )
     assert moved.state.owner_of("ore-transfer") == "player-b"
+    assert moved.state.reference_number("ore-transfer") == 4
     assert moved.events[-1].kind == "inventory.item.transferred"
     assert moved.events[-1].values["from_owner_id"] == "player-a"
 
@@ -299,6 +323,39 @@ def _assert_asset_transactions_and_provenance() -> None:
     assert rejected_split.failure
     assert rejected_split.failure.code == "inventory.container_full"
     assert set(full.stacks) == {"ore-small"}
+
+    space_limited = _execute(
+        engine,
+        InventoryState(containers=_containers()),
+        "fill-space-bag",
+        GrantStack(
+            "space-ore",
+            "item.spirit_ore",
+            "space-bag",
+            4,
+            _receipt("receipt-space"),
+        ),
+    ).state
+    rejected_space = engine.execute(
+        InventoryTransaction(
+            "overflow-space-bag",
+            "player-a",
+            "inventory.test_operation",
+            (
+                GrantInstance(
+                    "space-sword",
+                    "item.training_sword",
+                    "space-bag",
+                    _receipt("receipt-space-sword"),
+                ),
+            ),
+        ),
+        state=space_limited,
+        context=_context(),
+    )
+    assert rejected_space.failure
+    assert rejected_space.failure.code == "inventory.container_space_full"
+    assert "space-sword" not in space_limited.asset_references
 
 
 def _assert_reservations_and_escrow() -> None:
