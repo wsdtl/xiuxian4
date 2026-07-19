@@ -136,7 +136,7 @@ from game.features.player import (
 from game.rules.exploration import EXPLORATION_AGGREGATE
 from game.rules.economy import MARKET_AGGREGATE
 from game.rules.sparring import SparringBattleSimulator
-from launch import C, OnEvent, Scheduler, config, logger
+from launch import C, OnEvent, config, logger
 from launch.adapter import MessageIdentity
 
 
@@ -810,120 +810,6 @@ def initialize_game_services() -> None:
     )
 
 
-@Scheduler._sync(
-    "interval",
-    seconds=60,
-    id="game_exploration_settlement",
-    max_instances=1,
-    coalesce=True,
-)
-def settle_running_explorations() -> None:
-    """后台发现到期探险；单个批次仍由应用服务独立原子提交。"""
-
-    services = current_game_services()
-    try:
-        services.exploration.settle_all_due(
-            logical_time=datetime.now(ZoneInfo(config.project.timezone))
-        )
-    except Exception as exc:
-        logger.opt(colors=True, exception=exc).error(C.fail("探险后台结算失败"))
-
-
-@Scheduler._sync(
-    "interval",
-    seconds=60,
-    id="game_dimensional_disaster_maintenance",
-    max_instances=1,
-    coalesce=True,
-)
-def maintain_dimensional_disasters() -> None:
-    """开放当前灾厄窗口，并为到期事件封榜和发放唯一遗羽。"""
-
-    services = current_game_services()
-    try:
-        services.dimensional_disasters.maintain(
-            logical_time=datetime.now(ZoneInfo(config.project.timezone))
-        )
-    except Exception as exc:
-        logger.opt(colors=True, exception=exc).error(C.fail("次元灾厄维护失败"))
-
-
-@Scheduler._sync(
-    "interval",
-    seconds=60,
-    id="game_rest_settlement",
-    max_instances=1,
-    coalesce=True,
-)
-def settle_completed_rest() -> None:
-    """后台完成已经达到三十分钟的休息行动。"""
-
-    services = current_game_services()
-    try:
-        services.rest.settle_all_due(
-            logical_time=datetime.now(ZoneInfo(config.project.timezone))
-        )
-    except Exception as exc:
-        logger.opt(colors=True, exception=exc).error(C.fail("休息后台结算失败"))
-
-
-@Scheduler._sync(
-    "interval",
-    hours=24,
-    id="game_battle_report_cleanup",
-    max_instances=1,
-    coalesce=True,
-)
-def cleanup_battle_reports() -> None:
-    """每天清理过期战报：七天删除明细，三十天删除摘要。"""
-
-    services = current_game_services()
-    try:
-        services.battle_reports.cleanup(
-            logical_time=datetime.now(ZoneInfo(config.project.timezone))
-        )
-    except Exception as exc:
-        logger.opt(colors=True, exception=exc).error(C.fail("战报保留期清理失败"))
-
-
-@Scheduler._sync(
-    "interval",
-    seconds=60,
-    id="game_market_expiration",
-    max_instances=1,
-    coalesce=True,
-)
-def expire_market_listings() -> None:
-    """释放七天到期的二手挂单及其物品预约。"""
-
-    services = current_game_services()
-    try:
-        services.economy.expire_due(
-            logical_time=datetime.now(ZoneInfo(config.project.timezone))
-        )
-    except Exception as exc:
-        logger.opt(colors=True, exception=exc).error(C.fail("二手挂单到期处理失败"))
-
-
-@Scheduler._sync(
-    "interval",
-    seconds=60,
-    id="game_lottery_draw",
-    max_instances=1,
-    coalesce=True,
-)
-def draw_due_lottery_rounds() -> None:
-    """补开所有已经到达开奖时间的彩票轮次。"""
-
-    services = current_game_services()
-    try:
-        services.lottery.draw_due(
-            logical_time=datetime.now(ZoneInfo(config.project.timezone))
-        )
-    except Exception as exc:
-        logger.opt(colors=True, exception=exc).error(C.fail("彩票后台开奖失败"))
-
-
 __all__ = [
     "CharacterCreationCommandResult",
     "CharacterOverview",
@@ -936,14 +822,9 @@ __all__ = [
     "PlayerReminderDetails",
     "PlayerReminderDetailsResult",
     "build_game_services",
-    "cleanup_battle_reports",
     "current_game_services",
-    "draw_due_lottery_rounds",
-    "expire_market_listings",
     "initialize_game_services",
     "install_game_services",
     "message_identity_evidence",
     "restore_game_services",
-    "settle_running_explorations",
-    "settle_completed_rest",
 ]

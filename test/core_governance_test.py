@@ -179,7 +179,11 @@ def _assert_business_feature_catalog() -> None:
     )
 
     command_root = ROOT / "game" / "cmd"
-    app_source = (ROOT / "game" / "app.py").read_text(encoding="utf-8")
+    job_sources = {
+        path: path.read_text(encoding="utf-8")
+        for path in command_root.rglob("jobs.py")
+    }
+    registered_job_files: set[Path] = set()
     for feature in ACTIVE_BUSINESS_FEATURES:
         for command_package in feature.command_packages:
             package = command_root / command_package
@@ -187,9 +191,20 @@ def _assert_business_feature_catalog() -> None:
                 f"业务 {feature.id} 缺少命令组件 {command_package}"
             )
         for job_id in feature.scheduled_jobs:
-            assert f'id="{job_id}"' in app_source, (
-                f"业务 {feature.id} 缺少定时任务 {job_id}"
+            matches = [
+                path
+                for path, source in job_sources.items()
+                if f'id="{job_id}"' in source
+            ]
+            assert len(matches) == 1, (
+                f"业务 {feature.id} 的定时任务 {job_id} 必须且只能登记一次"
             )
+            job_file = matches[0]
+            assert job_file.parent.name in feature.command_packages, (
+                f"业务 {feature.id} 的定时任务 {job_id} 不在所属二级组件中"
+            )
+            registered_job_files.add(job_file)
+    assert registered_job_files == set(job_sources), "存在未登记到业务台账的 jobs.py"
 
 
 def _assert_application_composition_boundary() -> None:
@@ -198,6 +213,7 @@ def _assert_application_composition_boundary() -> None:
     source = (ROOT / "game" / "app.py").read_text(encoding="utf-8")
     assert ".unit_of_work(" not in source, "game/app.py 禁止直接开启业务工作单元"
     assert "InventoryTransaction(" not in source, "game/app.py 禁止直接构造库存事务"
+    assert "@Scheduler" not in source, "game/app.py 禁止直接注册业务定时任务"
 
 
 def _assert_battle_modes_use_core_session() -> None:

@@ -6,6 +6,7 @@ from launch.adapter import Depends
 
 from ..command import GameCommand
 from ..dependencies import current_character
+from . import jobs as jobs  # noqa: F401
 from . import service
 
 

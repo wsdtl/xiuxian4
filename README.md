@@ -349,8 +349,8 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - `game/content/` 只承载稳定名录、世界皮肤和统一装配，只能依赖 Gameplay 公共契约。
 - `game/rules/` 只保存跨组件复用的英文具体游戏规则，不放中文组件业务文件。
 - `game/features/` 保存正式业务用例和联合事务，不能导入命令、消息协议或持久化实现。
-- `game/app.py` 只负责组装、稳定转发和启动生命周期，禁止直接开启业务工作单元。
-- `game/cmd/` 承接命令与对应组件业务；二级组件的 `__init__.py` 只注册，`service.py` 负责调用底座和展示。
+- `game/app.py` 只负责组装、稳定转发和启动生命周期，禁止直接开启业务工作单元或注册业务定时任务。
+- `game/cmd/` 承接命令与对应组件入口；二级组件的 `service.py` 负责命令，`jobs.py` 负责定时触发，真正业务仍归 `features`。
 - 只有 `game/cmd/` 的二级组件目录使用中文；Python 文件名和代码标识符统一使用英文。
 - `组件测试/` 只存放可删除的联调与协议测试，禁止依赖游戏代码。
 - `launch/` 只负责应用运行与通信基础设施，不能导入未来修仙业务包。
