@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -20,28 +20,19 @@ from game.content import (
 from game.core.account import AccountEngine, ExternalIdentity, IdentityEvidence
 from game.core.gameplay import (
     AttributeResolver,
-    ActionSlotKind,
-    ActionRecord,
-    ActionState,
     CharacterEngine,
     CharacterItemUseEngine,
     CharacterProjector,
     CharacterState,
     InventoryEngine,
     InventoryAbilityExecutor,
-    InventoryState,
     InscriptionEngine,
     InscriptionPreference,
-    LedgerState,
     LedgerEngine,
-    LoadoutState,
     LoadoutEngine,
-    NotificationEntry,
-    NotificationStatus,
     RewardSettlementEngine,
     GameplayExecutor,
     WeaponEngine,
-    WorldState,
 )
 from game.core.persistence import (
     ACTIVITY_AGGREGATE,
@@ -62,8 +53,10 @@ from game.core.persistence import (
     PersistedCharacterService,
     PersistedInscriptionService,
     PersistedItemUseService,
+    PersistedWeaponItemUseService,
     PersistedLoadoutService,
     PersistedRewardSettlementService,
+    PersistedSocialService,
     REWARD_CLAIM_AGGREGATE,
     RewardSettlementStorageKeys,
     SnapshotRepository,
@@ -77,21 +70,13 @@ from game.rules.character import (
     CHARACTER_SETTINGS_AGGREGATE,
     CharacterDimensionState,
     CharacterCreationPlanner,
-    CharacterCreationReceipt,
-    CharacterCreationRequest,
     CharacterCreationWorkflow,
-    CharacterIdentityViolation,
     CharacterSettingsState,
     DimensionShiftResult,
-    PRIMARY_LEDGER_ID,
-    PRIMARY_WORLD_ID,
-    character_creation_context,
-    shift_dimension,
 )
 from game.rules.activity import (
     GLOBAL_ACTIVITY_SCOPE_ID,
     GlobalActivityCatalog,
-    GlobalActivityView,
     global_activity_catalog,
 )
 from game.rules.combat import PlayerCombatProjector
@@ -105,117 +90,54 @@ from game.features.dimensional_disaster import (
     DimensionalDisasterStorageKinds,
     dimensional_disaster_codec_registrations,
 )
-from game.features.item_sale import ItemSaleFeature, ItemSaleStorageKinds
+from game.features.economy import (
+    EconomyFeature,
+    EconomyStorageKinds,
+    economy_codec_registrations,
+)
+from game.features.draw import (
+    DRAW_HISTORY_AGGREGATE,
+    DrawFeature,
+    DrawStorageKinds,
+    draw_codec_registrations,
+)
+from game.features.lottery import (
+    LOTTERY_AGGREGATE,
+    LotteryFeature,
+    LotteryStorageKinds,
+    lottery_codec_registrations,
+)
 from game.features.battle_report import BattleReportService
 from game.features.rest import RestFeature, RestStorageKinds, rest_codec_registrations
-from game.rules.exploration import (
-    EXPLORATION_AGGREGATE,
-    ExplorationState,
-    ExplorationStatus,
+from game.features.sparring import SparringFeature, SparringStorageKinds
+from game.features.special_items import (
+    SpecialItemUseService,
+    special_item_codec_registrations,
 )
+from game.features.dimension_shift import (
+    DimensionShiftFeature,
+    DimensionShiftStorageKinds,
+)
+from game.features.player import (
+    CharacterCreationCommandResult,
+    CharacterOverview,
+    CharacterOverviewResult,
+    CurrentCharacterResult,
+    GlobalActivityViewsResult,
+    NotificationMarkResult,
+    PlayerFeature,
+    PlayerOwnershipError,
+    PlayerReminderDetails,
+    PlayerReminderDetailsResult,
+    PlayerReplyState,
+    PlayerReplyStateResult,
+    PlayerStorageKinds,
+)
+from game.rules.exploration import EXPLORATION_AGGREGATE
+from game.rules.economy import MARKET_AGGREGATE
+from game.rules.sparring import SparringBattleSimulator
 from launch import C, OnEvent, Scheduler, config, logger
 from launch.adapter import MessageIdentity
-
-
-@dataclass(frozen=True)
-class CharacterCreationCommandResult:
-    """命令层可以稳定展示的角色创建结果。"""
-
-    status: str
-    receipt: CharacterCreationReceipt | None = None
-    existing_character: CharacterState | None = None
-
-
-@dataclass(frozen=True)
-class CharacterOverview:
-    """角色状态页需要的一致数据库快照。"""
-
-    character: CharacterState
-    inventory: InventoryState
-    loadout: LoadoutState
-    ledger: LedgerState
-    world: WorldState
-    dimension: CharacterDimensionState
-    inscription_preference: InscriptionPreference | None = None
-    action: ActionState | None = None
-
-
-@dataclass(frozen=True)
-class CharacterOverviewResult:
-    """角色状态查询的稳定结果。"""
-
-    status: str
-    overview: CharacterOverview | None = None
-
-
-@dataclass(frozen=True)
-class CurrentCharacterResult:
-    """当前身份解析到角色后的稳定结果。"""
-
-    status: str
-    character: CharacterState | None = None
-    dimension: CharacterDimensionState | None = None
-
-
-@dataclass(frozen=True)
-class PlayerReplyState:
-    """统一人物头和全局通栏需要的只读状态。"""
-
-    character: CharacterState
-    settings: CharacterSettingsState
-    dimension: CharacterDimensionState
-    activity_spotlights: tuple[GlobalActivityView, ...] = ()
-    additional_activity_count: int = 0
-    unread_notification_count: int = 0
-    pending_action_count: int = 0
-
-    def __post_init__(self) -> None:
-        if (
-            self.additional_activity_count < 0
-            or self.unread_notification_count < 0
-            or self.pending_action_count < 0
-        ):
-            raise ValueError("玩家回复摘要数量不能小于 0")
-
-
-@dataclass(frozen=True)
-class PlayerReplyStateResult:
-    """当前消息身份对应的玩家回复装饰状态。"""
-
-    status: str
-    state: PlayerReplyState | None = None
-
-
-@dataclass(frozen=True)
-class PlayerReminderDetails:
-    """通知与待领取汇总页使用的只读明细。"""
-
-    notifications: tuple[NotificationEntry, ...] = ()
-    pending_actions: tuple[ActionRecord, ...] = ()
-
-
-@dataclass(frozen=True)
-class PlayerReminderDetailsResult:
-    """玩家提醒明细的稳定读取结果。"""
-
-    status: str
-    details: PlayerReminderDetails | None = None
-
-
-@dataclass(frozen=True)
-class GlobalActivityViewsResult:
-    """当前开放全服活动的稳定读取结果。"""
-
-    status: str
-    activities: tuple[GlobalActivityView, ...] = ()
-
-
-@dataclass(frozen=True)
-class NotificationMarkResult:
-    """通知已读操作的受控结果。"""
-
-    status: str
-    notification: NotificationEntry | None = None
 
 
 @dataclass(frozen=True)
@@ -230,6 +152,11 @@ class GameServices:
     player_combat: PlayerCombatProjector
     inscriptions: PersistedInscriptionService
     item_use: PersistedItemUseService
+    weapon_item_use: PersistedWeaponItemUseService
+    special_item_use: SpecialItemUseService
+    inventory_engine: InventoryEngine
+    player: PlayerFeature
+    dimension_shift: DimensionShiftFeature
     loadouts: PersistedLoadoutService
     notifications: NotificationInboxService
     activities: PersistedActivityService
@@ -239,7 +166,10 @@ class GameServices:
     dimensional_disasters: DimensionalDisasterFeature
     exploration: ExplorationFeature
     rest: RestFeature
-    item_sale: ItemSaleFeature
+    sparring: SparringFeature
+    economy: EconomyFeature
+    lottery: LotteryFeature
+    draw: DrawFeature
     world_views: WorldViewCatalog
     content: OfficialContent
 
@@ -263,51 +193,19 @@ class GameServices:
         requested_name: str = "",
         platform_name: str = "",
     ) -> CharacterCreationCommandResult:
-        """解析账号并执行角色创世，不把持久化异常泄漏到命令组件。"""
+        """通过玩家业务创建角色，并统一映射基础设施异常。"""
 
         try:
-            resolution = self.accounts.resolve_identity(evidence)
-        except PersistenceError as exc:
-            logger.opt(colors=True, exception=exc).error(
-                C.join(
-                    C.fail("账号身份解析失败"),
-                    C.kv("evidence", evidence.id),
-                )
-            )
-            return CharacterCreationCommandResult("failed")
-        if resolution.account is None:
-            return CharacterCreationCommandResult("identity_conflict")
-        account_id = resolution.account.id
-        request = CharacterCreationRequest(
-            f"character:create:{evidence.id}",
-            account_id,
-            requested_name=requested_name,
-            platform_name=platform_name,
-        )
-        try:
-            receipt = self.character_creation.create(
-                request,
-                context=character_creation_context(
-                    trace_id=request.transaction_id,
-                    logical_time=evidence.logical_time,
-                ),
-            )
-        except CharacterIdentityViolation as exc:
-            status = {
-                "character.name_required": "name_required",
-                "character.name_invalid": "name_invalid",
-                "character.account_already_has_character": "existing",
-            }.get(exc.code, "rejected")
-            existing_character = self.characters.load_for_account(account_id)
-            return CharacterCreationCommandResult(
-                status,
-                existing_character=existing_character,
+            return self.player.create_character(
+                evidence,
+                requested_name=requested_name,
+                platform_name=platform_name,
             )
         except ConcurrencyConflict:
-            existing_character = self.characters.load_for_account(account_id)
+            current = self.player.load_current_character(evidence)
             return CharacterCreationCommandResult(
                 "existing",
-                existing_character=existing_character,
+                existing_character=current.character,
             )
         except PersistenceError as exc:
             logger.opt(colors=True, exception=exc).error(
@@ -317,32 +215,14 @@ class GameServices:
                 )
             )
             return CharacterCreationCommandResult("failed")
-        if not isinstance(receipt, CharacterCreationReceipt):
-            raise TypeError("角色创世服务返回了错误回执类型")
-        return CharacterCreationCommandResult("created", receipt=receipt)
 
     def load_current_character(
         self,
         evidence: IdentityEvidence,
     ) -> CurrentCharacterResult:
-        """把当前外部身份解析为游戏角色，不读取其他领域快照。"""
-
+        """通过玩家业务解析当前身份。"""
         try:
-            resolution = self.accounts.resolve_identity(evidence)
-            if resolution.account is None:
-                return CurrentCharacterResult("identity_conflict")
-            character = self.characters.load_for_account(resolution.account.id)
-            if character is None:
-                return CurrentCharacterResult("not_created")
-            snapshots = self.character_creation.snapshots
-            with self.database.unit_of_work(write=False) as uow:
-                dimension = snapshots.require(
-                    uow,
-                    CHARACTER_DIMENSION_AGGREGATE,
-                    character.id,
-                    CharacterDimensionState,
-                )
-            return CurrentCharacterResult("ok", character, dimension)
+            return self.player.load_current_character(evidence)
         except PersistenceError as exc:
             logger.opt(colors=True, exception=exc).error(
                 C.join(
@@ -356,75 +236,10 @@ class GameServices:
         self,
         character: CharacterState,
     ) -> CharacterOverviewResult:
-        """按需读取角色状态页使用的跨领域快照。"""
-
+        """通过玩家业务读取角色状态页一致快照。"""
         try:
-            snapshots = self.character_creation.snapshots
-            with self.database.unit_of_work(write=False) as uow:
-                stored_character = snapshots.require(
-                    uow,
-                    CHARACTER_AGGREGATE,
-                    character.id,
-                    CharacterState,
-                )
-                if stored_character.account_id != character.account_id:
-                    raise PersistenceError("角色详情账号归属不一致")
-                inventory = snapshots.require(
-                    uow,
-                    INVENTORY_AGGREGATE,
-                    character.id,
-                    InventoryState,
-                )
-                loadout = snapshots.require(
-                    uow,
-                    LOADOUT_AGGREGATE,
-                    character.id,
-                    LoadoutState,
-                )
-                ledger = snapshots.require(
-                    uow,
-                    LEDGER_AGGREGATE,
-                    PRIMARY_LEDGER_ID,
-                    LedgerState,
-                )
-                world = snapshots.require(
-                    uow,
-                    WORLD_AGGREGATE,
-                    PRIMARY_WORLD_ID,
-                    WorldState,
-                )
-                dimension = snapshots.require(
-                    uow,
-                    CHARACTER_DIMENSION_AGGREGATE,
-                    character.id,
-                    CharacterDimensionState,
-                )
-                action = snapshots.load(
-                    uow,
-                    ACTION_AGGREGATE,
-                    character.id,
-                    ActionState,
-                )
-                inscription_preference = snapshots.load(
-                    uow,
-                    INSCRIPTION_PREFERENCE_AGGREGATE,
-                    character.id,
-                    InscriptionPreference,
-                )
-            return CharacterOverviewResult(
-                "ok",
-                CharacterOverview(
-                    character=stored_character,
-                    inventory=inventory,
-                    loadout=loadout,
-                    ledger=ledger,
-                    world=world,
-                    dimension=dimension,
-                    inscription_preference=inscription_preference,
-                    action=action,
-                ),
-            )
-        except PersistenceError as exc:
+            return self.player.load_character_overview(character)
+        except (PersistenceError, PlayerOwnershipError) as exc:
             logger.opt(colors=True, exception=exc).error(
                 C.join(
                     C.fail("角色状态读取失败"),
@@ -436,14 +251,7 @@ class GameServices:
     def load_character_settings(self, character_id: str) -> CharacterSettingsState:
         """读取角色个人展示和自动操作设置。"""
 
-        snapshots = self.character_creation.snapshots
-        with self.database.unit_of_work(write=False) as uow:
-            return snapshots.require(
-                uow,
-                CHARACTER_SETTINGS_AGGREGATE,
-                str(character_id or "").strip(),
-                CharacterSettingsState,
-            )
+        return self.player.load_settings(character_id)
 
     def load_player_reply_state(
         self,
@@ -451,58 +259,13 @@ class GameServices:
     ) -> PlayerReplyStateResult:
         """只读加载当前人物头、通知摘要和待领取行动数量。"""
 
-        current = self.load_current_character(evidence)
-        if current.status != "ok" or current.character is None:
-            return PlayerReplyStateResult(current.status)
-        character = current.character
         try:
-            snapshots = self.character_creation.snapshots
-            with self.database.unit_of_work(write=False) as uow:
-                settings = snapshots.require(
-                    uow,
-                    CHARACTER_SETTINGS_AGGREGATE,
-                    character.id,
-                    CharacterSettingsState,
-                )
-                dimension = snapshots.require(
-                    uow,
-                    CHARACTER_DIMENSION_AGGREGATE,
-                    character.id,
-                    CharacterDimensionState,
-                )
-                action = snapshots.load(
-                    uow,
-                    ACTION_AGGREGATE,
-                    character.id,
-                    ActionState,
-                )
-            unread_count = self.notifications.count_unread(
-                character.account_id,
-                logical_time=evidence.logical_time,
-            )
-            activity_state = self.activities.load(GLOBAL_ACTIVITY_SCOPE_ID)
-            activity_selection = self.global_activities.spotlight(
-                activity_state,
-                logical_time=evidence.logical_time,
-                limit=2,
-            )
-            return PlayerReplyStateResult(
-                "ok",
-                PlayerReplyState(
-                    character,
-                    settings,
-                    dimension,
-                    activity_spotlights=activity_selection.activities,
-                    additional_activity_count=activity_selection.additional_count,
-                    unread_notification_count=unread_count,
-                    pending_action_count=(len(action.completed()) if action else 0),
-                ),
-            )
+            return self.player.load_reply_state(evidence)
         except PersistenceError as exc:
             logger.opt(colors=True, exception=exc).error(
                 C.join(
                     C.fail("玩家回复状态读取失败"),
-                    C.kv("character", character.id),
+                    C.kv("evidence", evidence.id),
                 )
             )
             return PlayerReplyStateResult("failed")
@@ -514,62 +277,13 @@ class GameServices:
         *,
         logical_time: datetime,
     ) -> DimensionShiftResult:
-        """角色空闲时原子切换界相，不修改位置、资产或规则状态。"""
+        """转发到跃迁业务的唯一写入口。"""
 
-        target = self.world_views.require(target_skin_id).skin.id
-        snapshots = self.character_creation.snapshots
-        normalized_id = str(character_id or "").strip()
-        with self.database.unit_of_work() as uow:
-            current = snapshots.require(
-                uow,
-                CHARACTER_DIMENSION_AGGREGATE,
-                normalized_id,
-                CharacterDimensionState,
-            )
-            if current.skin_id == target:
-                return shift_dimension(
-                    current,
-                    target,
-                    logical_time=logical_time,
-                )
-            action = snapshots.load(
-                uow,
-                ACTION_AGGREGATE,
-                normalized_id,
-                ActionState,
-            )
-            exploration = snapshots.load(
-                uow,
-                EXPLORATION_AGGREGATE,
-                normalized_id,
-                ExplorationState,
-            )
-            main_action_running = bool(
-                action is not None and action.running(ActionSlotKind.MAIN)
-            )
-            exploration_running = bool(
-                exploration is not None
-                and exploration.status is ExplorationStatus.RUNNING
-            )
-            if main_action_running or exploration_running:
-                return DimensionShiftResult("main_action_occupied", current)
-            result = shift_dimension(
-                current,
-                target,
-                logical_time=logical_time,
-            )
-            if result.status != "shifted" or result.current is None:
-                return result
-            snapshots.update(
-                uow,
-                CHARACTER_DIMENSION_AGGREGATE,
-                normalized_id,
-                current,
-                result.current,
-                logical_time,
-            )
-            uow.commit()
-            return result
+        return self.dimension_shift.shift(
+            character_id,
+            target_skin_id,
+            logical_time=logical_time,
+        )
 
     def set_mood_header_enabled(
         self,
@@ -580,7 +294,7 @@ class GameServices:
     ) -> CharacterSettingsState:
         """原子更新彩色人物头开关；重复设置相同值不增加版本。"""
 
-        return self._set_character_setting(
+        return self.player.set_setting(
             character_id,
             "mood_header_enabled",
             enabled,
@@ -596,7 +310,7 @@ class GameServices:
     ) -> CharacterSettingsState:
         """原子更新探险自动用药开关。"""
 
-        return self._set_character_setting(
+        return self.player.set_setting(
             character_id,
             "auto_use_medicine",
             enabled,
@@ -642,65 +356,15 @@ class GameServices:
     ) -> NotificationMarkResult:
         """只允许当前角色标记自己账号的有效未读通知。"""
 
-        notification_id = str(notification_id or "").strip()
-        if not notification_id:
-            return NotificationMarkResult("not_found")
-        unread = self.notifications.list_unread(
-            character.account_id,
-            logical_time=logical_time,
-            limit=100,
-        )
-        entry = next((value for value in unread if value.id == notification_id), None)
-        if entry is None:
-            return NotificationMarkResult("not_found")
-        if entry.revision != expected_revision:
-            return NotificationMarkResult("stale", entry)
         try:
-            marked = self.notifications.mark(
-                entry.id,
-                NotificationStatus.READ,
+            return self.player.mark_notification_read(
+                character,
+                notification_id,
                 expected_revision=expected_revision,
                 logical_time=logical_time,
             )
         except ConcurrencyConflict:
-            return NotificationMarkResult("stale", entry)
-        return NotificationMarkResult("read", marked)
-
-    def _set_character_setting(
-        self,
-        character_id: str,
-        field_name: str,
-        enabled: bool,
-        *,
-        logical_time: datetime,
-    ) -> CharacterSettingsState:
-        if not isinstance(enabled, bool):
-            raise TypeError("角色设置值必须是 bool")
-        snapshots = self.character_creation.snapshots
-        normalized_id = str(character_id or "").strip()
-        with self.database.unit_of_work() as uow:
-            current = snapshots.require(
-                uow,
-                CHARACTER_SETTINGS_AGGREGATE,
-                normalized_id,
-                CharacterSettingsState,
-            )
-            if getattr(current, field_name) is enabled:
-                return current
-            updated = replace(
-                current,
-                **{field_name: enabled, "revision": current.revision + 1},
-            )
-            snapshots.update(
-                uow,
-                CHARACTER_SETTINGS_AGGREGATE,
-                normalized_id,
-                current,
-                updated,
-                logical_time,
-            )
-            uow.commit()
-            return updated
+            return NotificationMarkResult("stale")
 
     def load_player_reminder_details(
         self,
@@ -712,25 +376,10 @@ class GameServices:
         """只读加载未读通知和待领取行动，不改变任何状态。"""
 
         try:
-            snapshots = self.character_creation.snapshots
-            with self.database.unit_of_work(write=False) as uow:
-                action = snapshots.load(
-                    uow,
-                    ACTION_AGGREGATE,
-                    character.id,
-                    ActionState,
-                )
-            notifications = self.notifications.list_unread(
-                character.account_id,
+            return self.player.load_reminder_details(
+                character,
                 logical_time=logical_time,
-                limit=notification_limit,
-            )
-            return PlayerReminderDetailsResult(
-                "ok",
-                PlayerReminderDetails(
-                    notifications,
-                    action.completed() if action else (),
-                ),
+                notification_limit=notification_limit,
             )
         except PersistenceError as exc:
             logger.opt(colors=True, exception=exc).error(
@@ -749,11 +398,7 @@ class GameServices:
         """只读列出当前开放且已经注册的全部全服活动。"""
 
         try:
-            state = self.activities.load(GLOBAL_ACTIVITY_SCOPE_ID)
-            return GlobalActivityViewsResult(
-                "ok",
-                self.global_activities.active(state, logical_time=logical_time),
-            )
+            return self.player.load_global_activity_views(logical_time=logical_time)
         except PersistenceError as exc:
             logger.opt(colors=True, exception=exc).error(
                 C.join(C.fail("全服活动读取失败"), C.kv("scope", GLOBAL_ACTIVITY_SCOPE_ID))
@@ -836,6 +481,10 @@ def build_game_services(
                 *dimensional_disaster_codec_registrations(),
                 *exploration_codec_registrations(),
                 *rest_codec_registrations(),
+                *economy_codec_registrations(),
+                *lottery_codec_registrations(),
+                *draw_codec_registrations(),
+                *special_item_codec_registrations(),
             )
         )
     )
@@ -866,6 +515,21 @@ def build_game_services(
         ),
         snapshots,
     )
+    weapon_engine = WeaponEngine(content.catalog.weapons)
+    weapon_item_use_service = PersistedWeaponItemUseService(
+        database,
+        content.catalog.items,
+        inventory_engine,
+        weapon_engine,
+        snapshots,
+    )
+    special_item_use_service = SpecialItemUseService(
+        database,
+        content.catalog.items,
+        inventory_engine,
+        snapshots,
+        INVENTORY_AGGREGATE,
+    )
     action_service = PersistedActionService(
         database,
         content.catalog.action_engine,
@@ -894,7 +558,7 @@ def build_game_services(
         inventory=inventory_engine,
         ledger=ledger_engine,
         character=CharacterEngine(content.catalog.characters),
-        weapon=WeaponEngine(content.catalog.weapons),
+        weapon=weapon_engine,
     )
     reward_settlement = PersistedRewardSettlementService(
         database,
@@ -944,13 +608,43 @@ def build_game_services(
         maximum_battle_rounds=DIMENSIONAL_DISASTER_BATTLE_ROUNDS,
         timezone=config.project.timezone,
     )
-    item_sale = ItemSaleFeature(
+    economy = EconomyFeature(
         database,
+        content.catalog,
         snapshots,
-        content.catalog.items,
         inventory_engine,
         ledger_engine,
-        ItemSaleStorageKinds(INVENTORY_AGGREGATE, LEDGER_AGGREGATE),
+        EconomyStorageKinds(
+            INVENTORY_AGGREGATE,
+            LOADOUT_AGGREGATE,
+            LEDGER_AGGREGATE,
+            MARKET_AGGREGATE,
+        ),
+    )
+    lottery = LotteryFeature(
+        database,
+        snapshots,
+        ledger_engine,
+        storage=LotteryStorageKinds(
+            LOTTERY_AGGREGATE,
+            LEDGER_AGGREGATE,
+        ),
+        timezone=config.project.timezone,
+    )
+    draw = DrawFeature(
+        database,
+        content,
+        snapshots,
+        inventory_engine,
+        reward_settlement,
+        DrawStorageKinds(
+            DRAW_HISTORY_AGGREGATE,
+            INVENTORY_AGGREGATE,
+            LEDGER_AGGREGATE,
+            LOOT_AGGREGATE,
+            REWARD_CLAIM_AGGREGATE,
+        ),
+        RewardSettlementStorageKeys,
     )
     rest = RestFeature(
         database,
@@ -967,33 +661,95 @@ def build_game_services(
             EXPLORATION_AGGREGATE,
         ),
     )
+    accounts = PersistedAccountService(
+        database,
+        AccountEngine(lambda: f"account-{uuid4().hex}"),
+        secret,
+    )
+    characters = PersistedCharacterService(database)
+    character_creation_service = PersistedCharacterCreationService(
+        database,
+        workflow,
+        snapshots=snapshots,
+    )
+    notifications = NotificationInboxService(database)
+    activities = PersistedActivityService(database, content.catalog.activity_engine)
+    player = PlayerFeature(
+        database,
+        accounts,
+        characters,
+        character_creation_service,
+        snapshots,
+        notifications,
+        activities,
+        registered_global_activities,
+        PlayerStorageKinds(
+            character=CHARACTER_AGGREGATE,
+            inventory=INVENTORY_AGGREGATE,
+            loadout=LOADOUT_AGGREGATE,
+            ledger=LEDGER_AGGREGATE,
+            world=WORLD_AGGREGATE,
+            dimension=CHARACTER_DIMENSION_AGGREGATE,
+            action=ACTION_AGGREGATE,
+            settings=CHARACTER_SETTINGS_AGGREGATE,
+            inscription_preference=INSCRIPTION_PREFERENCE_AGGREGATE,
+        ),
+    )
+    dimension_shift = DimensionShiftFeature(
+        database,
+        content,
+        world_views,
+        snapshots,
+        inventory_engine,
+        DimensionShiftStorageKinds(
+            dimension=CHARACTER_DIMENSION_AGGREGATE,
+            action=ACTION_AGGREGATE,
+            exploration=EXPLORATION_AGGREGATE,
+            inventory=INVENTORY_AGGREGATE,
+        ),
+    )
+    social = PersistedSocialService(database, content.catalog.social_engine, snapshots)
+    sparring = SparringFeature(
+        database,
+        content,
+        world_views,
+        snapshots,
+        social,
+        characters,
+        battle_reports,
+        SparringBattleSimulator(content.catalog, player_combat),
+        SparringStorageKinds(
+            inventory=INVENTORY_AGGREGATE,
+            loadout=LOADOUT_AGGREGATE,
+        ),
+    )
     return GameServices(
         database=database,
-        accounts=PersistedAccountService(
-            database,
-            AccountEngine(lambda: f"account-{uuid4().hex}"),
-            secret,
-        ),
-        characters=PersistedCharacterService(database),
-        character_creation=PersistedCharacterCreationService(
-            database,
-            workflow,
-            snapshots=snapshots,
-        ),
+        accounts=accounts,
+        characters=characters,
+        character_creation=character_creation_service,
         character_projector=character_projector,
         player_combat=player_combat,
         inscriptions=inscription_service,
         item_use=item_use_service,
+        weapon_item_use=weapon_item_use_service,
+        special_item_use=special_item_use_service,
+        inventory_engine=inventory_engine,
+        player=player,
+        dimension_shift=dimension_shift,
         loadouts=loadout_service,
-        notifications=NotificationInboxService(database),
-        activities=PersistedActivityService(database, content.catalog.activity_engine),
+        notifications=notifications,
+        activities=activities,
         actions=action_service,
         global_activities=registered_global_activities,
         battle_reports=battle_reports,
         dimensional_disasters=dimensional_disasters,
         exploration=exploration,
         rest=rest,
-        item_sale=item_sale,
+        sparring=sparring,
+        economy=economy,
+        lottery=lottery,
+        draw=draw,
         world_views=world_views,
         content=content,
     )
@@ -1041,6 +797,12 @@ def initialize_game_services() -> None:
     services.database.initialize()
     services.activities.initialize(
         GLOBAL_ACTIVITY_SCOPE_ID,
+        logical_time=datetime.now(ZoneInfo(config.project.timezone)),
+    )
+    services.economy.initialize(
+        logical_time=datetime.now(ZoneInfo(config.project.timezone)),
+    )
+    services.lottery.initialize(
         logical_time=datetime.now(ZoneInfo(config.project.timezone)),
     )
     services.dimensional_disasters.maintain(
@@ -1124,6 +886,44 @@ def cleanup_battle_reports() -> None:
         logger.opt(colors=True, exception=exc).error(C.fail("战报保留期清理失败"))
 
 
+@Scheduler._sync(
+    "interval",
+    seconds=60,
+    id="game_market_expiration",
+    max_instances=1,
+    coalesce=True,
+)
+def expire_market_listings() -> None:
+    """释放七天到期的二手挂单及其物品预约。"""
+
+    services = current_game_services()
+    try:
+        services.economy.expire_due(
+            logical_time=datetime.now(ZoneInfo(config.project.timezone))
+        )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(C.fail("二手挂单到期处理失败"))
+
+
+@Scheduler._sync(
+    "interval",
+    seconds=60,
+    id="game_lottery_draw",
+    max_instances=1,
+    coalesce=True,
+)
+def draw_due_lottery_rounds() -> None:
+    """补开所有已经到达开奖时间的彩票轮次。"""
+
+    services = current_game_services()
+    try:
+        services.lottery.draw_due(
+            logical_time=datetime.now(ZoneInfo(config.project.timezone))
+        )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(C.fail("彩票后台开奖失败"))
+
+
 __all__ = [
     "CharacterCreationCommandResult",
     "CharacterOverview",
@@ -1138,6 +938,8 @@ __all__ = [
     "build_game_services",
     "cleanup_battle_reports",
     "current_game_services",
+    "draw_due_lottery_rounds",
+    "expire_market_listings",
     "initialize_game_services",
     "install_game_services",
     "message_identity_evidence",

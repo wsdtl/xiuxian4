@@ -13,6 +13,7 @@ from .schema import (
     Emphasis,
     FieldSeparator,
     HeaderBlock,
+    ImageBlock,
     ImageMessage,
     InlineBlock,
     Link,
@@ -50,7 +51,7 @@ class DocumentBuilder:
     """按内容顺序构建不可变 DocumentMessage。"""
 
     def __init__(self) -> None:
-        self._blocks: list[HeaderBlock | InlineBlock | SectionBlock | NoteBlock] = []
+        self._blocks: list[HeaderBlock | InlineBlock | SectionBlock | ImageBlock | NoteBlock] = []
         self._actions: list[Action] = []
         self._section_index: int | None = None
 
@@ -122,6 +123,20 @@ class DocumentBuilder:
         if content:
             self._blocks.append(NoteBlock(content))
             self._section_index = None
+        return self
+
+    def image(
+        self,
+        url: object,
+        *,
+        alt: object = "图片",
+        width: int | None = None,
+        height: int | None = None,
+    ) -> "DocumentBuilder":
+        """添加可与正文一起发送的公网图片。"""
+
+        self._blocks.append(ImageBlock(str(url or ""), str(alt or ""), width, height))
+        self._section_index = None
         return self
 
     def action(self, action: Action) -> "DocumentBuilder":

@@ -93,6 +93,7 @@ class DisasterChallengeReceipt:
     turns: int
     player_victory: bool
     resolved_at: datetime
+    draw_ticket_drops: int = 0
     replayed: bool = False
 
     def __post_init__(self) -> None:
@@ -105,6 +106,7 @@ class DisasterChallengeReceipt:
             self.shared_health_after,
             self.attempts_today,
             self.turns,
+            self.draw_ticket_drops,
         ) < 0:
             raise ValueError("灾厄挑战回执包含负数")
         if self.shared_health_after > self.shared_health_before:
@@ -126,6 +128,7 @@ class DisasterChallengeReceipt:
             self.turns,
             self.player_victory,
             self.resolved_at,
+            self.draw_ticket_drops,
             True,
         )
 

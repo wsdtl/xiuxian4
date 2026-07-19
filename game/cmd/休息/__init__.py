@@ -11,21 +11,14 @@ from . import service
 
 @GameCommand.handler(cmd="休息")
 async def rest(current=Depends(current_character)) -> None:
-    """查看当前休息状态与开始入口。"""
-
-    await service.view(current)
-
-
-@GameCommand.handler(cmd="rest_start")
-async def start_rest(current=Depends(current_character)) -> None:
-    """由休息面板按钮开始休息。"""
+    """直接开始或续接休息。"""
 
     await service.start(current)
 
 
-@GameCommand.handler(cmd="停止休息")
+@GameCommand.handler(cmd="结束休息")
 async def stop_rest(current=Depends(current_character)) -> None:
-    """结算累计有效时间并停止休息。"""
+    """结算累计有效时间并结束休息。"""
 
     await service.stop(current)
 

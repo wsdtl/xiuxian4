@@ -58,6 +58,16 @@ from ..gameplay.character import (
     CharacterStatus,
     ProgressionState,
 )
+from ..gameplay.draw import (
+    DrawCommand,
+    DrawExecution,
+    DrawInventoryCommand,
+    DrawInventoryExecution,
+    DrawInventoryReceipt,
+    DrawItemAward,
+    DrawPoolDefinition,
+    DrawReceipt,
+)
 from ..gameplay.economy import (
     AppliedLedgerTransaction,
     FundHold,
@@ -196,7 +206,11 @@ from ..gameplay.social import (
     TransferOrganizationLeadership,
 )
 from ..gameplay.tags import Tag, TagSet
-from ..gameplay.weapon import WeaponState
+from ..gameplay.weapon import (
+    WeaponItemUseReceipt,
+    WeaponMaximumLevelRoll,
+    WeaponState,
+)
 from ..gameplay.valuation import ValueVector
 from ..gameplay.world import (
     AddPresence,
@@ -291,6 +305,14 @@ def gameplay_snapshot_codec(
         ("action.record", ActionRecord),
         ("action.state", ActionState),
         ("action.execution", ActionExecution),
+        ("draw.pool_definition", DrawPoolDefinition),
+        ("draw.command", DrawCommand),
+        ("draw.receipt", DrawReceipt),
+        ("draw.execution", DrawExecution),
+        ("draw.inventory_command", DrawInventoryCommand),
+        ("draw.item_award", DrawItemAward),
+        ("draw.inventory_receipt", DrawInventoryReceipt),
+        ("draw.inventory_execution", DrawInventoryExecution),
         ("inventory.asset_kind", ItemAssetKind),
         ("inventory.reservation_mode", ReservationMode),
         ("inventory.source_receipt", SourceReceipt),
@@ -356,6 +378,8 @@ def gameplay_snapshot_codec(
         ("character.roster_state", CharacterRosterState),
         ("character.state", CharacterState),
         ("weapon.state", WeaponState),
+        ("weapon.maximum_level_roll", WeaponMaximumLevelRoll),
+        ("weapon.item_use_receipt", WeaponItemUseReceipt),
         ("equipment.state", EquipmentState),
         ("valuation.value_vector", ValueVector),
         ("itemization.kind", ItemizationKind),

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +17,9 @@ CORE = ROOT / "game" / "core"
 
 # 跨领域状态只能出现在经过审计的类型化组合结果中。键值精确到字段，禁止目录级放行。
 APPROVED_CROSS_DOMAIN_STATE_FIELDS = {
+    ("game/core/gameplay/draw/models.py", "DrawExecution", "loot_state", "LootState"),
+    ("game/core/gameplay/draw/models.py", "DrawInventoryExecution", "inventory_state", "InventoryState"),
+    ("game/core/gameplay/draw/models.py", "DrawInventoryExecution", "loot_state", "LootState"),
     ("game/core/gameplay/equipment/models.py", "EquipmentState", "roll", "ItemRollState"),
     ("game/core/gameplay/exchange/models.py", "ExchangeExecution", "inventory", "InventoryState"),
     ("game/core/gameplay/exchange/models.py", "ExchangeExecution", "ledger", "LedgerState"),
@@ -115,6 +119,7 @@ FOUNDATION_TESTS = {
     "COMBAT_FOUNDATION_VERSION": "test/advanced_effects_test.py",
     "CONTENT_FOUNDATION_VERSION": "test/content_assembly_test.py",
     "CYCLE_FOUNDATION_VERSION": "test/cycle_foundation_test.py",
+    "DRAW_FOUNDATION_VERSION": "test/draw_foundation_test.py",
     "ECONOMY_FOUNDATION_VERSION": "test/economy_foundation_test.py",
     "ENEMY_FOUNDATION_VERSION": "test/official_enemy_catalog_test.py",
     "EQUIPMENT_FOUNDATION_VERSION": "test/loadout_weapon_equipment_test.py",
@@ -139,6 +144,8 @@ FOUNDATION_TESTS = {
 def main() -> None:
     _assert_database_write_boundary()
     _assert_feature_layer_boundary()
+    _assert_business_feature_catalog()
+    _assert_application_composition_boundary()
     _assert_balance_values_live_in_content()
     _assert_cross_domain_state_fields()
     _assert_dynamic_field_registry()
@@ -146,6 +153,51 @@ def main() -> None:
     _assert_battle_modes_use_core_session()
     _assert_changed_core_has_evidence()
     print("core governance tests passed")
+
+
+def _assert_business_feature_catalog() -> None:
+    """业务目录、中文组件和后台任务必须与正式能力台账一致。"""
+
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from game.features.catalog import ACTIVE_BUSINESS_FEATURES
+
+    ids = [value.id for value in ACTIVE_BUSINESS_FEATURES]
+    packages = [value.package for value in ACTIVE_BUSINESS_FEATURES]
+    assert len(ids) == len(set(ids)), "正式业务台账存在重复 ID"
+    assert len(packages) == len(set(packages)), "正式业务台账存在重复包名"
+
+    feature_root = ROOT / "game" / "features"
+    actual_packages = {
+        path.name
+        for path in feature_root.iterdir()
+        if path.is_dir() and (path / "__init__.py").is_file()
+    }
+    assert actual_packages == set(packages), (
+        f"业务目录与能力台账不一致：目录={sorted(actual_packages)}，"
+        f"台账={sorted(packages)}"
+    )
+
+    command_root = ROOT / "game" / "cmd"
+    app_source = (ROOT / "game" / "app.py").read_text(encoding="utf-8")
+    for feature in ACTIVE_BUSINESS_FEATURES:
+        for command_package in feature.command_packages:
+            package = command_root / command_package
+            assert (package / "__init__.py").is_file(), (
+                f"业务 {feature.id} 缺少命令组件 {command_package}"
+            )
+        for job_id in feature.scheduled_jobs:
+            assert f'id="{job_id}"' in app_source, (
+                f"业务 {feature.id} 缺少定时任务 {job_id}"
+            )
+
+
+def _assert_application_composition_boundary() -> None:
+    """组合根只能装配和转发，不能重新成为业务事务集中地。"""
+
+    source = (ROOT / "game" / "app.py").read_text(encoding="utf-8")
+    assert ".unit_of_work(" not in source, "game/app.py 禁止直接开启业务工作单元"
+    assert "InventoryTransaction(" not in source, "game/app.py 禁止直接构造库存事务"
 
 
 def _assert_battle_modes_use_core_session() -> None:

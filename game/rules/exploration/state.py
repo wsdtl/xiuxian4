@@ -59,6 +59,7 @@ def record_batch(
         equipment_drops=state.equipment_drops + result.equipment_drops,
         trophy_drops=state.trophy_drops + result.trophy_drops,
         medicine_drops=state.medicine_drops + result.medicine_drops,
+        draw_ticket_drops=state.draw_ticket_drops + result.draw_ticket_drops,
         trophy_value=state.trophy_value + result.trophy_value,
         stopped_at=result.resolved_at if stopped else None,
         stop_reason=stop_reason,

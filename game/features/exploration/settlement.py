@@ -28,6 +28,11 @@ from game.rules.character import (
     PRIMARY_LEDGER_ID,
 )
 from game.rules.encounter import EnemyEncounterGenerator
+from game.rules.equipment import (
+    EQUIPMENT_SET_GUARANTEE_AGGREGATE,
+    EquipmentSetGuaranteeState,
+    consume_equipment_set_guarantee,
+)
 from game.rules.exploration import (
     EXPLORATION_AGGREGATE,
     EXPLORATION_RULESET_VERSION,
@@ -224,6 +229,7 @@ class ExplorationSettlementService:
             equipment_drops = 0
             trophy_drops = 0
             medicine_drops = 0
+            draw_ticket_drops = 0
             trophy_value = 0
             reward_references = []
             medicines_used = []
@@ -255,6 +261,12 @@ class ExplorationSettlementService:
                     raise RuntimeError(
                         loot_outcome.failure.message if loot_outcome.failure else "探险掉落失败"
                     )
+                equipment_set_guarantee = self.snapshots.load(
+                    uow,
+                    EQUIPMENT_SET_GUARANTEE_AGGREGATE,
+                    character_id,
+                    EquipmentSetGuaranteeState,
+                )
                 reward_build = self.reward_factory.build(
                     loot_outcome.value.receipt.awards,
                     plan=plan,
@@ -263,6 +275,11 @@ class ExplorationSettlementService:
                     loadout=loadout,
                     character_experience=character_experience,
                     weapon_experience=weapon_experience,
+                    equipment_set_guarantee_charges=(
+                        equipment_set_guarantee.charges
+                        if equipment_set_guarantee is not None
+                        else 0
+                    ),
                     context=context,
                 )
                 remaining_space = available_backpack_space(
@@ -292,6 +309,7 @@ class ExplorationSettlementService:
                 equipment_drops = reward_build.equipment_drops
                 trophy_drops = reward_build.trophy_drops
                 medicine_drops = reward_build.medicine_drops
+                draw_ticket_drops = reward_build.draw_ticket_drops
                 trophy_value = reward_build.trophy_value
                 reward_references = list(reward_build.references)
                 self.snapshots.update(
@@ -323,6 +341,7 @@ class ExplorationSettlementService:
                                 or equipment_drops
                                 or trophy_drops
                                 or medicine_drops
+                                or draw_ticket_drops
                             )
                             else None
                         ),
@@ -344,6 +363,21 @@ class ExplorationSettlementService:
                 )
                 if reward_outcome.failure:
                     raise RuntimeError(reward_outcome.failure.message)
+                if reward_build.equipment_set_guarantees_consumed:
+                    if equipment_set_guarantee is None:
+                        raise RuntimeError("装备套装保证状态缺失")
+                    next_guarantee = consume_equipment_set_guarantee(
+                        equipment_set_guarantee,
+                        reward_build.equipment_set_guarantees_consumed,
+                    )
+                    self.snapshots.update(
+                        uow,
+                        EQUIPMENT_SET_GUARANTEE_AGGREGATE,
+                        character_id,
+                        equipment_set_guarantee,
+                        next_guarantee,
+                        resolved_at,
+                    )
 
             current_character = self.snapshots.require(
                 uow, self.storage.character, character_id, CharacterState
@@ -388,6 +422,7 @@ class ExplorationSettlementService:
                 equipment_drops=equipment_drops,
                 trophy_drops=trophy_drops,
                 medicine_drops=medicine_drops,
+                draw_ticket_drops=draw_ticket_drops,
                 trophy_value=trophy_value,
                 rewards=tuple(reward_references),
                 medicines_used=tuple(medicines_used),

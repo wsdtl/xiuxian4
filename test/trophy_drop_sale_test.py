@@ -1,4 +1,4 @@
-"""探险战利品、容量停止与固定价原子出售闭环测试。"""
+"""探险战利品、容量停止与固定价原子回收闭环测试。"""
 
 from __future__ import annotations
 
@@ -79,35 +79,35 @@ def main() -> None:
             (stack.definition_id, stack.quantity)
             for stack in _trophy_stacks(services, character_id)
         )
-        ledger_engine = services.item_sale.ledger_engine
-        services.item_sale.ledger_engine = _FailingLedgerEngine()
+        ledger_engine = services.economy.ledger_engine
+        services.economy.ledger_engine = _FailingLedgerEngine()
         try:
-            services.item_sale.sell_trophies(
+            services.economy.recycle_trophies(
                 character_id,
                 logical_time=TIME + timedelta(minutes=10, seconds=30),
             )
-            raise AssertionError("账本失败时出售必须整体失败")
+            raise AssertionError("账本失败时回收必须整体失败")
         except RuntimeError as exc:
             assert "测试账本失败" in str(exc)
         finally:
-            services.item_sale.ledger_engine = ledger_engine
+            services.economy.ledger_engine = ledger_engine
         assert _wallet_balance(services, character_id) == before_balance
         assert tuple(
             (stack.definition_id, stack.quantity)
             for stack in _trophy_stacks(services, character_id)
         ) == before_trophies
 
-        sale = services.item_sale.sell_trophies(
+        sale = services.economy.recycle_trophies(
             character_id,
             logical_time=TIME + timedelta(minutes=11),
         )
-        assert sale.status == "sold"
+        assert sale.status == "recycled"
         assert sale.quote.total_amount == settled.state.trophy_value
         assert _wallet_balance(services, character_id) == (
             before_balance + sale.quote.total_amount
         )
         assert not _trophy_stacks(services, character_id)
-        assert services.item_sale.sell_trophies(
+        assert services.economy.recycle_trophies(
             character_id,
             logical_time=TIME + timedelta(minutes=11, seconds=1),
         ).status == "empty"
@@ -216,7 +216,7 @@ def _fill_backpack(services, character_id: str, *, quantity: int) -> None:
             TIME,
             SeededRandomSource("fill-trophy-backpack"),
         )
-        outcome = services.item_sale.inventory_engine.execute(
+        outcome = services.economy.inventory_engine.execute(
             InventoryTransaction(
                 "fill-trophy-backpack",
                 character_id,

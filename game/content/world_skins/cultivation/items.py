@@ -3,6 +3,10 @@
 from game.core.gameplay import SkinEntry
 
 from ...catalog import (
+    DRAW_TICKET_ITEM_ID,
+    BACKPACK_CAPACITY_ITEM_ID,
+    DIMENSION_SHIFT_ITEM_ID,
+    EQUIPMENT_SET_GUARANTEE_ITEM_ID,
     INSCRIPTION_FEATHER_ITEM_ID,
     LARGE_HEALTH_MEDICINE_ABILITY_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
@@ -16,14 +20,46 @@ from ...catalog import (
     SMALL_HEALTH_MEDICINE_ITEM_ID,
     SMALL_SPIRIT_MEDICINE_ABILITY_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
+    WEAPON_LEVEL_ITEM_ID,
+    WEAPON_MAXIMUM_LEVEL_ITEM_ID,
 )
 
 
 CULTIVATION_ITEM_ENTRIES = {
+    DRAW_TICKET_ITEM_ID: SkinEntry(
+        name="流光签",
+        description="承接多次元战斗余辉的抽奖凭证。",
+        icon="🎟️",
+    ),
     INSCRIPTION_FEATHER_ITEM_ID: SkinEntry(
         name="铭刻之羽",
         description="承载一段不可复刻的旧愿，可为武器、装备或武器能力留下私名。",
         icon="📜",
+    ),
+    BACKPACK_CAPACITY_ITEM_ID: SkinEntry(
+        name="芥子神砂",
+        description="炼入背包后永久增加 5 格空间；背包最多扩展至 140 格。",
+        icon="⌛",
+    ),
+    DIMENSION_SHIFT_ITEM_ID: SkinEntry(
+        name="渡界玉符",
+        description="跃迁至另一世界时自动消耗一枚；查看界相或跃迁失败不会消耗。",
+        icon="🧿",
+    ),
+    EQUIPMENT_SET_GUARANTEE_ITEM_ID: SkinEntry(
+        name="合道玉契",
+        description="激活后，下一件实际掉落的装备必定拥有随机套装身份。",
+        icon="📜",
+    ),
+    WEAPON_MAXIMUM_LEVEL_ITEM_ID: SkinEntry(
+        name="淬锋丹",
+        description="为一把未臻极限的武器淬炼根基，使其等级上限提升 1 级，最高 100 级。",
+        icon="⚗️",
+    ),
+    WEAPON_LEVEL_ITEM_ID: SkinEntry(
+        name="岁华玉髓",
+        description="补足一把武器当前等级所缺的全部经验，使其直接提升 1 级。",
+        icon="💠",
     ),
     SMALL_HEALTH_MEDICINE_ABILITY_ID: SkinEntry(name="服用小还丹"),
     MEDIUM_HEALTH_MEDICINE_ABILITY_ID: SkinEntry(name="服用中还丹"),

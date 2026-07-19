@@ -6,6 +6,12 @@ from .generation import (
     EquipmentGenerationResult,
     EquipmentInstanceGenerator,
 )
+from .guarantees import (
+    EQUIPMENT_SET_GUARANTEE_AGGREGATE,
+    EquipmentSetGuaranteeState,
+    activate_equipment_set_guarantee,
+    consume_equipment_set_guarantee,
+)
 
 
 __all__ = [
@@ -13,4 +19,8 @@ __all__ = [
     "EquipmentGenerationRequest",
     "EquipmentGenerationResult",
     "EquipmentInstanceGenerator",
+    "EQUIPMENT_SET_GUARANTEE_AGGREGATE",
+    "EquipmentSetGuaranteeState",
+    "activate_equipment_set_guarantee",
+    "consume_equipment_set_guarantee",
 ]

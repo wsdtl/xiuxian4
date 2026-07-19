@@ -23,6 +23,8 @@ from game.content import (  # noqa: E402
     CULTIVATION_SKIN,
     CULTIVATION_SKIN_ID,
     DEFAULT_SKIN_ID,
+    DRAW_TICKET_ITEM_ID,
+    DIMENSION_SHIFT_ITEM_ID,
     EPIC_QUALITY_ID,
     FINE_QUALITY_ID,
     INSCRIPTION_FEATHER_ITEM_ID,
@@ -83,8 +85,8 @@ def main() -> None:
         CATALOG_PACKAGE_ID,
         WORLD_SKIN_PACKAGE_ID,
     )
-    assert str(CATALOG_PACKAGE.manifest.version) == "3.9.0"
-    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.10.0"
+    assert str(CATALOG_PACKAGE.manifest.version) == "3.15.0"
+    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.12.0"
     assert len(catalog.report.content_fingerprint) == 64
     assert catalog.report.display_content_ids == CATALOG_PACKAGE.display_content_ids
     progression = catalog.characters.progressions.require("progression.character_level")
@@ -141,7 +143,7 @@ def main() -> None:
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
     assert cultivation.catalog is magic.catalog
     assert cultivation.skin.name == "太玄界"
-    assert cultivation.skin.version == 16
+    assert cultivation.skin.version == 19
     assert cultivation.skin.icon == "☯"
     assert cultivation.projector.name(PRIMARY_CURRENCY_ID) == "灵石"
     assert tuple(cultivation.projector.name(value) for value in QUALITY_IDS) == (
@@ -152,12 +154,16 @@ def main() -> None:
         "圣",
     )
     assert magic.skin.name == "魔法世界"
-    assert magic.skin.version == 15
+    assert magic.skin.version == 18
     assert magic.skin.icon == "✦"
     assert magic.projector.name(PRIMARY_CURRENCY_ID) == "魔晶"
     assert magic.projector.name(COMMON_QUALITY_ID) == "普通"
     assert cultivation.projector.name(INSCRIPTION_FEATHER_ITEM_ID) == "铭刻之羽"
     assert magic.projector.name(INSCRIPTION_FEATHER_ITEM_ID) == "铭刻之羽"
+    assert cultivation.projector.name(DRAW_TICKET_ITEM_ID) == "流光签"
+    assert magic.projector.name(DRAW_TICKET_ITEM_ID) == "星辉秘券"
+    assert cultivation.projector.name(DIMENSION_SHIFT_ITEM_ID) == "渡界玉符"
+    assert magic.projector.name(DIMENSION_SHIFT_ITEM_ID) == "位面跃迁晶核"
     assert tuple(magic.projector.name(value) for value in QUALITY_IDS) == (
         "普通",
         "精良",

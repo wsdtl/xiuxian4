@@ -3,6 +3,10 @@
 from game.core.gameplay import SkinEntry
 
 from ...catalog import (
+    DRAW_TICKET_ITEM_ID,
+    BACKPACK_CAPACITY_ITEM_ID,
+    DIMENSION_SHIFT_ITEM_ID,
+    EQUIPMENT_SET_GUARANTEE_ITEM_ID,
     INSCRIPTION_FEATHER_ITEM_ID,
     LARGE_HEALTH_MEDICINE_ABILITY_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
@@ -16,14 +20,46 @@ from ...catalog import (
     SMALL_HEALTH_MEDICINE_ITEM_ID,
     SMALL_SPIRIT_MEDICINE_ABILITY_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
+    WEAPON_LEVEL_ITEM_ID,
+    WEAPON_MAXIMUM_LEVEL_ITEM_ID,
 )
 
 
 MAGIC_ITEM_ENTRIES = {
+    DRAW_TICKET_ITEM_ID: SkinEntry(
+        name="星辉秘券",
+        description="凝结多次元战斗余辉的抽奖凭证。",
+        icon="🎟️",
+    ),
     INSCRIPTION_FEATHER_ITEM_ID: SkinEntry(
         name="铭刻之羽",
         description="承载一段不可复刻的旧愿，可为武器、装备或武器能力留下私名。",
         icon="📜",
+    ),
+    BACKPACK_CAPACITY_ITEM_ID: SkinEntry(
+        name="折叠空间晶砂",
+        description="融入背包后永久增加 5 格空间；背包最多扩展至 140 格。",
+        icon="⌛",
+    ),
+    DIMENSION_SHIFT_ITEM_ID: SkinEntry(
+        name="位面跃迁晶核",
+        description="跃迁至另一世界时自动消耗一枚；查看位面或跃迁失败不会消耗。",
+        icon="🧿",
+    ),
+    EQUIPMENT_SET_GUARANTEE_ITEM_ID: SkinEntry(
+        name="套装共鸣契印",
+        description="激活后，下一件实际掉落的装备必定拥有随机套装身份。",
+        icon="📜",
+    ),
+    WEAPON_MAXIMUM_LEVEL_ITEM_ID: SkinEntry(
+        name="极限锻造催化剂",
+        description="重塑一件武器的承载极限，使其等级上限提升 1 级，最高 100 级。",
+        icon="⚗️",
+    ),
+    WEAPON_LEVEL_ITEM_ID: SkinEntry(
+        name="时序晶髓",
+        description="补足一件武器当前等级所缺的全部经验，使其直接提升 1 级。",
+        icon="💠",
     ),
     SMALL_HEALTH_MEDICINE_ABILITY_ID: SkinEntry(name="饮用小型生命药剂"),
     MEDIUM_HEALTH_MEDICINE_ABILITY_ID: SkinEntry(name="饮用中型生命药剂"),

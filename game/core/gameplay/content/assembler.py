@@ -13,6 +13,7 @@ from typing import Iterable, Mapping
 
 from ..actions import ActionCatalog, ActionEngine
 from ..activities import ActivityCatalog, ActivityEngine
+from ..draw import DrawEngine, DrawPoolCatalog
 from ..loot import LootCatalog, LootEngine
 from ..party import PartyCatalog, PartyEngine
 from ..social import SocialCatalog, SocialEngine
@@ -69,7 +70,7 @@ from ..weapon import WeaponCatalog, weapon_level_contribution
 from .models import CombatProfileDefinition, ContentPackage, ContentVersion
 
 
-CONTENT_FOUNDATION_VERSION = "content.foundation.v6"
+CONTENT_FOUNDATION_VERSION = "content.foundation.v7"
 
 
 @dataclass(frozen=True)
@@ -163,6 +164,7 @@ class ContentRuntime:
     actions: ActionCatalog
     activities: ActivityCatalog
     loot_tables: LootCatalog
+    draw_pools: DrawPoolCatalog
     world: WorldCatalog
     social: SocialCatalog
     parties: PartyCatalog
@@ -181,6 +183,7 @@ class ContentRuntime:
     action_engine: ActionEngine
     activity_engine: ActivityEngine
     loot_engine: LootEngine
+    draw_engine: DrawEngine
     world_engine: WorldEngine
     social_engine: SocialEngine
     party_engine: PartyEngine
@@ -230,6 +233,7 @@ class ContentAssembler:
         actions = ActionCatalog()
         activities = ActivityCatalog()
         loot_tables = LootCatalog()
+        draw_pools = DrawPoolCatalog()
         world = WorldCatalog()
         social = SocialCatalog()
         parties = PartyCatalog()
@@ -353,6 +357,14 @@ class ContentAssembler:
                 "loot_table",
                 package.loot_tables,
                 loot_tables.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "draw_pool",
+                package.draw_pools,
+                draw_pools.register,
                 ownership,
                 known_displayable,
             )
@@ -825,6 +837,16 @@ class ContentAssembler:
         action_engine = ActionEngine(actions)
         activity_engine = ActivityEngine(activities)
         loot_engine = LootEngine(loot_tables)
+        draw_pools.finalize(loot_tables=loot_tables)
+        known_item_ids = frozenset(items.definitions.ids())
+        for pool_id in draw_pools.ids():
+            pool = draw_pools.require(pool_id)
+            unknown_items = {pool.ticket_item_id} - known_item_ids
+            if unknown_items:
+                raise KeyError(
+                    f"抽取池 {pool.id} 引用了未知物品：{', '.join(sorted(unknown_items))}"
+                )
+        draw_engine = DrawEngine(draw_pools, loot_engine)
         world_engine = WorldEngine(world)
         social_engine = SocialEngine(social)
         party_engine = PartyEngine(parties)
@@ -877,6 +899,7 @@ class ContentAssembler:
             actions,
             activities,
             loot_tables,
+            draw_pools,
             world,
             social,
             parties,
@@ -895,6 +918,7 @@ class ContentAssembler:
             action_engine,
             activity_engine,
             loot_engine,
+            draw_engine,
             world_engine,
             social_engine,
             party_engine,

@@ -72,6 +72,8 @@ from game.core.gameplay import (
     ValueVector,
     WeaponDefinition,
     WeaponLevelAttribute,
+    WeaponMaximumLevelBand,
+    WeaponMaximumLevelTable,
     WeaponQualityProfile,
     DamageInterceptorDefinition,
     DamageStage,
@@ -131,6 +133,19 @@ QUALITY_BANDS = (
 WEAPON_EXPERIENCE_REQUIREMENTS = tuple(
     60 + level * level * 4
     for level in range(1, 100)
+)
+
+WEAPON_MAXIMUM_LEVEL_TABLE = WeaponMaximumLevelTable(
+    "weapon_maximum_level.standard",
+    1,
+    (
+        WeaponMaximumLevelBand(20, 40, 450),
+        WeaponMaximumLevelBand(41, 60, 280),
+        WeaponMaximumLevelBand(61, 80, 180),
+        WeaponMaximumLevelBand(81, 90, 60),
+        WeaponMaximumLevelBand(91, 99, 25),
+        WeaponMaximumLevelBand(100, 100, 5),
+    ),
 )
 
 
@@ -893,6 +908,7 @@ __all__ = [
     "WEAPON_CHARGE_EFFECT_ID",
     "WEAPON_EXPERIENCE_REQUIREMENTS",
     "WEAPON_MARK_EFFECT_ID",
+    "WEAPON_MAXIMUM_LEVEL_TABLE",
     "WEAPON_MECHANIC_CONTENT",
     "WeaponMechanicContent",
     "build_weapon_mechanic_content",

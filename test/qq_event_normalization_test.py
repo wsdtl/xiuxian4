@@ -62,17 +62,17 @@ def main() -> None:
 
     ambiguous_bot_mentions = [{"id": "bot", "user_openid": "bot-openid"}]
     assert normalize_content(
-        "<@bot> 天府灵签 123456",
+        "<@bot> 购票 123456",
         event_type="GROUP_MESSAGE_CREATE",
         mentions=ambiguous_bot_mentions,
-    ) == "天府灵签 123456"
+    ) == "购票 123456"
 
     explicit_player_mentions = [{"id": "target-token", "user_openid": "target-openid", "is_you": False}]
     assert normalize_content(
-        "<@target-token> 天府灵签 123456",
+        "<@target-token> 购票 123456",
         event_type="GROUP_MESSAGE_CREATE",
         mentions=explicit_player_mentions,
-    ) == "target-openid 天府灵签 123456"
+    ) == "target-openid 购票 123456"
 
     print("QQ 消息归一化测试通过")
 

@@ -19,7 +19,7 @@ PLAYABLE_WORLD_SKIN_IDS = (CULTIVATION_SKIN_ID, MAGIC_SKIN_ID)
 WORLD_SKIN_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=WORLD_SKIN_PACKAGE_ID,
-        version=ContentVersion(3, 10, 0),
+        version=ContentVersion(3, 12, 0),
         dependencies=(
             PackageRequirement(
                 package_id=CATALOG_PACKAGE_ID,

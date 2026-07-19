@@ -16,9 +16,11 @@ from game.content import (
     DIMENSIONAL_DISASTER_BUSINESS_DAY_RESET_HOUR,
     DIMENSIONAL_DISASTER_CYCLE_IDS,
     DIMENSIONAL_DISASTER_DAILY_ATTEMPTS,
+    DIMENSIONAL_DISASTER_DRAW_TICKET_CHANCE,
     DIMENSIONAL_DISASTER_MINIMUM_CONTRIBUTION_RATIO,
     DIMENSIONAL_DISASTER_RECENT_EXCLUSION,
     INSCRIPTION_FEATHER_ITEM_ID,
+    DRAW_TICKET_ITEM_ID,
 )
 from game.core.gameplay import (
     ENEMY_RANK_BOSS_ID,
@@ -43,6 +45,7 @@ from game.core.gameplay import (
     RewardClaimState,
     RewardExpectations,
     RewardSettlement,
+    StackItemReward,
     RuleContext,
     Ruleset,
     SeededRandomSource,
@@ -65,6 +68,7 @@ from game.rules.disaster import (
     close_disaster,
     mark_disaster_rewarded,
     record_disaster_challenge,
+    roll_draw_ticket_drop,
 )
 from game.rules.exploration import ExplorationState, ExplorationStatus
 from game.rules.battle_report import (
@@ -255,6 +259,26 @@ class DimensionalDisasterFeature:
                 context=context,
             )
             damage = min(event.current_health, max(0, battle.damage))
+            ticket_stack = next(
+                (
+                    value
+                    for value in inventory.stacks.values()
+                    if value.definition_id == DRAW_TICKET_ITEM_ID
+                ),
+                None,
+            )
+            ticket_definition = self.content.catalog.items.require(DRAW_TICKET_ITEM_ID)
+            ticket_capacity = (
+                ticket_definition.stack_limit - (ticket_stack.quantity if ticket_stack else 0)
+                if ticket_definition.stack_limit is not None
+                else 1
+            )
+            draw_ticket_drops = roll_draw_ticket_drop(
+                context.random,
+                chance=DIMENSIONAL_DISASTER_DRAW_TICKET_CHANCE,
+                effective_damage=damage,
+                available_capacity=ticket_capacity,
+            )
             receipt = DisasterChallengeReceipt(
                 normalized_operation_id,
                 normalized_character_id,
@@ -269,6 +293,7 @@ class DimensionalDisasterFeature:
                 battle.turns,
                 battle.player_victory,
                 logical_time,
+                draw_ticket_drops,
             )
             next_event = record_disaster_challenge(event, receipt)
             next_activity_state = activity_state
@@ -318,6 +343,46 @@ class DimensionalDisasterFeature:
                     next_character,
                     logical_time,
                 )
+            if draw_ticket_drops:
+                container_id = next(
+                    value.id
+                    for value in inventory.containers.values()
+                    if value.kind == "container.special"
+                )
+                claim = self.snapshots.require(
+                    uow,
+                    self.storage.reward_claim,
+                    normalized_character_id,
+                    RewardClaimState,
+                )
+                settlement = RewardSettlement(
+                    f"reward:{normalized_operation_id}:draw-ticket",
+                    normalized_character_id,
+                    normalized_character_id,
+                    SOURCE_KIND,
+                    f"{event.event_id}:{normalized_operation_id}:draw-ticket",
+                    (
+                        StackItemReward(
+                            ticket_stack.id if ticket_stack else f"stack:{normalized_character_id}:{DRAW_TICKET_ITEM_ID}",
+                            DRAW_TICKET_ITEM_ID,
+                            container_id,
+                            1,
+                            {"disaster_event_id": event.event_id},
+                        ),
+                    ),
+                    RewardExpectations(
+                        claim.revision,
+                        inventory_revision=inventory.revision,
+                    ),
+                )
+                reward_outcome = self.rewards.settle_in_uow(
+                    uow,
+                    settlement,
+                    self.reward_keys_factory(normalized_character_id, PRIMARY_LEDGER_ID),
+                    context=context,
+                )
+                if reward_outcome.failure:
+                    raise RuntimeError(reward_outcome.failure.message)
             report = self.battle_reports.capture_in_uow(
                 uow,
                 self._battle_report_draft(

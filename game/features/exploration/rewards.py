@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from game.content.catalog import CHARACTER_LEVEL_PROGRESSION_ID
+from game.content.catalog import CHARACTER_LEVEL_PROGRESSION_ID, DRAW_TICKET_ITEM_ID
 from game.content.catalog.enemy import (
     AWARD_BOSS_TROPHY_ID,
+    AWARD_DRAW_TICKET_ID,
     AWARD_ENEMY_TROPHY_ID,
     AWARD_LARGE_HEALTH_MEDICINE_ID,
     AWARD_LARGE_SPIRIT_MEDICINE_ID,
@@ -21,7 +22,7 @@ from game.content.catalog.enemy import (
 )
 from game.content.catalog.item import (
     BOSS_TROPHY_ITEM_IDS,
-    ITEM_SALE_COMPONENT_ID,
+    ITEM_RECYCLE_COMPONENT_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
     LARGE_SPIRIT_MEDICINE_ITEM_ID,
     MEDIUM_HEALTH_MEDICINE_ITEM_ID,
@@ -31,7 +32,7 @@ from game.content.catalog.item import (
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
     WORLD_CURIO_ITEM_IDS,
     WORLD_CURIO_WEIGHTS,
-    ItemSaleValue,
+    ItemRecycleValue,
 )
 from game.core.gameplay import (
     ITEM_STORAGE_COMPONENT_ID,
@@ -45,6 +46,7 @@ from game.core.gameplay import (
 from game.rules.equipment import EquipmentGenerationRequest, EquipmentInstanceGenerator
 from game.rules.exploration import ExplorationRewardKind, ExplorationRewardReference
 from game.rules.weapon import WeaponGenerationRequest, WeaponInstanceGenerator
+from game.content.catalog.weapon.mechanics import WEAPON_MAXIMUM_LEVEL_TABLE
 
 
 _MEDICINE_AWARDS = {
@@ -64,8 +66,10 @@ class ExplorationRewardBuild:
     equipment_drops: int
     trophy_drops: int
     medicine_drops: int
+    draw_ticket_drops: int
     trophy_value: int
     backpack_space: int
+    equipment_set_guarantees_consumed: int
     references: tuple[ExplorationRewardReference, ...]
 
 
@@ -78,6 +82,7 @@ class ExplorationRewardFactory:
         self.weapon_generator = WeaponInstanceGenerator(
             catalog.weapons,
             catalog.itemization_engine,
+            WEAPON_MAXIMUM_LEVEL_TABLE,
         )
         self.equipment_generator = EquipmentInstanceGenerator(
             catalog.equipment,
@@ -94,8 +99,11 @@ class ExplorationRewardFactory:
         loadout,
         character_experience: int,
         weapon_experience: int,
+        equipment_set_guarantee_charges: int = 0,
         context,
     ) -> ExplorationRewardBuild:
+        if equipment_set_guarantee_charges < 0:
+            raise ValueError("装备套装保证次数不能小于 0")
         armory_id = _container_id(inventory, "container.armory")
         backpack_id = _container_id(inventory, "container.backpack")
         special_id = _container_id(inventory, "container.special")
@@ -115,8 +123,10 @@ class ExplorationRewardFactory:
         equipment_count = 0
         trophy_count = 0
         medicine_count = 0
+        draw_ticket_count = 0
         trophy_value = 0
         backpack_space = 0
+        equipment_set_guarantees_consumed = 0
         references: list[ExplorationRewardReference] = []
         sequence = 0
         stack_quantities: dict[str, int] = {}
@@ -158,6 +168,10 @@ class ExplorationRewardFactory:
                     )
                 elif award.award_id == AWARD_RANDOM_EQUIPMENT_ID:
                     definition_id = context.random.choice(equipment_ids)
+                    force_set_mark = (
+                        equipment_set_guarantees_consumed
+                        < equipment_set_guarantee_charges
+                    )
                     generated = self.equipment_generator.generate(
                         EquipmentGenerationRequest(
                             f"{context.trace_id}:equipment:{sequence}",
@@ -166,7 +180,10 @@ class ExplorationRewardFactory:
                             self.content.catalog.report.content_fingerprint,
                         ),
                         context=context,
+                        force_set_mark=force_set_mark,
                     ).state
+                    if force_set_mark:
+                        equipment_set_guarantees_consumed += 1
                     definition = self.content.catalog.equipment.require(definition_id)
                     rewards.append(
                         GeneratedEquipmentReward(
@@ -237,8 +254,11 @@ class ExplorationRewardFactory:
             )
             if definition.tags.has("item.trophy"):
                 trophy_count += quantity
-                sale = definition.component(ITEM_SALE_COMPONENT_ID, ItemSaleValue)
-                trophy_value += sale.unit_price * quantity
+                recycle = definition.component(
+                    ITEM_RECYCLE_COMPONENT_ID,
+                    ItemRecycleValue,
+                )
+                trophy_value += recycle.unit_amount * quantity
                 storage = definition.component(
                     ITEM_STORAGE_COMPONENT_ID,
                     ItemStorageComponent,
@@ -246,6 +266,8 @@ class ExplorationRewardFactory:
                 backpack_space += storage.unit_space * quantity
             elif definition.tags.has("item.medicine"):
                 medicine_count += quantity
+            elif definition.tags.has("item.draw_ticket"):
+                draw_ticket_count += quantity
 
         return ExplorationRewardBuild(
             tuple(rewards),
@@ -253,12 +275,16 @@ class ExplorationRewardFactory:
             equipment_count,
             trophy_count,
             medicine_count,
+            draw_ticket_count,
             trophy_value,
             backpack_space,
+            equipment_set_guarantees_consumed,
             tuple(references),
         )
 
     def _stack_definition(self, award, plan, context) -> str | None:
+        if award.award_id == AWARD_DRAW_TICKET_ID:
+            return DRAW_TICKET_ITEM_ID
         if award.award_id in _MEDICINE_AWARDS:
             return _MEDICINE_AWARDS[award.award_id]
         enemies = plan.encounter.enemies if plan.encounter is not None else ()

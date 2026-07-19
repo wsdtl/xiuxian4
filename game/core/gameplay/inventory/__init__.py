@@ -1,9 +1,12 @@
 """协议、数据库与具体玩法无关的物品资产底座。"""
 
-INVENTORY_FOUNDATION_VERSION = "inventory.foundation.v3"
+INVENTORY_FOUNDATION_VERSION = "inventory.foundation.v5"
 
 from .components import (
     ITEM_STORAGE_COMPONENT_ID,
+    ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
+    ITEM_CONTAINER_CAPACITY_COMPONENT_TYPE,
+    ContainerCapacityItemComponent,
     ItemComponentRegistry,
     ItemComponentType,
     ItemStorageComponent,
@@ -50,6 +53,8 @@ from .transactions import (
     InventoryTransaction,
     MergeStacks,
     MoveAsset,
+    UpdateInstance,
+    IncreaseContainerSpace,
     ReleaseReservation,
     ReserveAsset,
     SplitStack,
@@ -71,6 +76,9 @@ __all__ = [
     "INVENTORY_FOUNDATION_VERSION",
     "ITEM_ABILITY_COMPONENT_ID",
     "ITEM_STORAGE_COMPONENT_ID",
+    "ITEM_CONTAINER_CAPACITY_COMPONENT_ID",
+    "ITEM_CONTAINER_CAPACITY_COMPONENT_TYPE",
+    "ContainerCapacityItemComponent",
     "InventoryAbilityExecution",
     "InventoryAbilityExecutor",
     "InventoryState",
@@ -92,6 +100,8 @@ __all__ = [
     "ItemUseReceipt",
     "MergeStacks",
     "MoveAsset",
+    "UpdateInstance",
+    "IncreaseContainerSpace",
     "ProvenanceLot",
     "ReservationMode",
     "ReleaseReservation",

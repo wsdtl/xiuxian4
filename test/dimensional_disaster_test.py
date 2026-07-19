@@ -22,6 +22,8 @@ from game.app import (  # noqa: E402
 )
 from game.content import (  # noqa: E402
     CULTIVATION_SKIN_ID,
+    DIMENSION_SHIFT_ITEM_ID,
+    DRAW_TICKET_ITEM_ID,
     INSCRIPTION_FEATHER_ITEM_ID,
     MAGIC_SKIN_ID,
     build_dimensional_disaster_catalog,
@@ -34,9 +36,13 @@ from game.core.gameplay import (  # noqa: E402
     SPIRIT_MAXIMUM,
     ActivityState,
     CharacterState,
+    GrantStack,
     InscriptionMediumData,
     InventoryState,
+    InventoryTransaction,
     INSCRIPTION_MEDIUM_DATA_KEY,
+    SeededRandomSource,
+    SourceReceipt,
 )
 from game.core.persistence import (  # noqa: E402
     ACTIVITY_AGGREGATE,
@@ -44,17 +50,20 @@ from game.core.persistence import (  # noqa: E402
     INVENTORY_AGGREGATE,
 )
 from game.rules.activity import GLOBAL_ACTIVITY_SCOPE_ID  # noqa: E402
+from game.rules import game_operation_context  # noqa: E402
 from game.rules.disaster import (  # noqa: E402
     DIMENSIONAL_DISASTER_AGGREGATE,
     DimensionalDisasterOutcome,
     DimensionalDisasterState,
     DimensionalDisasterStatus,
+    roll_draw_ticket_drop,
 )
-from game.cmd import 次元 as dimension_component  # noqa: E402,F401
+from game.cmd import 跃迁 as dimension_component  # noqa: E402,F401
 from game.cmd import 多次元灾厄 as disaster_component  # noqa: E402,F401
 from game.cmd import 角色 as character_component  # noqa: E402,F401
 from game.cmd import 铭刻 as inscription_component  # noqa: E402,F401
 from game.cmd.多次元灾厄 import service as disaster_command_service  # noqa: E402
+from game.features.dimensional_disaster import service as disaster_feature_service  # noqa: E402
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
 
@@ -69,6 +78,18 @@ def main() -> None:
 
 
 async def _main() -> None:
+    assert roll_draw_ticket_drop(
+        SeededRandomSource("no-damage"),
+        chance=1_000_000,
+        effective_damage=0,
+        available_capacity=1,
+    ) == 0
+    assert roll_draw_ticket_drop(
+        SeededRandomSource("guaranteed"),
+        chance=1_000_000,
+        effective_damage=1,
+        available_capacity=1,
+    ) == 1
     catalog = build_dimensional_disaster_catalog()
     assert len(catalog.definitions()) == 20
     assert len(catalog.for_source(CULTIVATION_SKIN_ID)) == 10
@@ -90,12 +111,15 @@ async def _main() -> None:
         services.activities.initialize(GLOBAL_ACTIVITY_SCOPE_ID, logical_time=TIME)
         previous = install_game_services(services)
         original_now = disaster_command_service._now
+        original_ticket_chance = disaster_feature_service.DIMENSIONAL_DISASTER_DRAW_TICKET_CHANCE
         disaster_command_service._now = lambda: TIME
+        disaster_feature_service.DIMENSIONAL_DISASTER_DRAW_TICKET_CHANCE = 1_000_000
         try:
             await LocalEventHandler.run()
             await _dispatch("player-a", "创建角色 观星客", "create-a")
             await _dispatch("player-b", "创建角色 守夜人", "create-b")
             first_character, second_character = _characters(services)
+            _grant_dimension_shift_item(services, first_character.id)
 
             status = await _dispatch("player-a", "多次元灾厄", "status-a")
             content = status.replies[0].message.content
@@ -136,6 +160,7 @@ async def _main() -> None:
             assert all(state.participants for state in first_segment.round_states)
             replay = await _dispatch("player-a", "讨伐灾厄", "challenge-a-1")
             assert "重复消息" in replay.replies[0].message.content
+            assert "战斗掉落" in replay.replies[0].message.content
             assert _event(services).attempts_today(first_character.id, "2026-07-13") == 1
 
             _restore_combat_resources(services, first_character.id, attack=10_000)
@@ -194,8 +219,15 @@ async def _main() -> None:
             ) == 1
             activity = _activity(services)
             assert activity.instances[event.event_id].status.value == "closed"
+            assert sum(
+                value.quantity
+                for character in (first_character, second_character)
+                for value in _inventory(services, character.id).stacks.values()
+                if value.definition_id == DRAW_TICKET_ITEM_ID
+            ) == 3
         finally:
             disaster_command_service._now = original_now
+            disaster_feature_service.DIMENSIONAL_DISASTER_DRAW_TICKET_CHANCE = original_ticket_chance
             restore_game_services(previous)
 
 
@@ -250,6 +282,57 @@ def _inventory(services, character_id: str) -> InventoryState:
             character_id,
             InventoryState,
         )
+
+
+def _grant_dimension_shift_item(services, character_id: str) -> None:
+    snapshots = services.character_creation.snapshots
+    with services.database.unit_of_work() as uow:
+        inventory = snapshots.require(
+            uow,
+            INVENTORY_AGGREGATE,
+            character_id,
+            InventoryState,
+        )
+        special = next(
+            value.id
+            for value in inventory.containers.values()
+            if value.kind == "container.special"
+        )
+        outcome = services.inventory_engine.execute(
+            InventoryTransaction(
+                "disaster-test-grant-dimension-shift-item",
+                character_id,
+                "inventory.test_setup",
+                (
+                    GrantStack(
+                        "stack:disaster-dimension-shift",
+                        DIMENSION_SHIFT_ITEM_ID,
+                        special,
+                        1,
+                        SourceReceipt(
+                            "receipt:disaster-dimension-shift",
+                            "source.test",
+                            character_id,
+                            TIME,
+                        ),
+                    ),
+                ),
+            ),
+            state=inventory,
+            context=game_operation_context(
+                "disaster-test-grant-dimension-shift-item",
+                logical_time=TIME,
+            ),
+        ).unwrap()
+        snapshots.update(
+            uow,
+            INVENTORY_AGGREGATE,
+            character_id,
+            inventory,
+            outcome.state,
+            TIME,
+        )
+        uow.commit()
 
 
 def _restore_combat_resources(services, character_id: str, *, attack: float) -> None:

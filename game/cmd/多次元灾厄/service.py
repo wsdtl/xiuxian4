@@ -10,6 +10,7 @@ from game.app import CurrentCharacterResult, current_game_services
 from game.content import (
     DIMENSIONAL_DISASTER_ACTIVITY_ID,
     DIMENSIONAL_DISASTER_DAILY_ATTEMPTS,
+    DRAW_TICKET_ITEM_ID,
 )
 from game.features.dimensional_disaster import (
     DimensionalDisasterChallengeResult,
@@ -74,7 +75,8 @@ async def challenge_disaster(current: CurrentCharacterResult) -> None:
             operation_id,
             logical_time=_now(),
         )
-        await send_game_reply(_challenge_message(result))
+        view = current_game_services().world_view(current.dimension)
+        await send_game_reply(_challenge_message(result, view.projector))
     except Exception as exc:
         await _failed("讨伐灾厄失败", character.id, exc)
 
@@ -153,7 +155,7 @@ def _status_message(
     return builder.actions(tuple(actions)).build()
 
 
-def _challenge_message(result: DimensionalDisasterChallengeResult) -> DocumentMessage:
+def _challenge_message(result: DimensionalDisasterChallengeResult, projector) -> DocumentMessage:
     builder = M.document().section("讨伐灾厄", icon="combat")
     if result.status in {"resolved", "defeated", "replayed"} and result.receipt is not None:
         receipt = result.receipt
@@ -169,6 +171,8 @@ def _challenge_message(result: DimensionalDisasterChallengeResult) -> DocumentMe
             ("今日次数", f"{receipt.attempts_today}/{DIMENSIONAL_DISASTER_DAILY_ATTEMPTS}"),
             ("战斗行动", receipt.turns),
         )
+        if receipt.draw_ticket_drops:
+            builder.field("战斗掉落", f"{projector.name(DRAW_TICKET_ITEM_ID)} x1")
         if result.battle_report is not None:
             builder.field(
                 "战报",

@@ -11,6 +11,7 @@ from ..ids import StableId, stable_id
 ComponentT = TypeVar("ComponentT")
 ComponentValidator = Callable[[object], None]
 ITEM_STORAGE_COMPONENT_ID = "item_component.storage"
+ITEM_CONTAINER_CAPACITY_COMPONENT_ID = "item_component.use_container_capacity"
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,28 @@ class ItemStorageComponent:
 
 
 @dataclass(frozen=True)
+class ContainerCapacityItemComponent:
+    """一次使用对指定容器增加的容量及其绝对上限。"""
+
+    container_kind: StableId
+    amount: int
+    maximum_space: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "container_kind",
+            stable_id(self.container_kind, field="container kind"),
+        )
+        for field_name in ("amount", "maximum_space"):
+            value = getattr(self, field_name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(f"ContainerCapacityItemComponent.{field_name} 必须是整数")
+        if self.amount < 1 or self.maximum_space < self.amount:
+            raise ValueError("容器扩容数量和绝对上限无效")
+
+
+@dataclass(frozen=True)
 class ItemComponentType(Generic[ComponentT]):
     """一个物品组件槽位允许保存的数据类型。"""
 
@@ -36,6 +59,12 @@ class ItemComponentType(Generic[ComponentT]):
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "id", stable_id(self.id, field="item component id"))
+
+
+ITEM_CONTAINER_CAPACITY_COMPONENT_TYPE = ItemComponentType(
+    ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
+    ContainerCapacityItemComponent,
+)
 
 
 class ItemComponentRegistry:
@@ -88,6 +117,9 @@ def register_item_storage_component(registry: ItemComponentRegistry) -> None:
 
 __all__ = [
     "ITEM_STORAGE_COMPONENT_ID",
+    "ITEM_CONTAINER_CAPACITY_COMPONENT_ID",
+    "ITEM_CONTAINER_CAPACITY_COMPONENT_TYPE",
+    "ContainerCapacityItemComponent",
     "ItemComponentRegistry",
     "ItemComponentType",
     "ItemStorageComponent",

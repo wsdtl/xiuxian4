@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import fields, is_dataclass
+from dataclasses import fields, is_dataclass, replace
 from datetime import datetime
 from enum import Enum
 from hashlib import sha256
@@ -14,8 +14,12 @@ from ..context import RuleContext
 from ..economy import LedgerEngine, LedgerTransaction
 from ..errors import RuleFailure, RuleOutcome, RuleViolation
 from ..events import RuleEvent
-from ..inventory import InventoryEngine, InventoryTransaction
-from ..weapon import WeaponEngine, WeaponExperienceTransaction
+from ..inventory import InventoryEngine, InventoryTransaction, UpdateInstance
+from ..weapon import (
+    WeaponEngine,
+    WeaponExperienceTransaction,
+    weapon_state_data,
+)
 from .models import (
     RewardClaimRecord,
     RewardClaimState,
@@ -232,25 +236,6 @@ class RewardSettlementEngine:
                 )
             weapons[asset_id] = state
 
-        if plan.inventory_operations:
-            transaction_id = f"{settlement.id}:inventory"
-            outcome = self.inventory.execute(
-                InventoryTransaction(
-                    transaction_id,
-                    settlement.actor_id,
-                    "reward.settlement",
-                    plan.inventory_operations,
-                ),
-                state=inventory_state,
-                context=context,
-            )
-            if outcome.failure:
-                return RuleOutcome.failed(outcome.failure)
-            assert outcome.value is not None
-            inventory_state = outcome.value.state
-            events.extend(outcome.value.events)
-            transaction_ids.append(transaction_id)
-
         if plan.ledger_operations:
             transaction_id = f"{settlement.id}:ledger"
             outcome = self.ledger.execute(
@@ -310,6 +295,56 @@ class RewardSettlementEngine:
                 return RuleOutcome.failed(outcome.failure)
             assert outcome.value is not None
             weapons[asset_id] = outcome.value.state
+            events.extend(outcome.value.events)
+            transaction_ids.append(transaction_id)
+
+        inventory_operations = list(plan.inventory_operations)
+        for asset_id in sorted(plan.weapon_experience):
+            try:
+                instance = inventory_state.instances[asset_id]
+            except KeyError:
+                return RuleOutcome.failed(
+                    RuleFailure(
+                        "reward.weapon_instance_missing",
+                        "武器成长目标不在角色武库中",
+                        {"asset_id": asset_id},
+                    )
+                )
+            embedded = instance.data.get("weapon.state")
+            if embedded is not None and embedded != snapshot.weapons[asset_id]:
+                return RuleOutcome.failed(
+                    RuleFailure(
+                        "reward.weapon_state_mismatch",
+                        "武器聚合状态与武库实例状态不一致",
+                        {"asset_id": asset_id},
+                    )
+                )
+            inventory_operations.append(
+                UpdateInstance(
+                    replace(
+                        instance,
+                        data={**instance.data, **weapon_state_data(weapons[asset_id])},
+                    ),
+                    instance.revision,
+                )
+            )
+
+        if inventory_operations:
+            transaction_id = f"{settlement.id}:inventory"
+            outcome = self.inventory.execute(
+                InventoryTransaction(
+                    transaction_id,
+                    settlement.actor_id,
+                    "reward.settlement",
+                    tuple(inventory_operations),
+                ),
+                state=inventory_state,
+                context=context,
+            )
+            if outcome.failure:
+                return RuleOutcome.failed(outcome.failure)
+            assert outcome.value is not None
+            inventory_state = outcome.value.state
             events.extend(outcome.value.events)
             transaction_ids.append(transaction_id)
 

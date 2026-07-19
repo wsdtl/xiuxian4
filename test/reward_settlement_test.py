@@ -45,6 +45,8 @@ from game.core.gameplay.inventory import (  # noqa: E402
     ItemComponentRegistry,
     ItemContainer,
     ItemDefinition,
+    ItemInstance,
+    SourceReceipt,
 )
 from game.core.gameplay.loadout import (  # noqa: E402
     WEAPON_SLOT_ID,
@@ -79,6 +81,7 @@ from game.core.gameplay.weapon import (  # noqa: E402
     WeaponEngine,
     WeaponQualityProfile,
     WeaponState,
+    weapon_state_data,
 )
 from game.core.persistence import (  # noqa: E402
     PersistedRewardSettlementService,
@@ -233,7 +236,16 @@ def _environment() -> dict[str, object]:
         InventoryState(
             containers={
                 "bag-a": ItemContainer("bag-a", "container.inventory", "account-a")
-            }
+            },
+            instances={
+                weapon.asset_id: ItemInstance(
+                    weapon.asset_id,
+                    "item.weapon.training_blade",
+                    "bag-a",
+                    SourceReceipt("receipt:weapon-a", "source.test", "test", TIME),
+                    weapon_state_data(weapon),
+                )
+            },
         ),
         ledger_state,
         {character.id: character},

@@ -23,6 +23,10 @@ from game.core.persistence import SqliteDatabase  # noqa: E402
 from game.app import build_game_services, install_game_services, restore_game_services  # noqa: E402
 from game.cmd import router as game_router  # noqa: E402
 from game.cmd.战报.site import _event_text  # noqa: E402
+from game.content.world_skins.cultivation import (  # noqa: E402
+    CULTIVATION_SKIN_ID,
+    CULTIVATION_SKIN_VERSION,
+)
 from game.features.battle_report import BattleReportService  # noqa: E402
 from game.rules.battle_report import (  # noqa: E402
     BattleReportDraft,
@@ -291,8 +295,8 @@ def _draft(segment_id: str, title: str, logical_time: datetime) -> BattleReportD
     return BattleReportDraft(
         report_id="battle-report:exploration:session-private-id",
         mode_id="battle.mode.exploration",
-        presentation_skin_id="skin.cultivation",
-        presentation_skin_version=16,
+        presentation_skin_id=CULTIVATION_SKIN_ID,
+        presentation_skin_version=CULTIVATION_SKIN_VERSION,
         content_fingerprint="content-fingerprint",
         summary=BattleReportSummary("探险战报", "1胜 0负", ("完成批次: 1",)),
         segment=BattleReportSegmentDraft(

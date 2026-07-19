@@ -17,24 +17,26 @@
 - 任意数量、多历史版本的世界皮肤投影目录
 - 随机降临、角色级界相投影与不迁移资产的即时跃迁
 - 战斗底座 `combat.foundation.v5`，由核心会话自动产生完整结构化轨迹
-- 已封板的物品与物资底座 `inventory.foundation.v2`
+- 已封板的物品与物资底座 `inventory.foundation.v5`
 - 已封板的角色与成长底座 `character.foundation.v4`
 - 已封板的原子装配底座 `loadout.foundation.v2`
-- 已封板的武器底座 `weapon.foundation.v3`
-- 已封板的装备底座 `equipment.foundation.v2`
+- 已封板的武器底座 `weapon.foundation.v4`
+- 已封板的装备底座 `equipment.foundation.v3`
 - 已封板的价值评估底座 `valuation.foundation.v2`
 - 已封板的随机物品化底座 `itemization.foundation.v2`
 - 已封板的临时队伍底座 `party.foundation.v1`
 - 已封板的账号与归属底座 `account.foundation.v1`
 - 已封板的经济账本底座 `economy.foundation.v1`
+- 统一参考价、系统回收、二手市场、价格纠偏、中央资金与环形号码彩票
 - 已封板的统一奖励结算底座 `reward.foundation.v1`
 - 已封板的权益凭证与兑付底座 `grant.foundation.v1`
-- 已封板的持久化联合事务底座 `persistence.foundation.v6`
-- 已封板的内容包统一组装底座 `content.foundation.v5`
+- 已封板的持久化联合事务底座 `persistence.foundation.v7`
+- 已封板的内容包统一组装底座 `content.foundation.v7`
 - 已封板的时间与周期底座 `cycle.foundation.v1`
 - 异步行动槽与生命周期底座 `action.foundation.v1`
 - 已封板的铭刻底座 `inscription.foundation.v1`
 - 已封板的掉落与保底底座 `loot.foundation.v1`
+- 已封板的可信奖池与批量抽取底座 `draw.foundation.v1`
 - 已封板的世界空间与区域状态底座 `world.foundation.v1`
 - 已封板的交换契约底座 `exchange.foundation.v1`
 - 已封板的活动实例底座 `activity.foundation.v1`
@@ -177,16 +179,34 @@ ROUTER_CHILD_FOLDERS=[]
 查看 物品编号
 使用 物品编号 [数量]
 休息
-停止休息
+结束休息
+切磋 @对方
+接受切磋 请求编号
+拒绝切磋 请求编号
 探险
 前往 地点
 开始探险
 停止探险
 探险总结
-出售战利品
+回收 物品编号
+批量回收 [部位] [品阶...]
+回收战利品
+二手 [部位] [页码]
+上架 物品编号 价格
+下架 M编号
+购买 M编号
+我的上架 [页码]
+税务
+彩票
+购票 六位号码
+中奖记录
 多次元灾厄
 讨伐灾厄
 灾厄排行
+抽奖
+十连抽奖
+抽奖奖池
+抽奖记录
 跃迁
 跃迁 世界名称
 ```
@@ -268,6 +288,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [核心架构门禁](design/核心架构门禁说明.md)
 - [正式内容层](game/content/正式内容层说明.md)
 - [具体游戏规则](game/rules/具体游戏规则说明.md)
+- [业务框架与功能规划](game/features/业务框架与功能规划.md)
 - [游戏应用装配](game/应用装配说明.md)
 - [角色组件](game/cmd/角色/说明.md)
 - [提醒组件](game/cmd/提醒/说明.md)
@@ -292,6 +313,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [队伍底座说明](game/core/gameplay/party/队伍底座说明.md)
 - [账号与归属底座说明](game/core/account/账号与归属底座说明.md)
 - [经济账本底座说明](game/core/gameplay/economy/经济账本底座说明.md)
+- [统一经济系统](game/rules/economy/经济系统说明.md)
 - [统一奖励结算底座说明](game/core/gameplay/rewards/统一奖励结算底座说明.md)
 - [权益凭证与兑付底座说明](game/core/gameplay/grants/权益凭证与兑付底座说明.md)
 - [持久化联合事务底座说明](game/core/persistence/持久化联合事务底座说明.md)
@@ -326,7 +348,8 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - `game/core/persistence/` 可以适配领域快照，但领域包不能反向导入持久化实现。
 - `game/content/` 只承载稳定名录、世界皮肤和统一装配，只能依赖 Gameplay 公共契约。
 - `game/rules/` 只保存跨组件复用的英文具体游戏规则，不放中文组件业务文件。
-- `game/app.py` 负责组装内容、规则、持久化服务和启动生命周期。
+- `game/features/` 保存正式业务用例和联合事务，不能导入命令、消息协议或持久化实现。
+- `game/app.py` 只负责组装、稳定转发和启动生命周期，禁止直接开启业务工作单元。
 - `game/cmd/` 承接命令与对应组件业务；二级组件的 `__init__.py` 只注册，`service.py` 负责调用底座和展示。
 - 只有 `game/cmd/` 的二级组件目录使用中文；Python 文件名和代码标识符统一使用英文。
 - `组件测试/` 只存放可删除的联调与协议测试，禁止依赖游戏代码。

@@ -9,6 +9,7 @@ from ..schema import (
     Emphasis,
     FieldSeparator,
     HeaderBlock,
+    ImageBlock,
     InlineBlock,
     Link,
     NoteBlock,
@@ -32,6 +33,8 @@ def render_plain_text(document: Document) -> str:
         elif isinstance(block, SectionBlock):
             lines.append(_title(block.title, block.icon))
             lines.extend(_render_rich(line) for line in block.lines)
+        elif isinstance(block, ImageBlock):
+            lines.append(f"[{block.alt}]")
         elif isinstance(block, NoteBlock):
             lines.extend(_render_rich(line) for line in block.lines)
         previous_block = block

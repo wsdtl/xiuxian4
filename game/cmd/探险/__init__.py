@@ -44,11 +44,4 @@ async def summary(current=Depends(current_character)) -> None:
     await service.summary(current)
 
 
-@GameCommand.handler(cmd="出售战利品")
-async def sell_trophies(current=Depends(current_character)) -> None:
-    """按正式名录固定价出售背包中的全部战利品。"""
-
-    await service.sell_trophies(current)
-
-
 __all__ = []

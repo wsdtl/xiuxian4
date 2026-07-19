@@ -1,5 +1,6 @@
 """次元灾厄纯规则入口。"""
 
+from .drops import *
 from .models import *
 from .state import *
 

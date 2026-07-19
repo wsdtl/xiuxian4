@@ -18,6 +18,7 @@ from game.app import (  # noqa: E402
     restore_game_services,
 )
 from game.cmd import 探险 as exploration_component  # noqa: E402,F401
+from game.cmd import 回收 as recycle_component  # noqa: E402,F401
 from game.cmd import 角色 as character_component  # noqa: E402,F401
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
@@ -35,7 +36,7 @@ async def _main() -> None:
         "开始探险",
         "停止探险",
         "探险总结",
-        "出售战利品",
+        "回收战利品",
     ):
         assert len(LocalEventHandler.exact_rules[command]) == 1
         assert len(QqEventHandler.exact_rules[command]) == 1
@@ -90,15 +91,15 @@ async def _main() -> None:
                 event_id="exploration-summary",
             )
             assert "状态: _进行中_" in summary.replies[0].message.content
-            assert summary.replies[0].message.actions[0].data == "出售战利品"
+            assert summary.replies[0].message.actions[0].data == "回收战利品"
 
             empty_sale = await dispatch(
                 client_id="exploration-player",
-                raw_message="出售战利品",
+                raw_message="回收战利品",
                 sender_name="巡山客",
                 event_id="exploration-empty-sale",
             )
-            assert "没有可出售的战利品" in empty_sale.replies[0].message.content
+            assert "没有可回收的战利品" in empty_sale.replies[0].message.content
         finally:
             restore_game_services(previous)
 

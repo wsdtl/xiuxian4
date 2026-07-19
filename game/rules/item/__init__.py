@@ -1,10 +1,10 @@
-"""物品收购报价规则。"""
+"""物品回收报价与玩家物品编号规则。"""
 
-from .sale import (
-    ITEM_SALE_RULESET_VERSION,
-    ItemSaleQuote,
-    ItemSaleQuoteLine,
-    quote_trophy_sale,
+from .recycle import (
+    TROPHY_RECYCLE_RULESET_VERSION,
+    TrophyRecycleQuote,
+    TrophyRecycleQuoteLine,
+    quote_trophy_recycle,
 )
 from .references import asset_reference, resolve_asset_reference
 

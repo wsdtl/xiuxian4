@@ -55,6 +55,7 @@ class GrantInstance:
     container_id: str
     receipt: SourceReceipt
     data: Mapping[str, object] = field(default_factory=dict)
+    revision: int = 0
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,35 @@ class MoveAsset:
     asset_id: str
     destination_container_id: str
     reservation_id: str | None = None
+
+
+@dataclass(frozen=True)
+class UpdateInstance:
+    """以完整类型化实例更新其数据，资产身份和位置不得改变。"""
+
+    instance: ItemInstance
+    expected_revision: int
+
+    def __post_init__(self) -> None:
+        if self.expected_revision < 0:
+            raise ValueError("UpdateInstance.expected_revision 不能小于 0")
+
+
+@dataclass(frozen=True)
+class IncreaseContainerSpace:
+    container_id: str
+    amount: int
+    maximum_space: int
+
+    def __post_init__(self) -> None:
+        if not self.container_id.strip():
+            raise ValueError("IncreaseContainerSpace.container_id 不能为空")
+        for field_name in ("amount", "maximum_space"):
+            value = getattr(self, field_name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(f"IncreaseContainerSpace.{field_name} 必须是整数")
+        if self.amount < 1 or self.maximum_space < self.amount:
+            raise ValueError("容器扩容量和绝对上限无效")
 
 
 @dataclass(frozen=True)
@@ -216,6 +246,8 @@ class InventoryEngine:
             ConsumeInstance: self._consume_instance,
             DestroyAsset: self._destroy_asset,
             MoveAsset: self._move_asset,
+            UpdateInstance: self._update_instance,
+            IncreaseContainerSpace: self._increase_container_space,
             SwapAssetContainers: self._swap_asset_containers,
             SplitStack: self._split_stack,
             MergeStacks: self._merge_stacks,
@@ -317,6 +349,7 @@ class InventoryEngine:
             container.id,
             operation.receipt,
             operation.data,
+            operation.revision,
         )
         draft.instances[instance.id] = instance
         reference_number = self._allocate_reference(instance.id, draft)
@@ -493,6 +526,89 @@ class InventoryEngine:
             source_id=source.owner_id,
         )
 
+    def _update_instance(
+        self,
+        operation: UpdateInstance,
+        draft: _Draft,
+        transaction: InventoryTransaction,
+        context: RuleContext,
+    ) -> None:
+        try:
+            instance = draft.instances[operation.instance.id]
+        except KeyError:
+            self._fail(
+                "inventory.instance_unknown",
+                "找不到要更新的独立实例物品",
+                {"asset_id": operation.instance.id},
+            )
+        if instance.revision != operation.expected_revision:
+            self._fail(
+                "inventory.instance_revision_conflict",
+                "物品实例版本与更新预期不一致",
+                {
+                    "asset_id": instance.id,
+                    "expected": operation.expected_revision,
+                    "actual": instance.revision,
+                },
+            )
+        replacement = operation.instance
+        if (
+            replacement.id != instance.id
+            or replacement.definition_id != instance.definition_id
+            or replacement.container_id != instance.container_id
+            or replacement.receipt != instance.receipt
+        ):
+            self._fail("inventory.instance_identity_changed", "实例数据更新不能改变物品身份或位置")
+        draft.instances[instance.id] = replace(replacement, revision=instance.revision + 1)
+        container = draft.containers[instance.container_id]
+        self._event(
+            draft,
+            transaction,
+            context,
+            "inventory.item.data_updated",
+            instance.definition_id,
+            container.owner_id,
+            {
+                "asset_id": instance.id,
+                "revision": instance.revision + 1,
+            },
+        )
+
+    def _increase_container_space(
+        self,
+        operation: IncreaseContainerSpace,
+        draft: _Draft,
+        transaction: InventoryTransaction,
+        context: RuleContext,
+    ) -> None:
+        container = self._require_container(operation.container_id, draft)
+        if container.maximum_space is None:
+            self._fail("inventory.container_space_unlimited", "无限容量容器不能使用扩容道具")
+        if container.maximum_space >= operation.maximum_space:
+            self._fail(
+                "inventory.container_space_maximum_reached",
+                "背包空间已经达到扩容上限",
+                {"maximum_space": operation.maximum_space},
+            )
+        next_space = min(
+            container.maximum_space + operation.amount,
+            operation.maximum_space,
+        )
+        draft.containers[container.id] = replace(container, maximum_space=next_space)
+        self._event(
+            draft,
+            transaction,
+            context,
+            "inventory.container.space_increased",
+            container.kind,
+            container.owner_id,
+            {
+                "container_id": container.id,
+                "space_before": container.maximum_space,
+                "space_after": next_space,
+                "space_maximum": operation.maximum_space,
+            },
+        )
     def _split_stack(
         self,
         operation: SplitStack,

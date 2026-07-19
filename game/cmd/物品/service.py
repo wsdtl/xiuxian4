@@ -20,19 +20,21 @@ from game.content.catalog.combat import (
     SMALL_MEDICINE_RECOVERY_RATIO,
 )
 from game.content.catalog.item import (
-    ITEM_SALE_COMPONENT_ID,
+    DIMENSION_SHIFT_ITEM_COMPONENT_ID,
+    ITEM_RECYCLE_COMPONENT_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
     LARGE_SPIRIT_MEDICINE_ITEM_ID,
     MEDIUM_HEALTH_MEDICINE_ITEM_ID,
     MEDIUM_SPIRIT_MEDICINE_ITEM_ID,
     SMALL_HEALTH_MEDICINE_ITEM_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
-    ItemSaleValue,
+    ItemRecycleValue,
 )
 from game.core.gameplay import (
     HEALTH_CURRENT,
     HEALTH_MAXIMUM,
     ITEM_ABILITY_COMPONENT_ID,
+    ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
     ITEM_STORAGE_COMPONENT_ID,
     LOADOUT_ITEM_COMPONENT_ID,
     SPIRIT_CURRENT,
@@ -51,7 +53,11 @@ from game.core.gameplay import (
     ItemStorageComponent,
     LoadoutItemComponent,
     WeaponContributionProvider,
+    WeaponItemUseCommand,
     WeaponState,
+    WEAPON_LEVEL_ITEM_COMPONENT_ID,
+    WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
+    EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
     equipment_state_from_instance,
     weapon_state_from_instance,
 )
@@ -59,6 +65,11 @@ from game.core.gameplay.inscription import INSCRIPTION_MEDIUM_DATA_KEY
 from game.rules import game_operation_context
 from game.rules.character import equipped_character_contributions
 from game.rules.item import asset_reference, resolve_asset_reference
+from game.features.special_items import (
+    BACKPACK_CAPACITY_EFFECT_KIND,
+    EQUIPMENT_SET_GUARANTEE_EFFECT_KIND,
+    SpecialItemUseCommand,
+)
 from launch import C, config, logger
 from launch.adapter import current_message_context
 from message import Action, DocumentMessage, M
@@ -183,14 +194,7 @@ async def use_item(message: str, current: CurrentCharacterResult) -> None:
         return
     parts = str(message or "").strip().split()
     if not parts or len(parts) > 2:
-        await send_game_reply(_invalid("使用", "发送: 使用 物品编号 [数量]"))
-        return
-    try:
-        requested_quantity = int(parts[1]) if len(parts) == 2 else 1
-        if requested_quantity < 1:
-            raise ValueError("使用数量必须大于 0")
-    except ValueError as exc:
-        await send_game_reply(_invalid("使用", str(exc)))
+        await send_game_reply(_invalid("使用", "发送: 使用 物品编号 [数量或武器编号]"))
         return
 
     services = current_game_services()
@@ -201,12 +205,45 @@ async def use_item(message: str, current: CurrentCharacterResult) -> None:
     try:
         asset = resolve_asset_reference(initial.inventory, parts[0], services.content.catalog.items)
         definition = services.content.catalog.items.require(asset.definition_id)
-        component = definition.component(ITEM_ABILITY_COMPONENT_ID, ItemAbilityComponent)
         if definition.tags.has("item.inscription_medium"):
             raise ValueError("铭刻之羽只能通过铭刻命令使用")
+        if DIMENSION_SHIFT_ITEM_COMPONENT_ID in definition.components:
+            raise ValueError("跃迁凭证会在成功跃迁时自动消耗，请发送：跃迁")
         available = initial.inventory.available_quantity(asset.id)
         if available < 1:
             raise ValueError("物品当前不可使用")
+    except (KeyError, TypeError, ValueError) as exc:
+        await send_game_reply(_invalid("使用", str(exc)))
+        return
+
+    if any(
+        component_id in definition.components
+        for component_id in (
+            WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
+            WEAPON_LEVEL_ITEM_COMPONENT_ID,
+        )
+    ):
+        await _use_weapon_growth_item(parts, asset, initial)
+        return
+
+    if any(
+        component_id in definition.components
+        for component_id in (
+            ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
+            EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
+        )
+    ):
+        if len(parts) != 1:
+            await send_game_reply(_invalid("使用", "该特殊物品每次只能使用一件"))
+            return
+        await _use_specialized_item(asset, initial)
+        return
+
+    try:
+        component = definition.component(ITEM_ABILITY_COMPONENT_ID, ItemAbilityComponent)
+        requested_quantity = int(parts[1]) if len(parts) == 2 else 1
+        if requested_quantity < 1:
+            raise ValueError("使用数量必须大于 0")
     except (KeyError, TypeError, ValueError) as exc:
         await send_game_reply(_invalid("使用", str(exc)))
         return
@@ -290,6 +327,108 @@ async def use_item(message: str, current: CurrentCharacterResult) -> None:
     )
 
 
+async def _use_weapon_growth_item(parts, item_asset, overview: CharacterOverview) -> None:
+    services = current_game_services()
+    try:
+        if len(parts) == 2:
+            target = resolve_asset_reference(
+                overview.inventory,
+                parts[1],
+                services.content.catalog.items,
+            )
+            if not isinstance(target, ItemInstance):
+                raise ValueError("目标编号不是武器")
+        else:
+            asset_id = overview.loadout.weapon_asset_id
+            if asset_id is None:
+                raise ValueError("当前没有装备武器，请补充武器编号")
+            target = overview.inventory.instances[asset_id]
+        target_definition = services.content.catalog.items.require(target.definition_id)
+        if not target_definition.tags.has("item.weapon"):
+            raise ValueError("目标编号不是武器")
+    except (KeyError, TypeError, ValueError) as exc:
+        await send_game_reply(_invalid("使用", str(exc)))
+        return
+
+    transaction_id = f"weapon-item-use:{_evidence_id()}"
+    try:
+        outcome = await asyncio.to_thread(
+            services.weapon_item_use.use,
+            WeaponItemUseCommand(
+                transaction_id,
+                overview.character.id,
+                item_asset.id,
+                target.id,
+            ),
+            inventory_id=overview.character.id,
+            context=game_operation_context(transaction_id, logical_time=_now()),
+        )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("武器成长道具使用失败"), C.kv("character", overview.character.id))
+        )
+        await send_game_reply(_invalid("使用", "物品使用没有完成"))
+        return
+    if outcome.failure:
+        await send_game_reply(_invalid("使用", outcome.failure.message))
+        return
+    assert outcome.value is not None
+    receipt = outcome.value
+    view = _view(overview)
+    builder = (
+        M.document()
+        .section("使用完成", icon="item")
+        .field("物品", view.projector.name(receipt.item_definition_id))
+        .field("武器", _asset_name(target, overview))
+    )
+    if receipt.maximum_level_after != receipt.maximum_level_before:
+        builder.field(
+            "等级上限",
+            f"{receipt.maximum_level_before} -> {receipt.maximum_level_after}",
+        )
+    if receipt.level_after != receipt.level_before:
+        builder.field("等级", f"Lv{receipt.level_before} -> Lv{receipt.level_after}")
+    await send_game_reply(builder.build())
+
+
+async def _use_specialized_item(item_asset, overview: CharacterOverview) -> None:
+    services = current_game_services()
+    transaction_id = f"special-item-use:{_evidence_id()}"
+    try:
+        outcome = await asyncio.to_thread(
+            services.special_item_use.use,
+            SpecialItemUseCommand(
+                transaction_id,
+                overview.character.id,
+                item_asset.id,
+            ),
+            inventory_id=overview.character.id,
+            context=game_operation_context(transaction_id, logical_time=_now()),
+        )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("特殊物品使用失败"), C.kv("character", overview.character.id))
+        )
+        await send_game_reply(_invalid("使用", "物品使用没有完成"))
+        return
+    if outcome.failure:
+        await send_game_reply(_invalid("使用", outcome.failure.message))
+        return
+    assert outcome.value is not None
+    receipt = outcome.value
+    view = _view(overview)
+    builder = (
+        M.document()
+        .section("使用完成", icon="item")
+        .field("物品", view.projector.name(receipt.item_definition_id))
+    )
+    if receipt.effect_kind == BACKPACK_CAPACITY_EFFECT_KIND:
+        builder.field("背包空间", f"{receipt.value_before} -> {receipt.value_after}")
+    elif receipt.effect_kind == EQUIPMENT_SET_GUARANTEE_EFFECT_KIND:
+        builder.field("套装保证", "已生效").note("下一件实际掉落的装备必定拥有套装身份。")
+    await send_game_reply(builder.build())
+
+
 def _armory_home(overview: CharacterOverview) -> DocumentMessage:
     counts = Counter()
     catalog = current_game_services().content.catalog.items
@@ -355,9 +494,9 @@ def _backpack_page(assets, page: int, overview: CharacterOverview) -> DocumentMe
         definition = current_game_services().content.catalog.items.require(asset.definition_id)
         quantity = asset.quantity if isinstance(asset, ItemStack) else 1
         value = ""
-        sale = definition.components.get(ITEM_SALE_COMPONENT_ID)
-        if isinstance(sale, ItemSaleValue):
-            subtotal = sale.unit_price * quantity
+        recycle = definition.components.get(ITEM_RECYCLE_COMPONENT_ID)
+        if isinstance(recycle, ItemRecycleValue):
+            subtotal = recycle.unit_amount * quantity
             total_value += subtotal
             value = f"估价 {subtotal}"
         builder.line(
@@ -394,9 +533,12 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
         entry = view.projector.entry(definition.id)
         if entry.description:
             builder.line(entry.description)
-        sale = definition.components.get(ITEM_SALE_COMPONENT_ID)
-        if isinstance(sale, ItemSaleValue):
-            builder.row(("单价", sale.unit_price), ("总价", sale.unit_price * asset.quantity))
+        recycle = definition.components.get(ITEM_RECYCLE_COMPONENT_ID)
+        if isinstance(recycle, ItemRecycleValue):
+            builder.row(
+                ("回收单价", recycle.unit_amount),
+                ("回收总价", recycle.unit_amount * asset.quantity),
+            )
         medicine = _MEDICINE_RESOURCE.get(definition.id)
         if medicine is not None:
             resource_id, maximum_id, ratio = medicine
@@ -405,7 +547,18 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
                 ("恢复", view.projector.name(resource_id)),
                 ("单次", _number(maximum * ratio)),
             )
-        if ITEM_ABILITY_COMPONENT_ID in definition.components:
+        if DIMENSION_SHIFT_ITEM_COMPONENT_ID in definition.components:
+            actions.append(Action("dimension.shift", "跃迁", "跃迁", behavior="send"))
+        elif any(
+            component_id in definition.components
+            for component_id in (
+                ITEM_ABILITY_COMPONENT_ID,
+                WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
+                WEAPON_LEVEL_ITEM_COMPONENT_ID,
+                ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
+                EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
+            )
+        ):
             actions.append(Action("item.use", "使用", f"使用 {reference}", behavior="fill"))
     elif definition.tags.has("item.weapon"):
         state = weapon_state_from_instance(asset)
@@ -414,7 +567,12 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
             asset,
             inscription_preference=overview.inscription_preference,
         )
-        builder.row(("品阶", display.quality_name), ("等级", f"Lv{state.level}"))
+        builder.row(
+            ("品阶", display.quality_name),
+            ("等级", f"Lv{state.level}/{state.maximum_level}"),
+        )
+        if state.maximum_level != state.natural_maximum_level:
+            builder.field("天然上限", state.natural_maximum_level)
         profile = services.content.catalog.weapons.require(state.definition_id).quality_profiles[state.quality_id]
         required = profile.required_for_next_level(state.level)
         builder.field("经验", "已满级" if required is None else f"{state.experience}/{required}")
@@ -637,7 +795,8 @@ def _compact_meta(asset, overview: CharacterOverview) -> str:
     definition = current_game_services().content.catalog.items.require(asset.definition_id)
     status = _compact_status(asset, overview)
     if isinstance(asset, ItemInstance) and definition.tags.has("item.weapon"):
-        return f"Lv{weapon_state_from_instance(asset).level} | {status}"
+        state = weapon_state_from_instance(asset)
+        return f"Lv{state.level}/{state.maximum_level} | {status}"
     return status
 
 

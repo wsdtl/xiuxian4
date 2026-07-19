@@ -18,6 +18,7 @@ from game.features.exploration import exploration_battle_report_id  # noqa: E402
 from game.content import build_official_content  # noqa: E402
 from game.content.catalog.enemy import (  # noqa: E402
     AWARD_BOSS_TROPHY_ID,
+    AWARD_DRAW_TICKET_ID,
     AWARD_ENEMY_TROPHY_ID,
     AWARD_LARGE_HEALTH_MEDICINE_ID,
     AWARD_LARGE_SPIRIT_MEDICINE_ID,
@@ -29,6 +30,7 @@ from game.content.catalog.enemy import (  # noqa: E402
     AWARD_SMALL_HEALTH_MEDICINE_ID,
     AWARD_SMALL_SPIRIT_MEDICINE_ID,
     AWARD_WORLD_CURIO_ID,
+    ENEMY_LOOT_TABLES,
 )
 from game.content.catalog.exploration import (  # noqa: E402
     EXPLORATION_BATCH_SECONDS,
@@ -79,13 +81,14 @@ def _assert_content() -> None:
     assert content.projector.name(SPECIAL_EXPLORATION_REGIONS[2].location_id) == "归墟魔渊"
     award_ids = {
         entry.award_id
-        for table in content.catalog.loot_tables.definitions
+        for table in ENEMY_LOOT_TABLES
         for group in table.groups
         for entry in group.entries
         if entry.award_id is not None
     }
     assert award_ids == {
         AWARD_BOSS_TROPHY_ID,
+        AWARD_DRAW_TICKET_ID,
         AWARD_ENEMY_TROPHY_ID,
         AWARD_LARGE_HEALTH_MEDICINE_ID,
         AWARD_LARGE_SPIRIT_MEDICINE_ID,

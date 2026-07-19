@@ -11,6 +11,7 @@ from ..schema import (
     Emphasis,
     FieldSeparator,
     HeaderBlock,
+    ImageBlock,
     InlineBlock,
     Link,
     NoteBlock,
@@ -36,7 +37,7 @@ def render_markdown(document: Document, *, command_renderer: CommandRenderer | N
             previous_block = block
             continue
 
-        should_separate = isinstance(previous_block, (InlineBlock, SectionBlock, NoteBlock)) and not (
+        should_separate = isinstance(previous_block, (InlineBlock, SectionBlock, ImageBlock, NoteBlock)) and not (
             isinstance(previous_block, InlineBlock) and isinstance(block, InlineBlock)
         )
         if should_separate and lines and lines[-1] != "> ":
@@ -51,6 +52,13 @@ def render_markdown(document: Document, *, command_renderer: CommandRenderer | N
             for line in block.lines:
                 value = _render_rich(line, command_renderer)
                 lines.append("> >" if not value else f"> > {value}")
+        elif isinstance(block, ImageBlock):
+            size = ""
+            if block.width is not None:
+                size += f" #{block.width}px"
+            if block.height is not None:
+                size += f" #{block.height}px"
+            lines.append(f"![{_escape(block.alt)}{size}]({_escape_url(block.url)})")
         elif isinstance(block, NoteBlock):
             for line in block.lines:
                 value = _render_rich(line, command_renderer)

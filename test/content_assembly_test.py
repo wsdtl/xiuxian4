@@ -18,8 +18,15 @@ from game.core.gameplay import (  # noqa: E402
     AbilityDefinition,
     AbilityUse,
     DealDamage,
+    DrawCommand,
+    DrawPoolDefinition,
     EffectDefinition,
     EffectReference,
+    LootEntry,
+    LootGroup,
+    LootGroupMode,
+    LootState,
+    LootTableDefinition,
     ModifierLayer,
     RuleContext,
     RuleEntity,
@@ -79,7 +86,11 @@ from game.core.gameplay.loadout import (  # noqa: E402
     QualityDefinition,
 )
 from game.core.gameplay.party import PartyDefinition  # noqa: E402
-from game.core.gameplay.weapon import WeaponDefinition, WeaponQualityProfile  # noqa: E402
+from game.core.gameplay.weapon import (  # noqa: E402
+    WeaponDefinition,
+    WeaponMaximumLevelRoll,
+    WeaponQualityProfile,
+)
 from game.core.gameplay.valuation import (  # noqa: E402
     AttributeValuationDefinition,
     ValueAxis,
@@ -367,6 +378,36 @@ def _adventure_package() -> ContentPackage:
         tags=TagSet.of("item.material"),
         stack_limit=99,
     )
+    draw_ticket = ItemDefinition(
+        "item.draw.ticket",
+        ItemAssetKind.STACK,
+        tags=TagSet.of("item.draw_ticket"),
+        stack_limit=99,
+    )
+    draw_award = ItemDefinition(
+        "item.draw.award",
+        ItemAssetKind.STACK,
+        tags=TagSet.of("item.special"),
+        stack_limit=99,
+    )
+    draw_table = LootTableDefinition(
+        "loot_table.draw.content_test",
+        1,
+        (
+            LootGroup(
+                "loot_group.draw.content_test",
+                LootGroupMode.WEIGHTED_ONE,
+                (LootEntry("loot_entry.draw.content_test", draw_award.id, weight=1),),
+            ),
+        ),
+    )
+    draw_pool = DrawPoolDefinition(
+        "draw_pool.content_test",
+        1,
+        draw_ticket.id,
+        draw_table.id,
+        frozenset({draw_award.id}),
+    )
     effect = EffectDefinition(
         "effect.adventure_strike",
         operations=(
@@ -386,7 +427,9 @@ def _adventure_package() -> ContentPackage:
     )
     return ContentPackage(
         _manifest("content.adventure", "content.core", "content.mechanics"),
-        items=(material,),
+        items=(material, draw_ticket, draw_award),
+        loot_tables=(draw_table,),
+        draw_pools=(draw_pool,),
         effects=(effect,),
         abilities=(ability,),
         display_content_ids=frozenset({material.id, ability.id}),
@@ -458,12 +501,19 @@ def _assert_dependency_resolution(packages) -> None:
 
 def _assert_complete_runtime(packages):
     runtime = ContentAssembler().assemble(tuple(reversed(packages)))
-    assert CONTENT_FOUNDATION_VERSION == "content.foundation.v6"
+    assert CONTENT_FOUNDATION_VERSION == "content.foundation.v7"
     assert runtime.report.active_combat_profile_id == "combat_profile.standard"
     assert runtime.report.packages[-1].id == "content.world_skins"
     assert len(runtime.report.content_fingerprint) == 64
     assert runtime.currencies.ids() == ("currency.spirit_stone",)
     assert runtime.items.require("item.material.spirit_ore").stack_limit == 99
+    assert runtime.draw_pools.require("draw_pool.content_test").ticket_item_id == "item.draw.ticket"
+    draw = runtime.draw_engine.draw(
+        DrawCommand("content-draw", "actor", "draw_pool.content_test", 0),
+        state=LootState("actor"),
+        context=_context(87),
+    ).unwrap()
+    assert draw.receipt.awards[0].award_id == "item.draw.award"
     assert runtime.weapons.require("weapon.training_blade")
     assert runtime.equipment.require("equipment.training_head")
     assert runtime.parties.require("party_type.standard").capacity == 3
@@ -480,6 +530,13 @@ def _assert_complete_runtime(packages):
         definition_id="weapon.training_blade",
         quality_id=weapon_roll.quality_id,
         roll=weapon_roll,
+        maximum_level_roll=WeaponMaximumLevelRoll(
+            "weapon_maximum_level.test",
+            1,
+            1,
+            3,
+            2,
+        ),
     )
     assert weapon_state.roll == weapon_roll
     equipment_roll = runtime.itemization_engine.generate(
@@ -559,11 +616,25 @@ def _assert_runtime_is_frozen(runtime) -> None:
     assert runtime.abilities.frozen
     assert runtime.triggers.frozen
     assert runtime.target_selectors.frozen
+    assert runtime.draw_pools.finalized
     assert runtime.cycles.frozen
     assert runtime.cycle_engine.handlers.frozen
     try:
         runtime.currencies.register(CurrencyDefinition("currency.too_late"))
         raise AssertionError("运行期不能增加货币")
+    except RuntimeError:
+        pass
+    try:
+        runtime.draw_pools.register(
+            DrawPoolDefinition(
+                "draw_pool.too_late",
+                1,
+                "item.draw.ticket",
+                "loot_table.draw.content_test",
+                frozenset({"item.draw.award"}),
+            )
+        )
+        raise AssertionError("运行期不能增加抽取池")
     except RuntimeError:
         pass
 

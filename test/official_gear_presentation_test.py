@@ -18,6 +18,7 @@ from game.content import (  # noqa: E402
     select_world_skin,
 )
 from game.content.catalog.equipment.definitions import equipment_definition_id  # noqa: E402
+from game.content.catalog.weapon.mechanics import WEAPON_MAXIMUM_LEVEL_TABLE  # noqa: E402
 from game.content.world_skins import CULTIVATION_SKIN_ID, MAGIC_SKIN_ID  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
     INSCRIPTION_DATA_KEY,
@@ -62,6 +63,7 @@ def main() -> None:
     weapon = WeaponInstanceGenerator(
         catalog.weapons,
         catalog.itemization_engine,
+        WEAPON_MAXIMUM_LEVEL_TABLE,
     ).generate(
         WeaponGenerationRequest(
             "gear-display-weapon",

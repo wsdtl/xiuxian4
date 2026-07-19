@@ -19,6 +19,7 @@ from game.content.catalog.weapon.balance import WeaponBalanceAuditor  # noqa: E4
 from game.content.catalog.weapon.blueprints import WEAPON_BLUEPRINTS  # noqa: E402
 from game.content.catalog.weapon.mechanics import (  # noqa: E402
     WEAPON_MARK_EFFECT_ID,
+    WEAPON_MAXIMUM_LEVEL_TABLE,
     WEAPON_MECHANIC_CONTENT,
 )
 from game.content.official import assemble_official_catalog  # noqa: E402
@@ -94,6 +95,7 @@ def _assert_instance_generation(catalog) -> None:
     generator = WeaponInstanceGenerator(
         catalog.weapons,
         catalog.itemization_engine,
+        WEAPON_MAXIMUM_LEVEL_TABLE,
     )
     definition_ids = tuple(
         definition_id

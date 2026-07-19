@@ -122,23 +122,6 @@ async def summary(current: CurrentCharacterResult) -> None:
         await _failed("探险总结查询失败", character.id, exc)
 
 
-async def sell_trophies(current: CurrentCharacterResult) -> None:
-    character = _character(current)
-    if character is None:
-        await send_game_reply(_unavailable())
-        return
-    try:
-        result = await asyncio.to_thread(
-            current_game_services().item_sale.sell_trophies,
-            character.id,
-            logical_time=_now(),
-        )
-        view = current_game_services().world_view(current.dimension)
-        await send_game_reply(_sale_message(result, view))
-    except Exception as exc:
-        await _failed("出售战利品失败", character.id, exc)
-
-
 async def _operate(current, method_name, presenter, log_message) -> None:
     character = _character(current)
     if character is None:
@@ -284,6 +267,7 @@ def _summary_message(
         .row(("经验", f"+{state.character_experience}"), ("武器经验", f"+{state.weapon_experience}"))
         .row(("武器", state.weapon_drops), ("装备", state.equipment_drops))
         .row(("战利品", state.trophy_drops), ("药物", state.medicine_drops))
+        .field("抽奖签", state.draw_ticket_drops)
         .field("战利品估价", f"{state.trophy_value} {_name(PRIMARY_CURRENCY_ID, view)}")
     )
     if battle_report is not None:
@@ -328,26 +312,7 @@ def _summary_message(
                     ),
                 )
     return builder.actions(
-        (Action("exploration.sell_trophies", "出售", "出售战利品", behavior="send"),)
-    ).build()
-
-
-def _sale_message(result, view) -> DocumentMessage:
-    builder = M.document().section("出售战利品", icon="trade")
-    if result.status == "empty":
-        return builder.line("背包中没有可出售的战利品").build()
-    projector = view.projector
-    for index, line in enumerate(result.quote.lines[:12], start=1):
-        builder.item(
-            index,
-            f"{projector.name(line.definition_id)} x{line.quantity} | {line.subtotal}",
-        )
-    remaining = len(result.quote.lines) - 12
-    if remaining > 0:
-        builder.note(f"另有 {remaining} 类战利品已一并出售")
-    return builder.field(
-        "收入",
-        f"{result.quote.total_amount} {projector.name(result.quote.currency_id)}",
+        (Action("exploration.recycle_trophies", "回收", "回收战利品", behavior="send"),)
     ).build()
 
 
@@ -439,7 +404,6 @@ def _unavailable() -> DocumentMessage:
 
 __all__ = [
     "move",
-    "sell_trophies",
     "start",
     "stop",
     "summary",

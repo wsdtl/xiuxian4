@@ -134,6 +134,19 @@ class PersistedAccountService:
         with self.database.unit_of_work(write=False) as uow:
             return self._load_account(uow, account_id)
 
+    def find_existing_account(self, identity: ExternalIdentity) -> AccountState | None:
+        """按已知外部身份只读查找账号，不为陌生对手创建账号。"""
+
+        protected = self._protect_identity(identity)
+        with self.database.unit_of_work(write=False) as uow:
+            state = self._state_for_identities(uow, (protected,))
+            account_ids = {
+                binding.account_id for binding in state.bindings.values()
+            }
+            if len(account_ids) != 1:
+                return None
+            return self._load_account(uow, next(iter(account_ids)))
+
     def change_status(self, transaction: AccountStatusTransaction) -> AccountMutation:
         return self._mutate(
             transaction.id,

@@ -19,6 +19,7 @@ from game.app import build_game_services, install_game_services, restore_game_se
 from game.content import (  # noqa: E402
     CHARACTER_LEVEL_PROGRESSION_ID,
     CULTIVATION_SKIN_ID,
+    DIMENSION_SHIFT_ITEM_ID,
     INSCRIPTION_FEATHER_ITEM_ID,
     MAGIC_SKIN_ID,
     PRIMARY_CURRENCY_ID,
@@ -27,6 +28,7 @@ from game.content.catalog.character import REST_ACTION_ID  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
     INSCRIPTION_MEDIUM_DATA_KEY,
     GrantInstance,
+    GrantStack,
     HEALTH_CURRENT,
     HEALTH_MAXIMUM,
     SPIRIT_CURRENT,
@@ -47,7 +49,7 @@ from game.rules import (  # noqa: E402
     game_operation_context,
 )
 from game.cmd import 角色 as character_component  # noqa: E402,F401
-from game.cmd import 次元 as dimension_component  # noqa: E402,F401
+from game.cmd import 跃迁 as dimension_component  # noqa: E402,F401
 from game.cmd import 休息 as rest_component  # noqa: E402,F401
 from game.cmd import 提醒 as reminder_component  # noqa: E402,F401
 from game.cmd import 铭刻 as inscription_component  # noqa: E402,F401
@@ -106,7 +108,6 @@ async def _main() -> None:
             assert character is not None
             initial_overview = services.load_character_overview(character).overview
             assert initial_overview is not None
-            initial_inventory = initial_overview.inventory
             initial_world = initial_overview.world
             target_skin_id = (
                 MAGIC_SKIN_ID
@@ -128,6 +129,44 @@ async def _main() -> None:
                 if action.label == target_view.skin.name
             )
             assert target_action.data == f"跃迁 {target_skin_id}"
+            missing_shift = await dispatch(
+                client_id="small-command-player",
+                raw_message=target_action.data,
+                sender_name="试剑客",
+                event_id="small-command-shift-missing-item",
+            )
+            assert "纳戒中没有可用的跃迁凭证" in missing_shift.replies[0].message.content
+            unchanged = services.load_character_overview(character).overview
+            assert unchanged is not None
+            assert unchanged.dimension == initial_overview.dimension
+            _grant_dimension_shift_items(services, character.id, 2)
+            initial_overview = services.load_character_overview(character).overview
+            assert initial_overview is not None
+            initial_inventory = initial_overview.inventory
+            shift_stack = next(
+                value
+                for value in initial_inventory.stacks.values()
+                if value.definition_id == DIMENSION_SHIFT_ITEM_ID
+            )
+            shift_reference = initial_inventory.reference_number(shift_stack.id)
+            shift_detail = await dispatch(
+                client_id="small-command-player",
+                raw_message=f"查看 {shift_reference}",
+                sender_name="试剑客",
+                event_id="small-command-shift-item-detail",
+            )
+            assert shift_detail.replies[0].message.actions[0].data == "跃迁"
+            manual_use = await dispatch(
+                client_id="small-command-player",
+                raw_message=f"使用 {shift_reference}",
+                sender_name="试剑客",
+                event_id="small-command-shift-item-manual-use",
+            )
+            assert "成功跃迁时自动消耗" in manual_use.replies[0].message.content
+            assert _stack_quantity(
+                services.load_character_overview(character).overview.inventory,
+                DIMENSION_SHIFT_ITEM_ID,
+            ) == 2
             old_armory = await dispatch(
                 client_id="small-command-player",
                 raw_message="武库",
@@ -142,13 +181,28 @@ async def _main() -> None:
                 sender_name="试剑客",
                 event_id="small-command-shift-world",
             )
-            assert "次元跃迁" in shifted_world.replies[0].message.content
+            assert "跃迁" in shifted_world.replies[0].message.content
+            assert "消耗" in shifted_world.replies[0].message.content
             assert target_view.skin.name in shifted_world.replies[0].message.content
             shifted_overview = services.load_character_overview(character).overview
             assert shifted_overview is not None
-            assert shifted_overview.inventory == initial_inventory
+            assert shifted_overview.inventory.containers == initial_inventory.containers
+            assert shifted_overview.inventory.instances == initial_inventory.instances
+            assert _stack_quantity(shifted_overview.inventory, DIMENSION_SHIFT_ITEM_ID) == (
+                _stack_quantity(initial_inventory, DIMENSION_SHIFT_ITEM_ID) - 1
+            )
             assert shifted_overview.world == initial_world
             assert shifted_overview.dimension.skin_id == target_skin_id
+            already_there = services.shift_character_dimension(
+                character.id,
+                target_skin_id,
+                logical_time=datetime.now(ZoneInfo("Asia/Shanghai")),
+            )
+            assert already_there.status == "already_there"
+            assert _stack_quantity(
+                services.load_character_overview(character).overview.inventory,
+                DIMENSION_SHIFT_ITEM_ID,
+            ) == 1
             old_button_after_shift = await dispatch(
                 client_id="small-command-player",
                 raw_message=old_weapon_button.data,
@@ -163,7 +217,7 @@ async def _main() -> None:
             _injure_character(services, character.id)
             await dispatch(
                 client_id="small-command-player",
-                raw_message="rest_start",
+                raw_message="休息",
                 sender_name="试剑客",
                 event_id="small-command-rest-start",
             )
@@ -177,9 +231,13 @@ async def _main() -> None:
             assert "当前正在进行主要行动" in blocked_shift.replies[0].message.content, (
                 blocked_shift.replies[0].message.content
             )
+            assert _stack_quantity(
+                services.load_character_overview(character).overview.inventory,
+                DIMENSION_SHIFT_ITEM_ID,
+            ) == 1
             await dispatch(
                 client_id="small-command-player",
-                raw_message="停止休息",
+                raw_message="结束休息",
                 sender_name="试剑客",
                 event_id="small-command-rest-stop",
             )
@@ -512,6 +570,66 @@ def _injure_character(services, character_id: str) -> None:
             logical_time,
         )
         uow.commit()
+
+
+def _grant_dimension_shift_items(services, character_id: str, quantity: int) -> None:
+    snapshots = services.character_creation.snapshots
+    logical_time = datetime.now(ZoneInfo("Asia/Shanghai"))
+    with services.database.unit_of_work() as uow:
+        inventory = snapshots.require(
+            uow,
+            INVENTORY_AGGREGATE,
+            character_id,
+            InventoryState,
+        )
+        special = next(
+            value.id
+            for value in inventory.containers.values()
+            if value.kind == "container.special"
+        )
+        outcome = services.inventory_engine.execute(
+            InventoryTransaction(
+                "small-command-grant-dimension-shift-items",
+                character_id,
+                "inventory.test_setup",
+                (
+                    GrantStack(
+                        "stack:dimension-shift",
+                        DIMENSION_SHIFT_ITEM_ID,
+                        special,
+                        quantity,
+                        SourceReceipt(
+                            "receipt:dimension-shift",
+                            "source.test",
+                            character_id,
+                            logical_time,
+                        ),
+                    ),
+                ),
+            ),
+            state=inventory,
+            context=game_operation_context(
+                "small-command-grant-dimension-shift-items",
+                logical_time=logical_time,
+            ),
+        ).unwrap()
+        snapshots.update(
+            uow,
+            INVENTORY_AGGREGATE,
+            character_id,
+            inventory,
+            outcome.state,
+            logical_time,
+        )
+        uow.commit()
+
+
+def _stack_quantity(inventory: InventoryState, definition_id: str) -> int:
+    return sum(
+        value.quantity
+        for value in inventory.stacks.values()
+        if value.definition_id == definition_id
+    )
 
 
 if __name__ == "__main__":

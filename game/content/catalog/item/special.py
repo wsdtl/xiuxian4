@@ -3,14 +3,24 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 
 from game.core.gameplay import (
     ITEM_STORAGE_COMPONENT_ID,
+    ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
+    ContainerCapacityItemComponent,
+    EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
+    EquipmentSetGuaranteeItemComponent,
     ItemAssetKind,
     ItemDefinition,
+    ItemComponentType,
     ItemStorageComponent,
     StableId,
     TagSet,
+    WEAPON_LEVEL_ITEM_COMPONENT_ID,
+    WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
+    WeaponLevelItemComponent,
+    WeaponMaximumLevelItemComponent,
     stable_id,
 )
 
@@ -23,7 +33,32 @@ SPECIAL_STORAGE_TAG = "storage.special"
 INSCRIPTION_STORAGE_TAG = "storage.inscription"
 
 INSCRIPTION_FEATHER_ITEM_ID = "item.inscription.feather"
+WEAPON_MAXIMUM_LEVEL_ITEM_ID = "item.special.weapon_maximum_level"
+WEAPON_LEVEL_ITEM_ID = "item.special.weapon_level"
+BACKPACK_CAPACITY_ITEM_ID = "item.special.backpack_capacity"
+EQUIPMENT_SET_GUARANTEE_ITEM_ID = "item.special.equipment_set_guarantee"
+DIMENSION_SHIFT_ITEM_ID = "item.special.dimension_shift"
+DIMENSION_SHIFT_ITEM_COMPONENT_ID = "item_component.use_dimension_shift"
+BACKPACK_CAPACITY_INCREMENT = 5
+BACKPACK_CAPACITY_MAXIMUM = 140
 SPECIAL_ITEM_STACK_LIMIT = 99
+
+
+@dataclass(frozen=True)
+class DimensionShiftItemComponent:
+    """标记该特殊物品由跃迁业务自动消耗。"""
+
+    quantity: int = 1
+
+    def __post_init__(self) -> None:
+        if self.quantity != 1:
+            raise ValueError("每次跃迁必须且只能消耗一枚跃迁凭证")
+
+
+DIMENSION_SHIFT_ITEM_COMPONENT_TYPE = ItemComponentType(
+    DIMENSION_SHIFT_ITEM_COMPONENT_ID,
+    DimensionShiftItemComponent,
+)
 
 
 INSCRIPTION_FEATHER_ITEM = ItemDefinition(
@@ -108,16 +143,75 @@ def validate_nacre_item_categories(definitions: Iterable[ItemDefinition]) -> Non
                 raise ValueError(f"铭刻之羽 {definition.id} 不能进入普通消耗品流程")
 
 
+WEAPON_MAXIMUM_LEVEL_ITEM = special_item_definition(
+    WEAPON_MAXIMUM_LEVEL_ITEM_ID,
+    use_components={
+        WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID: WeaponMaximumLevelItemComponent(),
+    },
+)
+WEAPON_LEVEL_ITEM = special_item_definition(
+    WEAPON_LEVEL_ITEM_ID,
+    use_components={
+        WEAPON_LEVEL_ITEM_COMPONENT_ID: WeaponLevelItemComponent(),
+    },
+)
+BACKPACK_CAPACITY_ITEM = special_item_definition(
+    BACKPACK_CAPACITY_ITEM_ID,
+    use_components={
+        ITEM_CONTAINER_CAPACITY_COMPONENT_ID: ContainerCapacityItemComponent(
+            "container.backpack",
+            BACKPACK_CAPACITY_INCREMENT,
+            BACKPACK_CAPACITY_MAXIMUM,
+        ),
+    },
+)
+EQUIPMENT_SET_GUARANTEE_ITEM = special_item_definition(
+    EQUIPMENT_SET_GUARANTEE_ITEM_ID,
+    use_components={
+        EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID: EquipmentSetGuaranteeItemComponent(),
+    },
+)
+DIMENSION_SHIFT_ITEM = special_item_definition(
+    DIMENSION_SHIFT_ITEM_ID,
+    use_components={
+        DIMENSION_SHIFT_ITEM_COMPONENT_ID: DimensionShiftItemComponent(),
+    },
+)
+SPECIAL_ITEMS: tuple[ItemDefinition, ...] = (
+    WEAPON_MAXIMUM_LEVEL_ITEM,
+    WEAPON_LEVEL_ITEM,
+    BACKPACK_CAPACITY_ITEM,
+    EQUIPMENT_SET_GUARANTEE_ITEM,
+    DIMENSION_SHIFT_ITEM,
+)
+
+
 __all__ = [
     "CONSUMABLE_ITEM_TAG",
+    "BACKPACK_CAPACITY_INCREMENT",
+    "BACKPACK_CAPACITY_ITEM",
+    "BACKPACK_CAPACITY_ITEM_ID",
+    "BACKPACK_CAPACITY_MAXIMUM",
+    "EQUIPMENT_SET_GUARANTEE_ITEM",
+    "EQUIPMENT_SET_GUARANTEE_ITEM_ID",
+    "DIMENSION_SHIFT_ITEM",
+    "DIMENSION_SHIFT_ITEM_COMPONENT_ID",
+    "DIMENSION_SHIFT_ITEM_COMPONENT_TYPE",
+    "DIMENSION_SHIFT_ITEM_ID",
+    "DimensionShiftItemComponent",
     "INSCRIPTION_FEATHER_ITEM",
     "INSCRIPTION_FEATHER_ITEM_ID",
     "INSCRIPTION_MEDIUM_ITEM_TAG",
     "INSCRIPTION_STORAGE_TAG",
     "MEDICINE_ITEM_TAG",
     "SPECIAL_ITEM_STACK_LIMIT",
+    "SPECIAL_ITEMS",
     "SPECIAL_ITEM_TAG",
     "SPECIAL_STORAGE_TAG",
+    "WEAPON_LEVEL_ITEM",
+    "WEAPON_LEVEL_ITEM_ID",
+    "WEAPON_MAXIMUM_LEVEL_ITEM",
+    "WEAPON_MAXIMUM_LEVEL_ITEM_ID",
     "special_item_definition",
     "validate_nacre_item_categories",
 ]

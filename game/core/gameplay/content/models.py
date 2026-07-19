@@ -62,6 +62,7 @@ from ..inventory import ItemComponentType, ItemDefinition
 from ..itemization import GenerationProfileDefinition, PropertyDefinition
 from ..loadout import QualityDefinition
 from ..loot import LootTableDefinition
+from ..draw import DrawPoolDefinition
 from ..party import PartyDefinition
 from ..social import (
     OrganizationRoleDefinition,
@@ -240,6 +241,7 @@ class ContentPackage:
     actions: tuple[ActionDefinition, ...] = ()
     activities: tuple[ActivityDefinition, ...] = ()
     loot_tables: tuple[LootTableDefinition, ...] = ()
+    draw_pools: tuple[DrawPoolDefinition, ...] = ()
     world_spaces: tuple[WorldSpaceDefinition, ...] = ()
     world_locations: tuple[WorldLocationDefinition, ...] = ()
     world_connections: tuple[WorldConnectionDefinition, ...] = ()
@@ -302,6 +304,7 @@ class ContentPackage:
             "actions",
             "activities",
             "loot_tables",
+            "draw_pools",
             "world_spaces",
             "world_locations",
             "world_connections",

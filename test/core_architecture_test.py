@@ -104,6 +104,7 @@ def _assert_physical_layout() -> None:
             "models.py",
             "policy.py",
         },
+        "draw": {"__init__.py", "definitions.py"},
         "enemy": {
             "__init__.py",
             "behaviors.py",
@@ -116,10 +117,12 @@ def _assert_physical_layout() -> None:
         "item": {
             "__init__.py",
             "definitions.py",
+            "draw.py",
             "special.py",
             "trade.py",
             "trophies.py",
         },
+        "social": {"__init__.py"},
         "weapon": {
             "__init__.py",
             "balance.py",
@@ -134,6 +137,7 @@ def _assert_physical_layout() -> None:
             "definitions.py",
             "properties.py",
         },
+        "economy": {"__init__.py", "lottery.py", "policy.py"},
         "world": {"__init__.py", "definitions.py"},
     }
     assert {
@@ -211,7 +215,7 @@ def _assert_public_root() -> None:
     assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v10"
     assert set(game.__all__) == {"PUBLIC_FOUNDATION_VERSION"}
     assert cmd.router is not None
-    assert core.GAME_CORE_VERSION == "game-core.v10"
+    assert core.GAME_CORE_VERSION == "game-core.v11"
     assert core.CORE_LAYERS == (
         "game.core.gameplay",
         "game.core.account",

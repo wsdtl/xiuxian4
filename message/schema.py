@@ -89,13 +89,35 @@ class SectionBlock:
 
 
 @dataclass(frozen=True)
+class ImageBlock:
+    """文档中的公网图片；用于演出与正文保持在同一条消息。"""
+
+    url: str
+    alt: str = "图片"
+    width: int | None = None
+    height: int | None = None
+
+    def __post_init__(self) -> None:
+        url = str(self.url or "").strip()
+        alt = str(self.alt or "").strip() or "图片"
+        if not url or any(character in url for character in "\r\n"):
+            raise ValueError("文档图片缺少有效 URL")
+        if self.width is not None and self.width < 1:
+            raise ValueError("文档图片宽度必须大于 0")
+        if self.height is not None and self.height < 1:
+            raise ValueError("文档图片高度必须大于 0")
+        object.__setattr__(self, "url", url)
+        object.__setattr__(self, "alt", alt.replace("\r", " ").replace("\n", " "))
+
+
+@dataclass(frozen=True)
 class NoteBlock:
     """正文之后、按钮之前的附加说明区。"""
 
     lines: tuple[RichText, ...]
 
 
-DocumentBlock: TypeAlias = HeaderBlock | InlineBlock | SectionBlock | NoteBlock
+DocumentBlock: TypeAlias = HeaderBlock | InlineBlock | SectionBlock | ImageBlock | NoteBlock
 
 
 ActionBehavior = Literal["callback", "send", "fill", "link"]

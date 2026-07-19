@@ -55,7 +55,7 @@ def main() -> None:
 
 
 async def _main() -> None:
-    for command in ("纳戒", "武库", "背包", "查看", "使用", "休息", "rest_start", "停止休息"):
+    for command in ("纳戒", "武库", "背包", "查看", "使用", "休息", "结束休息"):
         assert len(LocalEventHandler.exact_rules[command]) == 1
         assert len(QqEventHandler.exact_rules[command]) == 1
 
@@ -146,9 +146,12 @@ async def _main() -> None:
             backpack = await _dispatch("背包", "item-rest-backpack")
             assert "空间: _0/40_" in backpack.replies[0].message.content
 
-            rest_panel = await _dispatch("休息", "item-rest-panel")
-            assert rest_panel.replies[0].message.actions[0].data == "rest_start"
             await _assert_rest_window_and_exploration(services, character.id)
+            _set_resources(services, character.id, health=25, spirit=25)
+            rest_result = await _dispatch("休息", "item-rest-start")
+            assert "已经开始休息" in rest_result.replies[0].message.content
+            assert rest_result.replies[0].message.actions[0].data == "结束休息"
+            await _dispatch("结束休息", "item-rest-stop")
         finally:
             restore_game_services(previous)
 

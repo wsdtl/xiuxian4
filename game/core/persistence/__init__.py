@@ -1,6 +1,6 @@
 """协议和具体玩法无关的持久化联合事务基础设施。"""
 
-PERSISTENCE_FOUNDATION_VERSION = "persistence.foundation.v6"
+PERSISTENCE_FOUNDATION_VERSION = "persistence.foundation.v7"
 
 from .codec import StructuredJsonCodec
 from .actions import (
@@ -26,6 +26,7 @@ from .cycles import (
 )
 from .inscriptions import PersistedInscriptionService
 from .item_use import PersistedItemUseService
+from .weapon_items import PersistedWeaponItemUseService
 from .loadouts import PersistedLoadoutExecution, PersistedLoadoutService
 from .loot import PersistedLootExecution, PersistedLootService
 from .parties import (
@@ -140,6 +141,7 @@ __all__ = [
     "PersistedGrantService",
     "PersistedInscriptionService",
     "PersistedItemUseService",
+    "PersistedWeaponItemUseService",
     "PersistedLoadoutExecution",
     "PersistedLoadoutService",
     "PersistedLootExecution",

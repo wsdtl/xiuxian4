@@ -21,6 +21,7 @@ from message.schema import (
     Document,
     FieldSeparator,
     HeaderBlock,
+    ImageBlock,
     InlineBlock,
     RichText,
     Text,

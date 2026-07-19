@@ -24,12 +24,13 @@ AWARD_LARGE_HEALTH_MEDICINE_ID = "award.enemy.medicine.large_health"
 AWARD_LARGE_SPIRIT_MEDICINE_ID = "award.enemy.medicine.large_spirit"
 AWARD_RANDOM_EQUIPMENT_ID = "award.enemy.gear.equipment"
 AWARD_RANDOM_WEAPON_ID = "award.enemy.gear.weapon"
+AWARD_DRAW_TICKET_ID = "award.enemy.draw_ticket"
 
 
 ENEMY_LOOT_TABLES = (
     LootTableDefinition(
         NORMAL_ENEMY_LOOT_TABLE_ID,
-        3,
+        4,
         (
             LootGroup(
                 "loot_group.enemy.normal.income",
@@ -62,11 +63,16 @@ ENEMY_LOOT_TABLES = (
                 LootGroupMode.INDEPENDENT,
                 (LootEntry("loot_entry.enemy.normal.curio", AWARD_WORLD_CURIO_ID, chance=500),),
             ),
+            LootGroup(
+                "loot_group.enemy.normal.draw_ticket",
+                LootGroupMode.INDEPENDENT,
+                (LootEntry("loot_entry.enemy.normal.draw_ticket", AWARD_DRAW_TICKET_ID, chance=10_000),),
+            ),
         ),
     ),
     LootTableDefinition(
         ELITE_ENEMY_LOOT_TABLE_ID,
-        3,
+        4,
         (
             LootGroup(
                 "loot_group.enemy.elite.income",
@@ -102,11 +108,16 @@ ENEMY_LOOT_TABLES = (
                 LootGroupMode.INDEPENDENT,
                 (LootEntry("loot_entry.enemy.elite.curio", AWARD_WORLD_CURIO_ID, chance=2_000),),
             ),
+            LootGroup(
+                "loot_group.enemy.elite.draw_ticket",
+                LootGroupMode.INDEPENDENT,
+                (LootEntry("loot_entry.enemy.elite.draw_ticket", AWARD_DRAW_TICKET_ID, chance=50_000),),
+            ),
         ),
     ),
     LootTableDefinition(
         BOSS_ENEMY_LOOT_TABLE_ID,
-        3,
+        4,
         (
             LootGroup(
                 "loot_group.enemy.boss.income",
@@ -141,6 +152,11 @@ ENEMY_LOOT_TABLES = (
                 LootGroupMode.INDEPENDENT,
                 (LootEntry("loot_entry.enemy.boss.curio", AWARD_WORLD_CURIO_ID, chance=10_000),),
             ),
+            LootGroup(
+                "loot_group.enemy.boss.draw_ticket",
+                LootGroupMode.INDEPENDENT,
+                (LootEntry("loot_entry.enemy.boss.draw_ticket", AWARD_DRAW_TICKET_ID, chance=200_000),),
+            ),
         ),
     ),
 )
@@ -148,6 +164,7 @@ ENEMY_LOOT_TABLES = (
 
 __all__ = [
     "AWARD_BOSS_TROPHY_ID",
+    "AWARD_DRAW_TICKET_ID",
     "AWARD_ENEMY_TROPHY_ID",
     "AWARD_LARGE_HEALTH_MEDICINE_ID",
     "AWARD_LARGE_SPIRIT_MEDICINE_ID",

@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
+from game.content import DIMENSION_SHIFT_ITEM_ID
 from game.rules.character import DimensionShiftResult
 from launch import C, config, logger
 from message import Action, DocumentMessage, M
@@ -89,20 +90,29 @@ def _result_message(result: DimensionShiftResult) -> DocumentMessage:
     if result.status == "already_there":
         return (
             M.document()
-            .section("次元跃迁", icon="world")
+            .section("跃迁", icon="world")
             .field("当前世界", f"{current.skin.icon} {current.skin.name}")
             .line("已经处于这个界相")
+            .build()
+        )
+    if result.status == "item_missing":
+        return (
+            M.document()
+            .section("跃迁", icon="notice")
+            .field("需要", f"{current.projector.name(DIMENSION_SHIFT_ITEM_ID)} x1")
+            .line("纳戒中没有可用的跃迁凭证")
             .build()
         )
     if result.status == "shifted" and result.previous_skin_id is not None:
         previous = services.world_views.require(result.previous_skin_id)
         return (
             M.document()
-            .section("次元跃迁", icon="world")
+            .section("跃迁", icon="world")
             .row(
                 ("原世界", f"{previous.skin.icon} {previous.skin.name}"),
                 ("当前世界", f"{current.skin.icon} {current.skin.name}"),
             )
+            .field("消耗", f"{previous.projector.name(DIMENSION_SHIFT_ITEM_ID)} x1")
             .line("化身、坐标、资产与构筑保持不变")
             .build()
         )
@@ -112,7 +122,7 @@ def _result_message(result: DimensionShiftResult) -> DocumentMessage:
 def _unavailable() -> DocumentMessage:
     return (
         M.document()
-        .section("次元跃迁", icon="notice")
+        .section("跃迁", icon="notice")
         .line("当前没有读取到界相状态，请稍后重试")
         .build()
     )

@@ -30,7 +30,7 @@ from ..world import (
     THUNDER_MARSH_STEPPE_ID,
     VERDANT_WILDERNESS_ID,
 )
-from .trade import ITEM_SALE_COMPONENT_ID, ItemSaleValue
+from .trade import ITEM_RECYCLE_COMPONENT_ID, ItemRecycleValue
 
 
 TROPHY_STACK_LIMIT = 999
@@ -100,20 +100,20 @@ _WORLD_CURIO_PRICES = (
 )
 
 
-def _item(definition_id: str, unit_price: int, *category_tags: str) -> ItemDefinition:
+def _item(definition_id: str, unit_amount: int, *category_tags: str) -> ItemDefinition:
     return ItemDefinition(
         definition_id,
         ItemAssetKind.STACK,
         TagSet.of(
             "item.trophy",
-            "loot.sellable",
+            "loot.recyclable",
             "storage.backpack",
             *category_tags,
         ),
         TROPHY_STACK_LIMIT,
         {
             ITEM_STORAGE_COMPONENT_ID: ItemStorageComponent(TROPHY_UNIT_SPACE),
-            ITEM_SALE_COMPONENT_ID: ItemSaleValue(PRIMARY_CURRENCY_ID, unit_price),
+            ITEM_RECYCLE_COMPONENT_ID: ItemRecycleValue(PRIMARY_CURRENCY_ID, unit_amount),
         },
     )
 

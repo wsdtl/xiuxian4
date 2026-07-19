@@ -38,6 +38,7 @@ def _sample_message():
         .header("示例对象 Lv1")
         .inline_section("通知", "任务已完成", icon="system")
         .inline_section("提醒", "存在待处理操作", icon="notice")
+        .image("https://example.com/demo.gif", alt="演出", width=360, height=203)
         .section("资源列表", icon="inventory")
         .row(("数量", 2), ("状态", "可用"))
         .item(1, "示例物品")
@@ -61,6 +62,8 @@ def _assert_markdown_shape(message) -> None:
             "> ✨ 通知: 任务已完成",
             "> 📌 提醒: 存在待处理操作",
             "> ",
+            "![演出 #360px #203px](https://example.com/demo.gif)",
+            "> ",
             "> 📦 资源列表",
             "> > 数量: _2_&nbsp;|&nbsp;状态: _可用_",
             "> > \\[1\\] 示例物品",
@@ -71,6 +74,7 @@ def _assert_markdown_shape(message) -> None:
     plain = render_plain_text(message.document)
     assert "数量: 2 | 状态: 可用" in plain
     assert ">" not in plain
+    assert "[演出]" in plain
 
 
 def _assert_header_rules() -> None:

@@ -1,13 +1,17 @@
 """单武器槽的品质、等级、经验和核心战斗贡献。"""
 
-WEAPON_FOUNDATION_VERSION = "weapon.foundation.v3"
+WEAPON_FOUNDATION_VERSION = "weapon.foundation.v4"
 
 from .models import (
     WeaponCatalog,
     WeaponDefinition,
     WeaponLevelAttribute,
+    WeaponMaximumLevelBand,
+    WeaponMaximumLevelRoll,
+    WeaponMaximumLevelTable,
     WeaponQualityProfile,
     WeaponState,
+    WEAPON_ABSOLUTE_MAXIMUM_LEVEL,
     WEAPON_STATE_DATA_KEY,
     weapon_state_data,
     weapon_state_from_data,
@@ -19,6 +23,18 @@ from .runtime import (
     WeaponEngine,
     WeaponExecution,
     WeaponExperienceTransaction,
+    WeaponMaximumLevelTransaction,
+)
+from .items import (
+    WEAPON_LEVEL_ITEM_COMPONENT_ID,
+    WEAPON_LEVEL_ITEM_COMPONENT_TYPE,
+    WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
+    WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_TYPE,
+    WeaponLevelItemComponent,
+    WeaponMaximumLevelItemComponent,
+    WeaponItemUseCommand,
+    WeaponItemUseReceipt,
+    weapon_item_use_fingerprint,
 )
 
 __all__ = [
@@ -29,10 +45,24 @@ __all__ = [
     "WeaponEngine",
     "WeaponExecution",
     "WeaponExperienceTransaction",
+    "WeaponMaximumLevelTransaction",
     "WeaponLevelAttribute",
+    "WeaponMaximumLevelBand",
+    "WeaponMaximumLevelRoll",
+    "WeaponMaximumLevelTable",
     "WeaponQualityProfile",
     "WeaponState",
+    "WEAPON_ABSOLUTE_MAXIMUM_LEVEL",
+    "WEAPON_LEVEL_ITEM_COMPONENT_ID",
+    "WEAPON_LEVEL_ITEM_COMPONENT_TYPE",
+    "WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID",
+    "WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_TYPE",
     "WEAPON_STATE_DATA_KEY",
+    "WeaponLevelItemComponent",
+    "WeaponMaximumLevelItemComponent",
+    "WeaponItemUseCommand",
+    "WeaponItemUseReceipt",
+    "weapon_item_use_fingerprint",
     "weapon_state_data",
     "weapon_state_from_data",
     "weapon_state_from_instance",

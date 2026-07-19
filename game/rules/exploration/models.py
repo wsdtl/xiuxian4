@@ -116,6 +116,7 @@ class ExplorationBatchResult:
     equipment_drops: int = 0
     trophy_drops: int = 0
     medicine_drops: int = 0
+    draw_ticket_drops: int = 0
     trophy_value: int = 0
     rewards: tuple[ExplorationRewardReference, ...] = ()
     medicines_used: tuple[ExplorationRewardReference, ...] = ()
@@ -130,6 +131,7 @@ class ExplorationBatchResult:
             self.equipment_drops,
             self.trophy_drops,
             self.medicine_drops,
+            self.draw_ticket_drops,
             self.trophy_value,
         )
         if any(value < 0 for value in values):
@@ -161,6 +163,7 @@ class ExplorationState:
     equipment_drops: int = 0
     trophy_drops: int = 0
     medicine_drops: int = 0
+    draw_ticket_drops: int = 0
     trophy_value: int = 0
     stopped_at: datetime | None = None
     stop_reason: ExplorationStopReason | None = None
@@ -188,6 +191,7 @@ class ExplorationState:
             self.equipment_drops,
             self.trophy_drops,
             self.medicine_drops,
+            self.draw_ticket_drops,
             self.trophy_value,
             self.revision,
         )

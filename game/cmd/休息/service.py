@@ -20,23 +20,6 @@ from message import Action, DocumentMessage, M
 from ..reply import send_game_reply
 
 
-async def view(current: CurrentCharacterResult) -> None:
-    character = _character(current)
-    if character is None:
-        await send_game_reply(_unavailable())
-        return
-    try:
-        result = await asyncio.to_thread(
-            current_game_services().rest.view,
-            character.id,
-            logical_time=_now(),
-        )
-    except Exception as exc:
-        await _failed("休息状态读取失败", character.id, exc)
-        return
-    await send_game_reply(_view_message(result, _view(current)))
-
-
 async def start(current: CurrentCharacterResult) -> None:
     character = _character(current)
     if character is None:
@@ -70,43 +53,9 @@ async def stop(current: CurrentCharacterResult) -> None:
             logical_time=_now(),
         )
     except Exception as exc:
-        await _failed("停止休息失败", character.id, exc)
+        await _failed("结束休息失败", character.id, exc)
         return
     await send_game_reply(_stop_message(result, _view(current)))
-
-
-def _view_message(result, view) -> DocumentMessage:
-    builder = M.document().section(view.projector.name(REST_ACTION_ID), icon="notice")
-    if result.character is None:
-        return builder.line("当前没有休息记录").build()
-    builder.row(
-        (
-            _resource_name(view, HEALTH_CURRENT),
-            f"{_number(result.character.resources[HEALTH_CURRENT])}/{_number(result.health_maximum)}",
-        ),
-        (
-            _resource_name(view, SPIRIT_CURRENT),
-            f"{_number(result.character.resources[SPIRIT_CURRENT])}/{_number(result.spirit_maximum)}",
-        ),
-    )
-    if result.action is not None:
-        elapsed = max(0, int((_now() - result.action.started_at).total_seconds()))
-        builder.row(
-            ("本次", _duration(elapsed)),
-            ("恢复进度", f"{result.progress_ratio * 100:.1f}%"),
-        )
-        return builder.actions(
-            (Action("rest.stop", "停止休息", "停止休息", style="secondary"),)
-        ).build()
-    if (
-        result.character.resources[HEALTH_CURRENT] >= result.health_maximum
-        and result.character.resources[SPIRIT_CURRENT] >= result.spirit_maximum
-    ):
-        return builder.line("当前状态已经完全恢复").build()
-    accumulated = result.recovery.accumulated_seconds if result.recovery else 0
-    if accumulated:
-        builder.field("累计休息", _duration(int(accumulated)))
-    return builder.actions((Action("rest.start", "开始休息", "rest_start"),)).build()
 
 
 def _start_message(result, view) -> DocumentMessage:
@@ -116,7 +65,7 @@ def _start_message(result, view) -> DocumentMessage:
             builder.line("已经开始休息")
             .field("最低结算", _duration(REST_MINIMUM_SECONDS))
             .field("完全恢复", _duration(REST_FULL_RECOVERY_SECONDS))
-            .actions((Action("rest.stop", "停止休息", "停止休息", style="secondary"),))
+            .actions((Action("rest.stop", "结束休息", "结束休息", style="secondary"),))
             .build()
         )
     if result.status == "full":
@@ -202,4 +151,4 @@ def _unavailable() -> DocumentMessage:
     ).build()
 
 
-__all__ = ["start", "stop", "view"]
+__all__ = ["start", "stop"]

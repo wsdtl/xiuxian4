@@ -1,6 +1,14 @@
 """汇总稳定名录定义；具体分类定义不得直接写在本文件。"""
 
-from game.core.gameplay import ContentPackage, ContentPackageManifest, ContentVersion
+from game.core.gameplay import (
+    ContentPackage,
+    ContentPackageManifest,
+    ContentVersion,
+    WEAPON_LEVEL_ITEM_COMPONENT_TYPE,
+    WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_TYPE,
+    ITEM_CONTAINER_CAPACITY_COMPONENT_TYPE,
+    EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_TYPE,
+)
 
 from .foundation import (
     BASE_ATTRIBUTES,
@@ -38,8 +46,14 @@ from .enemy import (
     STANDARD_ENEMY_LEVEL_PROFILE,
 )
 from .item.definitions import ITEM_DISPLAY_CONTENT_IDS, MEDICINE_ITEMS
-from .item.special import INSCRIPTION_FEATHER_ITEM, validate_nacre_item_categories
-from .item.trade import ITEM_SALE_COMPONENT_TYPE
+from .item.draw import DRAW_TICKET_ITEM, DRAW_TICKET_ITEM_ID
+from .item.special import (
+    DIMENSION_SHIFT_ITEM_COMPONENT_TYPE,
+    INSCRIPTION_FEATHER_ITEM,
+    SPECIAL_ITEMS,
+    validate_nacre_item_categories,
+)
+from .item.trade import ITEM_RECYCLE_COMPONENT_TYPE
 from .item.trophies import TROPHY_DISPLAY_CONTENT_IDS, TROPHY_ITEMS
 from .equipment.definitions import EQUIPMENT_CATALOG_CONTENT
 from .equipment.properties import EQUIPMENT_PROPERTY_CONTENT
@@ -61,7 +75,9 @@ from .world.definitions import (
     PRIMARY_WORLD_SPACE,
     WORLD_DISPLAY_CONTENT_IDS,
 )
+from .social import SPARRING_REQUEST
 from .combat.valuation import BASE_ATTRIBUTE_VALUATIONS, BASE_REFERENCE_VALUATIONS
+from .draw import DRAW_CATALOG_CONTENT
 
 
 CATALOG_PACKAGE_ID = "content.catalog.base"
@@ -85,6 +101,8 @@ COMBAT_MECHANISM_DISPLAY_IDS = frozenset(
 OFFICIAL_ITEMS = (
     *MEDICINE_ITEMS,
     INSCRIPTION_FEATHER_ITEM,
+    DRAW_TICKET_ITEM,
+    *SPECIAL_ITEMS,
     *TROPHY_ITEMS,
     STARTER_WEAPON_ITEM,
     *GENERATED_WEAPON_ITEMS,
@@ -96,9 +114,16 @@ validate_nacre_item_categories(OFFICIAL_ITEMS)
 CATALOG_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=CATALOG_PACKAGE_ID,
-        version=ContentVersion(3, 9, 0),
+        version=ContentVersion(3, 15, 0),
     ),
-    item_component_types=(ITEM_SALE_COMPONENT_TYPE,),
+    item_component_types=(
+        ITEM_RECYCLE_COMPONENT_TYPE,
+        WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_TYPE,
+        WEAPON_LEVEL_ITEM_COMPONENT_TYPE,
+        ITEM_CONTAINER_CAPACITY_COMPONENT_TYPE,
+        EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_TYPE,
+        DIMENSION_SHIFT_ITEM_COMPONENT_TYPE,
+    ),
     display_definitions=(
         *CHARACTER_REALM_CONTENT_DEFINITIONS,
         *LOADOUT_SLOT_CONTENT_DEFINITIONS,
@@ -164,9 +189,11 @@ CATALOG_PACKAGE = ContentPackage(
     ),
     interceptors=WEAPON_MECHANIC_CONTENT.interceptors,
     target_constraints=WEAPON_MECHANIC_CONTENT.constraints,
-    loot_tables=ENEMY_LOOT_TABLES,
+    loot_tables=(*ENEMY_LOOT_TABLES, DRAW_CATALOG_CONTENT.loot_table),
+    draw_pools=(DRAW_CATALOG_CONTENT.pool,),
     world_spaces=(PRIMARY_WORLD_SPACE,),
     world_locations=ALL_WORLD_LOCATIONS,
+    social_request_types=(SPARRING_REQUEST,),
     display_content_ids=(
         BASE_DISPLAY_CONTENT_IDS
         | CHARACTER_DISPLAY_CONTENT_IDS
@@ -179,6 +206,8 @@ CATALOG_PACKAGE = ContentPackage(
         | EQUIPMENT_CATALOG_CONTENT.display_ids
         | EQUIPMENT_PROPERTY_CONTENT.display_ids
         | ENEMY_DISPLAY_CONTENT_IDS
+        | {DRAW_TICKET_ITEM_ID}
+        | {str(value.id) for value in SPECIAL_ITEMS}
         | {REST_ACTION_ID}
         | WORLD_DISPLAY_CONTENT_IDS
     ),

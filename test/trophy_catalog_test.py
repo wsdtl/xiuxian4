@@ -15,13 +15,13 @@ from game.content.catalog import PRIMARY_CURRENCY_ID  # noqa: E402
 from game.content.catalog.exploration import REGULAR_EXPLORATION_REGIONS  # noqa: E402
 from game.content.catalog.item import (  # noqa: E402
     BOSS_TROPHY_ITEMS,
-    ITEM_SALE_COMPONENT_ID,
+    ITEM_RECYCLE_COMPONENT_ID,
     REGION_TROPHY_ITEMS,
     REGION_TROPHY_WEIGHTS,
     REGULAR_ENEMY_TROPHY_ITEMS,
     TROPHY_ITEMS,
     WORLD_CURIO_ITEMS,
-    ItemSaleValue,
+    ItemRecycleValue,
 )
 from game.core.gameplay import ITEM_STORAGE_COMPONENT_ID, ItemStorageComponent  # noqa: E402
 
@@ -41,13 +41,13 @@ def main() -> None:
     magic_names = []
     for item in TROPHY_ITEMS:
         assert item.tags.has("item.trophy")
-        assert item.tags.has("loot.sellable")
+        assert item.tags.has("loot.recyclable")
         assert item.tags.has("storage.backpack")
         storage = item.component(ITEM_STORAGE_COMPONENT_ID, ItemStorageComponent)
-        sale = item.component(ITEM_SALE_COMPONENT_ID, ItemSaleValue)
+        sale = item.component(ITEM_RECYCLE_COMPONENT_ID, ItemRecycleValue)
         assert storage.unit_space == 1
         assert sale.currency_id == PRIMARY_CURRENCY_ID
-        assert sale.unit_price > 0
+        assert sale.unit_amount > 0
         cultivation_names.append(cultivation.projector.name(item.id))
         magic_names.append(magic.projector.name(item.id))
     assert len(cultivation_names) == len(set(cultivation_names)) == 180
@@ -58,8 +58,8 @@ def main() -> None:
     for region in REGULAR_EXPLORATION_REGIONS:
         prices = tuple(
             catalog.items.require(item_id)
-            .component(ITEM_SALE_COMPONENT_ID, ItemSaleValue)
-            .unit_price
+            .component(ITEM_RECYCLE_COMPONENT_ID, ItemRecycleValue)
+            .unit_amount
             for item_id in region.trophy_item_ids
         )
         expected_values.append(

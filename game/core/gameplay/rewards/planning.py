@@ -18,7 +18,7 @@ from ..inventory import (
     InventoryOperation,
     SourceReceipt,
 )
-from ..weapon import WeaponState
+from ..weapon import WeaponState, weapon_state_data
 from .models import (
     CharacterExperienceReward,
     CharacterFeatureReward,
@@ -304,6 +304,7 @@ def _plan_generated_weapon(
             reward.item_definition_id,
             reward.container_id,
             builder.source_receipt(index, reward.metadata),
+            weapon_state_data(reward.state),
         ),
         reward.state,
         _line(index, "reward.generated_weapon", reward.container_id, reward.state.definition_id, 1),

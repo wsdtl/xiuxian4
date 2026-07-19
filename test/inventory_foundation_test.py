@@ -202,7 +202,7 @@ def _assert_definition_and_container_boundaries() -> None:
     catalog = _catalog()
     engine = InventoryEngine(catalog)
     assert catalog.finalized
-    assert INVENTORY_FOUNDATION_VERSION == "inventory.foundation.v3"
+    assert INVENTORY_FOUNDATION_VERSION == "inventory.foundation.v5"
     state = InventoryState(containers=_containers())
     rejected = engine.execute(
         InventoryTransaction(

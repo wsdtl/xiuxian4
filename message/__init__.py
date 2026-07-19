@@ -13,5 +13,6 @@ from .schema import CommandLink as CommandLink
 from .schema import Document as Document
 from .schema import DocumentMessage as DocumentMessage
 from .schema import ImageMessage as ImageMessage
+from .schema import ImageBlock as ImageBlock
 from .schema import Message as Message
 from .schema import RenderedMessage as RenderedMessage

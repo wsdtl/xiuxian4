@@ -1,4 +1,4 @@
-"""角色界相查询与跃迁命令。"""
+"""跃迁命令组件。"""
 
 from __future__ import annotations
 

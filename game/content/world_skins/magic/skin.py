@@ -14,7 +14,7 @@ from .world import MAGIC_WORLD_ENTRIES
 
 
 MAGIC_SKIN_ID = "skin.magic"
-MAGIC_SKIN_VERSION = 15
+MAGIC_SKIN_VERSION = 18
 
 
 MAGIC_SKIN = SkinPack(

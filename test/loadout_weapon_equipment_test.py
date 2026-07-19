@@ -465,8 +465,8 @@ def _prepared_loadout(env: dict[str, object]):
 
 def _assert_foundation_shapes(env: dict[str, object]) -> None:
     assert LOADOUT_FOUNDATION_VERSION == "loadout.foundation.v2"
-    assert WEAPON_FOUNDATION_VERSION == "weapon.foundation.v3"
-    assert EQUIPMENT_FOUNDATION_VERSION == "equipment.foundation.v2"
+    assert WEAPON_FOUNDATION_VERSION == "weapon.foundation.v4"
+    assert EQUIPMENT_FOUNDATION_VERSION == "equipment.foundation.v3"
     slots = env["slots"]
     assert len(slots.definitions.ids()) == 7  # type: ignore[union-attr]
 
@@ -670,8 +670,9 @@ def _assert_weapon_growth_and_contributions(env: dict[str, object]) -> None:
         context=context,
     ).unwrap()
     assert grown.state.level == 2
-    assert grown.state.experience == 50
-    assert grown.state.total_experience == 150
+    assert grown.state.experience == 0
+    assert grown.state.total_experience == 100
+    assert grown.events[-1].kind == "weapon.experience.discarded"
     contribution = WeaponContributionProvider(weapons).contribution(grown.state)
     attack = next(
         value

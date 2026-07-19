@@ -10,6 +10,8 @@ from game.core.gameplay import (
     ItemizationEngine,
     RuleContext,
     WeaponCatalog,
+    WeaponMaximumLevelRoll,
+    WeaponMaximumLevelTable,
     WeaponState,
 )
 
@@ -50,6 +52,7 @@ class WeaponInstanceGenerator:
         self,
         weapons: WeaponCatalog,
         itemization: ItemizationEngine,
+        maximum_levels: WeaponMaximumLevelTable,
     ) -> None:
         if not weapons.finalized:
             weapons.finalize()
@@ -57,6 +60,7 @@ class WeaponInstanceGenerator:
             raise ValueError("武器目录与实例生成器必须使用同一个物品化引擎")
         self.weapons = weapons
         self.itemization = itemization
+        self.maximum_levels = maximum_levels
 
     def generate(
         self,
@@ -77,16 +81,35 @@ class WeaponInstanceGenerator:
                 ),
                 context=context,
             )
+            maximum_level_roll = self._roll_maximum_level(context)
             state = self.weapons.create_state(
                 asset_id=request.asset_id,
                 definition_id=definition.id,
                 quality_id=execution.roll.quality_id,
                 roll=execution.roll,
+                maximum_level_roll=maximum_level_roll,
             )
             return WeaponGenerationResult(state, execution.roll)
         except Exception:
             context.random.restore(checkpoint)
             raise
+
+    def _roll_maximum_level(self, context: RuleContext) -> WeaponMaximumLevelRoll:
+        sampled_weight = context.random.randint(1, self.maximum_levels.total_weight)
+        selected = self.maximum_levels.bands[-1]
+        for band in self.maximum_levels.bands:
+            sampled_weight -= band.weight
+            if sampled_weight <= 0:
+                selected = band
+                break
+        sampled_level = context.random.randint(selected.minimum, selected.maximum)
+        return WeaponMaximumLevelRoll(
+            self.maximum_levels.id,
+            self.maximum_levels.version,
+            selected.minimum,
+            selected.maximum,
+            sampled_level,
+        )
 
 
 __all__ = [
