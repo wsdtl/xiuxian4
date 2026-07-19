@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 
 from game.app import CurrentCharacterResult, current_game_services
+from game.content.presentation import GAME_NAME
 from launch import C, logger
 from launch.adapter import (
     CommandGuardContext,
@@ -68,9 +69,10 @@ def _blocked_message(status: str) -> DocumentMessage:
     if status == "not_created":
         return (
             M.document()
-            .header("创建角色")
-            .section("建档状态", icon="notice")
-            .line("尚未创建角色")
+            .header(GAME_NAME)
+            .section("界门登录", icon="world")
+            .line("行纪中尚未发现你的化身记录。")
+            .note("建立唯一化身，从第一个世界开始写下行纪。")
             .note("发送: 创建角色 名称")
             .actions(
                 (
@@ -87,14 +89,14 @@ def _blocked_message(status: str) -> DocumentMessage:
     if status == "identity_conflict":
         return (
             M.document()
-            .header("角色访问")
+            .header(GAME_NAME)
             .section("身份归属冲突", icon="notice")
             .line("当前平台身份对应多个账号，暂时不能执行该命令。")
             .build()
         )
     return (
         M.document()
-        .header("角色访问")
+        .header(GAME_NAME)
         .section("读取失败", icon="notice")
         .line("当前没有读取到角色状态，请稍后重试。")
         .build()

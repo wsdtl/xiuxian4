@@ -1031,9 +1031,9 @@ class DimensionalDisasterFeature:
         date_text = event.opens_at.astimezone(self.timezone).strftime("%Y-%m-%d")
         return (
             f"{event.narrative.feather_text}\n"
-            f"此羽记得 {date_text} 的降临, "
-            f"{len(activity.participants)} 位登录者共同留下伤痕。"
-            f"最初持有者贡献 {entry.contribution / event.maximum_health:.1%}, "
+            f"万象行纪记载：{date_text}，"
+            f"{len(activity.participants)} 位登录者共同迎战 {event.narrative.name}。"
+            f"最初持有者贡献 {entry.contribution / event.maximum_health:.1%}，"
             f"位列第 {entry.rank}。"
         )
 

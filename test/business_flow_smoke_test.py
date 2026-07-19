@@ -65,7 +65,7 @@ async def _main() -> None:
                 ("武库", "flow-armory", "武库"),
                 ("装配", "flow-loadout", "装配"),
                 ("铭刻", "flow-inscription", "铭刻"),
-                ("跃迁", "flow-shift", "诸天界相"),
+                ("跃迁", "flow-shift", "界门"),
                 ("探险", "flow-exploration", "探险"),
                 ("抽奖", "flow-draw", "抽奖"),
                 ("回收战利品", "flow-recycle", "战利品"),

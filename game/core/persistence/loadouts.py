@@ -122,14 +122,15 @@ class PersistedLoadoutService:
                     outcome.value.loadout,
                     context.logical_time,
                 )
-                self.snapshots.update(
-                    uow,
-                    INVENTORY_AGGREGATE,
-                    inventory_id,
-                    inventory,
-                    outcome.value.inventory,
-                    context.logical_time,
-                )
+                if outcome.value.inventory != inventory:
+                    self.snapshots.update(
+                        uow,
+                        INVENTORY_AGGREGATE,
+                        inventory_id,
+                        inventory,
+                        outcome.value.inventory,
+                        context.logical_time,
+                    )
                 timestamp = context.logical_time.isoformat()
                 uow.insert_transaction(
                     transaction.id,

@@ -43,7 +43,7 @@ MAGIC_ITEM_ENTRIES = {
     ),
     DIMENSION_SHIFT_ITEM_ID: SkinEntry(
         name="位面跃迁晶核",
-        description="跃迁至另一世界时自动消耗一枚；查看位面或跃迁失败不会消耗。",
+        description="登录另一世界时自动消耗一枚；查看界门或跃迁失败不会消耗。",
         icon="🧿",
     ),
     EQUIPMENT_SET_GUARANTEE_ITEM_ID: SkinEntry(

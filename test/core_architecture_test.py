@@ -15,18 +15,36 @@ if str(ROOT) not in sys.path:
 import game  # noqa: E402
 from game import core  # noqa: E402
 from game import cmd  # noqa: E402
+from game.content.presentation import GAME_NAME, GAME_TITLE  # noqa: E402
 from game.core import account, gameplay, persistence  # noqa: E402
 
 
 def main() -> None:
     _assert_physical_layout()
+    _assert_product_identity()
     _assert_ascii_python_identifiers()
+    _assert_ascii_static_import_paths()
     _assert_public_root()
     _assert_layer_public_exports()
     _assert_import_boundaries()
     _assert_game_reply_boundaries()
     _assert_core_neutrality()
     print("core architecture tests passed")
+
+
+def _assert_product_identity() -> None:
+    """玩家品牌与正式背景必须拥有单一、可审计的事实来源。"""
+
+    assert GAME_NAME == "万象行纪"
+    assert GAME_TITLE == "《万象行纪》"
+    assert (ROOT / "README.md").read_text(encoding="utf-8").startswith(
+        "# 万象行纪\n"
+    )
+    background = ROOT / "design" / "万象行纪世界设定.md"
+    assert background.is_file()
+    source = background.read_text(encoding="utf-8")
+    for required in ("无穷界海", "唯一化身", "多次元灾厄", "铭刻之羽"):
+        assert required in source, f"正式背景缺少主轴：{required}"
 
 
 def _assert_ascii_python_identifiers() -> None:
@@ -53,6 +71,27 @@ def _assert_ascii_python_identifiers() -> None:
         invalid = sorted({name for name in identifiers if not name.isascii()})
         if invalid:
             failures.append(f"{relative} 存在中文代码标识符：{', '.join(invalid)}")
+    assert not failures, "\n".join(failures)
+
+
+def _assert_ascii_static_import_paths() -> None:
+    """中文二级组件必须动态加载，静态 import 路径统一使用英文。"""
+
+    failures: list[str] = []
+    for path in (ROOT / "game").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules = tuple(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                modules = (node.module,) if node.module else ()
+            else:
+                continue
+            for module in modules:
+                if not module.isascii():
+                    failures.append(
+                        f"{path.relative_to(ROOT)} 存在中文静态导包：{module}"
+                    )
     assert not failures, "\n".join(failures)
 
 

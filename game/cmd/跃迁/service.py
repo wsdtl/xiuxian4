@@ -54,14 +54,14 @@ def _worlds_message(current_skin_id: str, *, invalid: bool = False) -> DocumentM
     current = services.world_views.require(current_skin_id)
     builder = (
         M.document()
-        .section("诸天界相", icon="world")
-        .field("当前世界", f"{current.skin.icon} {current.skin.name}")
+        .section("界门", icon="world")
+        .field("当前登录", f"{current.skin.icon} {current.skin.name}")
     )
     if invalid:
         builder.line("没有找到这个世界")
     actions = []
     for index, view in enumerate(services.world_views.latest_views(), start=1):
-        state = "当前" if view.skin.id == current.skin.id else "可跃迁"
+        state = "已连接" if view.skin.id == current.skin.id else "可登录"
         builder.item(index, f"{view.skin.icon} {view.skin.name} | {state}")
         if view.skin.id != current.skin.id:
             actions.append(
@@ -92,7 +92,7 @@ def _result_message(result: DimensionShiftResult) -> DocumentMessage:
             M.document()
             .section("跃迁", icon="world")
             .field("当前世界", f"{current.skin.icon} {current.skin.name}")
-            .line("已经处于这个界相")
+            .line("界门已经连接这个世界")
             .build()
         )
     if result.status == "item_missing":
@@ -113,7 +113,8 @@ def _result_message(result: DimensionShiftResult) -> DocumentMessage:
                 ("当前世界", f"{current.skin.icon} {current.skin.name}"),
             )
             .field("消耗", f"{previous.projector.name(DIMENSION_SHIFT_ITEM_ID)} x1")
-            .line("化身、坐标、资产与构筑保持不变")
+            .line("目标世界已完成化身重构")
+            .note("角色档案、锚址、资产与构筑保持不变。")
             .build()
         )
     return _unavailable()
@@ -123,7 +124,7 @@ def _unavailable() -> DocumentMessage:
     return (
         M.document()
         .section("跃迁", icon="notice")
-        .line("当前没有读取到界相状态，请稍后重试")
+        .line("当前没有读取到世界连接状态，请稍后重试")
         .build()
     )
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from importlib import import_module
 from pathlib import Path
 import sqlite3
 import sys
@@ -22,7 +23,6 @@ from game.core.gameplay import ExecutionPhase, HEALTH_CURRENT, RuleEvent  # noqa
 from game.core.persistence import SqliteDatabase  # noqa: E402
 from game.app import build_game_services, install_game_services, restore_game_services  # noqa: E402
 from game.cmd import router as game_router  # noqa: E402
-from game.cmd.战报.site import _event_text  # noqa: E402
 from game.content.world_skins.cultivation import (  # noqa: E402
     CULTIVATION_SKIN_ID,
     CULTIVATION_SKIN_VERSION,
@@ -40,6 +40,9 @@ from game.rules.battle_report import (  # noqa: E402
     StoredBattleEvent,
     KNOWN_BATTLE_EVENT_KINDS,
 )
+
+
+_event_text = import_module("game.cmd.战报.site")._event_text
 
 
 NOW = datetime(2026, 7, 19, 12, tzinfo=timezone.utc)

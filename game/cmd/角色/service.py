@@ -313,10 +313,12 @@ def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
         receipt.starter_weapon,
         starter_instance,
     ).name
+    starting_location = projector.name(STARTING_CITY_ID)
     return (
         M.document()
-        .section("角色创建", icon="profile")
-        .field("降临世界", view.skin.name)
+        .section("行纪开篇", icon="world")
+        .line("源印建立完成，界门已经记住了你的名字。")
+        .field("首次降临", f"{view.skin.name}·{starting_location}")
         .row(
             ("种族", projector.name(ORIGIN_HUMAN_FEATURE_ID)),
             ("体质", projector.name(MORTAL_PHYSIQUE_FEATURE_ID)),
@@ -344,8 +346,7 @@ def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
                 f"x{quantities[SMALL_SPIRIT_MEDICINE_ITEM_ID]}",
             ),
         )
-        .section("落脚之地", icon="world")
-        .field("落脚地", projector.name(STARTING_CITY_ID))
+        .note("这是你在《万象行纪》中的第一条记录。")
         .build()
     )
 

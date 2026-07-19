@@ -5,12 +5,23 @@
 
 from __future__ import annotations
 
+from importlib import import_module
+
 from fastapi import APIRouter
 
 from . import access_guard as access_guard  # noqa: F401
-from .战报 import router as battle_report_router
+
+
+def _load_component_router(component_name: str) -> APIRouter:
+    """动态加载中文二级组件，避免 Python 静态导包路径出现中文。"""
+
+    module = import_module(f"{__name__}.{component_name}")
+    component_router = getattr(module, "router", None)
+    if not isinstance(component_router, APIRouter):
+        raise TypeError(f"二级组件未暴露 APIRouter：{component_name}")
+    return component_router
 
 router = APIRouter()
-router.include_router(battle_report_router)
+router.include_router(_load_component_router("战报"))
 
 __all__ = ["router"]

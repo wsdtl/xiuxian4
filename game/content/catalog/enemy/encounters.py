@@ -39,7 +39,7 @@ ENEMY_ENCOUNTERS = (
         ENCOUNTER_SCOPE_PERSONAL_ID,
         1,
         100,
-        (EnemySpawnDefinition(_REGULAR_IDS, ENEMY_RANK_NORMAL_ID, 1, 3, 1),),
+        (EnemySpawnDefinition(_REGULAR_IDS, ENEMY_RANK_NORMAL_ID, 1, 1, 1),),
         TagSet.of("encounter.enemy.normal"),
     ),
     EnemyEncounterDefinition(

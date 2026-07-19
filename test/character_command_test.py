@@ -137,9 +137,11 @@ async def _main() -> None:
             )
             blocked_content = _content(blocked)
             assert blocked_content == (
-                "**创建角色**\n"
-                "> 📌 建档状态\n"
-                "> > 尚未创建角色\n"
+                "**万象行纪**\n"
+                "> 🌏 界门登录\n"
+                "> > 行纪中尚未发现你的化身记录。\n"
+                "> \n"
+                "> 建立唯一化身，从第一个世界开始写下行纪。\n"
                 "> \n"
                 "> 发送: 创建角色 名称"
             )
@@ -535,9 +537,11 @@ async def _main() -> None:
                 event_id="local-profile-c",
             )
             assert _content(not_created) == (
-                "**创建角色**\n"
-                "> 📌 建档状态\n"
-                "> > 尚未创建角色\n"
+                "**万象行纪**\n"
+                "> 🌏 界门登录\n"
+                "> > 行纪中尚未发现你的化身记录。\n"
+                "> \n"
+                "> 建立唯一化身，从第一个世界开始写下行纪。\n"
                 "> \n"
                 "> 发送: 创建角色 名称"
             )

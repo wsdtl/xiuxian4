@@ -38,7 +38,7 @@ register_global_activity(
     presentation=GlobalActivityPresentation(
         "多次元灾厄",
         "灾厄",
-        "不属于任何世界皮肤的次元级灾难。",
+        "能够突破世界边界并同时影响多个世界的公共灾难。",
     ),
 )
 
@@ -221,7 +221,7 @@ def _ranking_message(
     services = current_game_services()
     for rank, character_id, contribution, attempts in ranked[:10]:
         character = services.characters.load_character(character_id)
-        name = character.name if character is not None else "失联登录者"
+        name = character.name if character is not None else "无名行者"
         builder.item(
             rank,
             f"{name} | 伤痕: {contribution} | "

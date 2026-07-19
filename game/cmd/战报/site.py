@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 
 from game.app import current_game_services
+from game.content.presentation import GAME_NAME
 from game.core.gameplay import HEALTH_CURRENT, SPIRIT_CURRENT
 from game.rules.battle_report import (
     KNOWN_BATTLE_EVENT_KINDS,
@@ -66,7 +67,7 @@ def _render_page(report: BattleReportView, services) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>{escape(summary.title)}</title>
+  <title>{escape(GAME_NAME)} · {escape(summary.title)}</title>
   <style>
     :root {{ color: #18201d; background: #eef1ed; font-family: system-ui, "Microsoft YaHei", sans-serif; }}
     * {{ box-sizing: border-box; }}
