@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from game.content.catalog.equipment import EQUIPMENT_SET_MARK_CHANCE
 from game.core.gameplay import (
     EquipmentCatalog,
     EquipmentState,
@@ -15,7 +16,6 @@ from game.core.gameplay import (
 
 
 EQUIPMENT_GENERATION_PROTOCOL_VERSION = "rules.equipment_generation.v1"
-EQUIPMENT_SET_MARK_CHANCE = 0.25
 
 
 @dataclass(frozen=True)
@@ -101,7 +101,6 @@ class EquipmentInstanceGenerator:
 
 __all__ = [
     "EQUIPMENT_GENERATION_PROTOCOL_VERSION",
-    "EQUIPMENT_SET_MARK_CHANCE",
     "EquipmentGenerationRequest",
     "EquipmentGenerationResult",
     "EquipmentInstanceGenerator",

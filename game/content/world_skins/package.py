@@ -8,21 +8,22 @@ from game.core.gameplay import (
 )
 
 from ..catalog import CATALOG_PACKAGE_ID
-from .cultivation import CULTIVATION_SKIN
-from .magic import MAGIC_SKIN
+from .cultivation import CULTIVATION_SKIN, CULTIVATION_SKIN_ID
+from .magic import MAGIC_SKIN, MAGIC_SKIN_ID
 
 
 WORLD_SKIN_PACKAGE_ID = "content.world_skins.official"
+PLAYABLE_WORLD_SKIN_IDS = (CULTIVATION_SKIN_ID, MAGIC_SKIN_ID)
 
 
 WORLD_SKIN_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=WORLD_SKIN_PACKAGE_ID,
-        version=ContentVersion(3, 5, 0),
+        version=ContentVersion(3, 10, 0),
         dependencies=(
             PackageRequirement(
                 package_id=CATALOG_PACKAGE_ID,
-                minimum_version=ContentVersion(3, 2, 0),
+                minimum_version=ContentVersion(3, 7, 0),
                 maximum_exclusive=ContentVersion(4, 0, 0),
             ),
         ),
@@ -31,4 +32,8 @@ WORLD_SKIN_PACKAGE = ContentPackage(
 )
 
 
-__all__ = ["WORLD_SKIN_PACKAGE", "WORLD_SKIN_PACKAGE_ID"]
+__all__ = [
+    "PLAYABLE_WORLD_SKIN_IDS",
+    "WORLD_SKIN_PACKAGE",
+    "WORLD_SKIN_PACKAGE_ID",
+]

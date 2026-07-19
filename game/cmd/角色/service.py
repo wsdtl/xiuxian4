@@ -16,15 +16,40 @@ from game.content import (
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
     STARTING_CITY_ID,
 )
+from game.content.catalog.combat import (
+    COMBAT_ACCURACY,
+    COMBAT_BLOCK_CHANCE,
+    COMBAT_BLOCK_REDUCTION,
+    COMBAT_CONTROL_CHANCE,
+    COMBAT_CONTROL_RESISTANCE,
+    COMBAT_CRITICAL_CHANCE,
+    COMBAT_CRITICAL_DAMAGE,
+    COMBAT_EVASION,
+    COMBAT_FLAT_PENETRATION,
+    COMBAT_HEALING_RATE,
+    COMBAT_HEALING_RECEIVED,
+    COMBAT_INCOMING_RATE,
+    COMBAT_OUTGOING_RATE,
+    COMBAT_RATE_PENETRATION,
+    COMBAT_TENACITY,
+)
 from game.core.account import IdentityEvidence
 from game.core.gameplay import (
     COMBAT_ATTACK,
     COMBAT_DEFENSE,
     COMBAT_SPEED,
+    ACCESSORY_SLOT_ID,
+    BODY_SLOT_ID,
+    FEET_SLOT_ID,
+    HANDS_SLOT_ID,
+    HEAD_SLOT_ID,
     HEALTH_CURRENT,
     HEALTH_MAXIMUM,
     SPIRIT_CURRENT,
     SPIRIT_MAXIMUM,
+    STANDARD_LOADOUT_SLOT_ORDER,
+    WAIST_SLOT_ID,
+    WEAPON_SLOT_ID,
     equipment_state_from_instance,
     weapon_state_from_instance,
 )
@@ -46,6 +71,17 @@ from ..presentation import (
     character_header_color,
     character_realm_name,
 )
+
+
+_LOADOUT_SLOT_LABELS = {
+    WEAPON_SLOT_ID: "武器",
+    HEAD_SLOT_ID: "头部",
+    BODY_SLOT_ID: "身体",
+    HANDS_SLOT_ID: "手部",
+    WAIST_SLOT_ID: "腰部",
+    FEET_SLOT_ID: "足部",
+    ACCESSORY_SLOT_ID: "饰品",
+}
 
 
 async def create_character(requested_name: str) -> None:
@@ -70,6 +106,25 @@ async def view_character(result: CharacterOverviewResult) -> None:
     """展示依赖层已经读取的当前角色状态。"""
 
     await send_game_reply(_overview_message(result))
+
+
+async def view_combat_panel(result: CharacterOverviewResult) -> None:
+    """展示当前配装经过真实战斗投影后的最终数据。"""
+
+    if result.status != "ok" or result.overview is None:
+        await send_game_reply(_combat_panel_unavailable_message())
+        return
+    try:
+        message = await asyncio.to_thread(_combat_panel_message, result.overview)
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(
+                C.fail("战斗面板生成失败"),
+                C.kv("character", result.overview.character.id),
+            )
+        )
+        message = _combat_panel_unavailable_message()
+    await send_game_reply(message)
 
 
 async def mood(message: str, current: CurrentCharacterResult) -> None:
@@ -113,6 +168,41 @@ async def mood(message: str, current: CurrentCharacterResult) -> None:
         await send_game_reply(_mood_unavailable_message())
         return
     await send_game_reply(_mood_message(settings))
+
+
+async def auto_medicine(message: str, current: CurrentCharacterResult) -> None:
+    """查看或修改当前角色的探险自动用药开关。"""
+
+    if current.status != "ok" or current.character is None:
+        await send_game_reply(_setting_unavailable_message("自动用药"))
+        return
+    services = current_game_services()
+    try:
+        settings = await asyncio.to_thread(
+            services.load_character_settings,
+            current.character.id,
+        )
+        requested = _parse_switch(message)
+        if requested is None and str(message or "").strip():
+            await send_game_reply(_auto_medicine_message(settings, invalid=True))
+            return
+        if requested is not None:
+            settings = await asyncio.to_thread(
+                services.set_auto_use_medicine,
+                current.character.id,
+                requested,
+                logical_time=_now(),
+            )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(
+                C.fail("自动用药设置执行失败"),
+                C.kv("character", current.character.id),
+            )
+        )
+        await send_game_reply(_setting_unavailable_message("自动用药"))
+        return
+    await send_game_reply(_auto_medicine_message(settings))
 
 
 async def _execute(
@@ -206,7 +296,8 @@ def _result_message(result: CharacterCreationCommandResult) -> DocumentMessage:
 
 def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
     services = current_game_services()
-    projector = services.content.projector
+    view = services.world_view(receipt.dimension)
+    projector = view.projector
     character = receipt.character
     quantities = {
         stack.definition_id: stack.quantity
@@ -218,24 +309,25 @@ def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
         if account.owner_id == character.id and account.currency_id == PRIMARY_CURRENCY_ID
     )
     starter_instance = receipt.inventory.instances[receipt.starter_weapon.asset_id]
-    starter_name = services.content.gear_projector.weapon(
+    starter_name = view.gear_projector.weapon(
         receipt.starter_weapon,
         starter_instance,
     ).name
     return (
         M.document()
         .section("角色创建", icon="profile")
+        .field("降临世界", view.skin.name)
         .row(
             ("种族", projector.name(ORIGIN_HUMAN_FEATURE_ID)),
             ("体质", projector.name(MORTAL_PHYSIQUE_FEATURE_ID)),
         )
         .row(
             (
-                "血气",
+                _resource_name(projector, HEALTH_CURRENT),
                 f"{int(character.resources[HEALTH_CURRENT])}/{int(character.core_attributes[HEALTH_MAXIMUM])}",
             ),
             (
-                "灵力",
+                _resource_name(projector, SPIRIT_CURRENT),
                 f"{int(character.resources[SPIRIT_CURRENT])}/{int(character.core_attributes[SPIRIT_MAXIMUM])}",
             ),
         )
@@ -253,7 +345,7 @@ def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
             ),
         )
         .section("落脚之地", icon="world")
-        .field("城池", projector.name(STARTING_CITY_ID))
+        .field("落脚地", projector.name(STARTING_CITY_ID))
         .build()
     )
 
@@ -261,26 +353,6 @@ def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
 def _overview_message(result: CharacterOverviewResult) -> DocumentMessage:
     if result.status == "ok" and result.overview is not None:
         return _character_overview_message(result.overview)
-    if result.status == "not_created":
-        return (
-            M.document()
-            .header("我的角色")
-            .section("建档状态", icon="notice")
-            .line("尚未创建角色")
-            .note("发送: 创建角色 名称")
-            .actions(
-                (
-                    Action(
-                        "character.create",
-                        "创建角色",
-                        "创建角色 ",
-                        behavior="fill",
-                        style="primary",
-                    ),
-                )
-            )
-            .build()
-        )
     if result.status == "identity_conflict":
         return (
             M.document()
@@ -349,9 +421,65 @@ def _mood_unavailable_message() -> DocumentMessage:
     )
 
 
+def _auto_medicine_message(
+    settings: CharacterSettingsState,
+    *,
+    invalid: bool = False,
+) -> DocumentMessage:
+    builder = (
+        M.document()
+        .section("自动用药", icon="recovery")
+        .field("当前状态", "开启" if settings.auto_use_medicine else "关闭")
+    )
+    if invalid:
+        builder.line("自动用药只支持 开启 或 关闭。")
+    else:
+        builder.line("开启后，探险会在批次之间按浪费最少原则使用恢复药。")
+    return (
+        builder.actions(
+            (
+                Action(
+                    "character.auto_medicine.enable",
+                    "开启",
+                    "自动用药 开启",
+                    behavior="send",
+                ),
+                Action(
+                    "character.auto_medicine.disable",
+                    "关闭",
+                    "自动用药 关闭",
+                    behavior="send",
+                    style="secondary",
+                ),
+            )
+        )
+        .build()
+    )
+
+
+def _setting_unavailable_message(title: str) -> DocumentMessage:
+    return (
+        M.document()
+        .header(title)
+        .section("读取失败", icon="notice")
+        .line("当前没有读取到角色设置，请稍后重试。")
+        .build()
+    )
+
+
+def _parse_switch(value: object) -> bool | None:
+    requested = str(value or "").strip().casefold()
+    if requested in {"开启", "打开", "启用", "开", "on", "1"}:
+        return True
+    if requested in {"关闭", "关掉", "停用", "关", "off", "0"}:
+        return False
+    return None
+
+
 def _character_overview_message(overview: CharacterOverview) -> DocumentMessage:
     services = current_game_services()
-    projector = services.content.projector
+    view = services.world_view(overview.dimension)
+    projector = view.projector
     character = overview.character
     progression = character.progressions[CHARACTER_LEVEL_PROGRESSION_ID]
     progression_definition = services.content.catalog.characters.progressions.require(
@@ -380,83 +508,256 @@ def _character_overview_message(overview: CharacterOverview) -> DocumentMessage:
     if presence is not None:
         position = presence.position
         location = (
-            _projected_name(position.location_id)
+            _projected_name(position.location_id, view)
             if position.location_id is not None
             else f"({position.x}, {position.y})"
         )
-    weapon_text = "未装备"
-    weapon_asset_id = overview.loadout.weapon_asset_id
-    if weapon_asset_id is not None:
-        instance = overview.inventory.instances.get(weapon_asset_id)
-        if instance is not None:
-            weapon = weapon_state_from_instance(instance)
-            weapon_text = " | ".join(
-                (
-                    services.content.gear_projector.weapon(
-                        weapon,
-                        instance,
-                        inscription_preference=overview.inscription_preference,
-                    ).name,
-                    f"Lv{weapon.level}",
-                )
-            )
-    equipment_names = []
-    for asset_id in overview.loadout.equipment_asset_ids:
-        instance = overview.inventory.instances.get(asset_id)
-        if instance is None:
-            continue
-        equipment = equipment_state_from_instance(instance)
-        equipment_names.append(
-            services.content.gear_projector.equipment(
-                equipment,
-                instance,
-                inscription_preference=overview.inscription_preference,
-            ).name
-        )
-    equipment_names = tuple(equipment_names)
-    equipment_text = "无" if not equipment_names else ", ".join(equipment_names)
-    return (
+    builder = (
         M.document()
-        .section("修行状态", icon="profile")
-        .row(("境界", character_realm_name(character, projector)), ("经验", experience))
+        .section("角色状态", icon="profile")
         .row(
             (
-                "血气",
+                projector.name(CHARACTER_LEVEL_PROGRESSION_ID),
+                character_realm_name(character, projector),
+            ),
+            ("经验", experience),
+        )
+        .row(
+            (
+                _resource_name(projector, HEALTH_CURRENT),
                 f"{_number(character.resources[HEALTH_CURRENT])}/{_number(character.core_attributes[HEALTH_MAXIMUM])}",
             ),
             (
-                "灵力",
+                _resource_name(projector, SPIRIT_CURRENT),
                 f"{_number(character.resources[SPIRIT_CURRENT])}/{_number(character.core_attributes[SPIRIT_MAXIMUM])}",
             ),
         )
-        .section("基础属性", icon="combat")
-        .row(
-            ("最大血气", _number(character.core_attributes[HEALTH_MAXIMUM])),
-            ("最大灵力", _number(character.core_attributes[SPIRIT_MAXIMUM])),
-        )
-        .row(
-            ("攻击", _number(character.core_attributes[COMBAT_ATTACK])),
-            ("防御", _number(character.core_attributes[COMBAT_DEFENSE])),
-        )
-        .field("速度", _number(character.core_attributes[COMBAT_SPEED]))
         .section("当前装配", icon="inventory")
-        .field("武器", weapon_text)
-        .field("装备", f"{len(equipment_names)}/6 | {equipment_text}")
-        .section("当前状态", icon="world")
+    )
+    for slot_id in STANDARD_LOADOUT_SLOT_ORDER:
+        builder.field(
+            _LOADOUT_SLOT_LABELS[slot_id],
+            _equipped_name(overview, slot_id, view),
+        )
+    return (
+        builder.section("当前状态", icon="world")
+        .field("世界", view.skin.name)
         .row(("位置", location), (projector.name(PRIMARY_CURRENCY_ID), wallet.balance if wallet else 0))
-        .field("行动", _action_text(overview))
+        .field("行动", _action_text(overview, view))
+        .actions(
+            (
+                Action(
+                    "character.combat_panel",
+                    "战斗面板",
+                    "战斗面板",
+                    behavior="send",
+                ),
+            )
+        )
         .build()
     )
 
 
-def _projected_name(definition_id: str) -> str:
+def _combat_panel_message(overview: CharacterOverview) -> DocumentMessage:
+    services = current_game_services()
+    view = services.world_view(overview.dimension)
+    entity = services.player_combat.project(
+        overview.character,
+        overview.inventory,
+        overview.loadout,
+    ).entity
+    snapshot = entity.snapshot(services.player_combat.attributes)
+    projector = view.projector
+    preset = "未命名"
+    if overview.loadout.active_preset_id:
+        token = overview.loadout.active_preset_id.rsplit(".", 1)[-1]
+        preset = token[1:] if token.startswith("p") and token[1:].isdigit() else token
+    builder = (
+        M.document()
+        .section("战斗面板", icon="combat")
+        .field("当前配装", preset)
+        .row(
+            (projector.name(HEALTH_MAXIMUM), _number(snapshot.value(HEALTH_MAXIMUM))),
+            (projector.name(SPIRIT_MAXIMUM), _number(snapshot.value(SPIRIT_MAXIMUM))),
+        )
+        .row(
+            ("攻击", _number(snapshot.value(COMBAT_ATTACK))),
+            ("防御", _number(snapshot.value(COMBAT_DEFENSE))),
+        )
+        .field("速度", _number(snapshot.value(COMBAT_SPEED)))
+        .section("战斗修正", icon="status")
+        .row(
+            ("命中修正", _percent(snapshot.value(COMBAT_ACCURACY))),
+            ("闪避", _percent(snapshot.value(COMBAT_EVASION))),
+        )
+        .row(
+            ("暴击", _percent(snapshot.value(COMBAT_CRITICAL_CHANCE))),
+            ("暴击增伤", _percent(snapshot.value(COMBAT_CRITICAL_DAMAGE))),
+        )
+        .row(
+            ("格挡", _percent(snapshot.value(COMBAT_BLOCK_CHANCE))),
+            ("格挡减伤", _percent(snapshot.value(COMBAT_BLOCK_REDUCTION))),
+        )
+        .row(
+            ("伤害修正", _percent(snapshot.value(COMBAT_OUTGOING_RATE))),
+            ("承伤修正", _percent(snapshot.value(COMBAT_INCOMING_RATE))),
+        )
+        .row(
+            ("固定穿透", _number(snapshot.value(COMBAT_FLAT_PENETRATION))),
+            ("比例穿透", _percent(snapshot.value(COMBAT_RATE_PENETRATION))),
+        )
+        .row(
+            ("治疗修正", _percent(snapshot.value(COMBAT_HEALING_RATE))),
+            ("受疗修正", _percent(snapshot.value(COMBAT_HEALING_RECEIVED))),
+        )
+        .row(
+            ("控制修正", _percent(snapshot.value(COMBAT_CONTROL_CHANCE))),
+            ("控制抵抗", _percent(snapshot.value(COMBAT_CONTROL_RESISTANCE))),
+        )
+        .field("韧性", _percent(snapshot.value(COMBAT_TENACITY)))
+        .section("战斗机制", icon="item")
+    )
+    _append_value_group(builder, "能力", _ability_names(entity.abilities, view), 3)
+    _append_value_group(builder, "特效", _mechanic_names(overview, entity, view), 4)
+    _append_value_group(builder, "套装", _set_bonus_names(overview, view), 2)
+    return builder.build()
+
+
+def _combat_panel_unavailable_message() -> DocumentMessage:
+    return (
+        M.document()
+        .section("战斗面板", icon="combat")
+        .line("当前没有读取到角色战斗数据，请稍后重试。")
+        .build()
+    )
+
+
+def _equipped_name(
+    overview: CharacterOverview,
+    slot_id: str,
+    view,
+) -> str:
+    asset_id = overview.loadout.slots.get(slot_id)
+    if asset_id is None:
+        return "未装备"
+    instance = overview.inventory.instances.get(asset_id)
+    if instance is None:
+        return "状态异常"
+    if slot_id == WEAPON_SLOT_ID:
+        weapon = weapon_state_from_instance(instance)
+        name = view.gear_projector.weapon(
+            weapon,
+            instance,
+            inscription_preference=overview.inscription_preference,
+        ).name
+        return f"{name} | Lv{weapon.level}"
+    equipment = equipment_state_from_instance(instance)
+    return view.gear_projector.equipment(
+        equipment,
+        instance,
+        inscription_preference=overview.inscription_preference,
+    ).name
+
+
+def _ability_names(ability_ids, view) -> tuple[str, ...]:
+    return tuple(_projected_name(value, view) for value in sorted(ability_ids))
+
+
+def _mechanic_names(overview: CharacterOverview, entity, view) -> tuple[str, ...]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for asset_id in overview.loadout.slots.values():
+        instance = overview.inventory.instances.get(asset_id)
+        if instance is None:
+            continue
+        state = (
+            weapon_state_from_instance(instance)
+            if asset_id == overview.loadout.weapon_asset_id
+            else equipment_state_from_instance(instance)
+        )
+        if state.roll is None:
+            continue
+        for rolled in state.roll.properties:
+            if rolled.values:
+                continue
+            label = f"{_projected_name(rolled.property_id, view)} T{rolled.tier}"
+            if label not in seen:
+                seen.add(label)
+                names.append(label)
+    for trigger_id in sorted(entity.triggers):
+        property_id = _trigger_property_id(trigger_id)
+        if property_id is None:
+            continue
+        label = _projected_name(property_id, view)
+        if label not in seen:
+            seen.add(label)
+            names.append(label)
+    if entity.interceptor_bindings:
+        names.append(f"守护机制 x{len(entity.interceptor_bindings)}")
+    if entity.target_constraint_bindings:
+        names.append(f"目标约束 x{len(entity.target_constraint_bindings)}")
+    return tuple(names)
+
+
+def _trigger_property_id(trigger_id: str) -> str | None:
+    if trigger_id.startswith("trigger.equipment."):
+        key = trigger_id.removeprefix("trigger.equipment.").split(".", 1)[0]
+        return f"property.equipment.{key}"
+    if trigger_id.startswith("trigger.weapon."):
+        key = trigger_id.removeprefix("trigger.weapon.").split(".", 1)[0]
+        return f"property.weapon_core.{key}"
+    return None
+
+
+def _set_bonus_names(overview: CharacterOverview, view) -> tuple[str, ...]:
+    catalog = current_game_services().content.catalog.equipment
+    counts: dict[str, int] = {}
+    for asset_id in overview.loadout.equipment_asset_ids:
+        instance = overview.inventory.instances.get(asset_id)
+        if instance is None:
+            continue
+        set_id = equipment_state_from_instance(instance).set_id
+        if set_id is not None:
+            counts[set_id] = counts.get(set_id, 0) + 1
+    names = []
+    for set_id, count in sorted(counts.items()):
+        active = tuple(
+            bonus.required_pieces
+            for bonus in catalog.sets.require(set_id).bonuses
+            if count >= bonus.required_pieces
+        )
+        if active:
+            thresholds = "/".join(str(value) for value in active)
+            names.append(f"{_projected_name(set_id, view)} x{count} | {thresholds}件生效")
+    return tuple(names)
+
+
+def _append_value_group(builder, label: str, values: tuple[str, ...], size: int) -> None:
+    if not values:
+        builder.field(label, "无")
+        return
+    groups = tuple(values[index : index + size] for index in range(0, len(values), size))
+    builder.field(label, " | ".join(groups[0]))
+    for group in groups[1:]:
+        builder.line(" | ".join(group))
+
+
+def _percent(value: float) -> str:
+    percentage = float(value) * 100.0
+    if abs(percentage) < 0.005:
+        return "0%"
+    text = f"{percentage:+.2f}".rstrip("0").rstrip(".")
+    return f"{text}%"
+
+
+def _projected_name(definition_id: str, view) -> str:
     try:
-        return current_game_services().content.projector.name(definition_id)
+        return view.projector.name(definition_id)
     except KeyError:
         return definition_id
 
 
-def _action_text(overview: CharacterOverview) -> str:
+def _action_text(overview: CharacterOverview, view) -> str:
     if overview.action is None:
         return "空闲"
     running = overview.action.running()
@@ -464,7 +765,7 @@ def _action_text(overview: CharacterOverview) -> str:
         record = running[0]
         remaining_seconds = max(0, int((record.completes_at - _now()).total_seconds()))
         remaining_minutes = ceil(remaining_seconds / 60)
-        return f"{_projected_name(record.definition_id)} | 剩余 {remaining_minutes} 分钟"
+        return f"{_projected_name(record.definition_id, view)} | 剩余 {remaining_minutes} 分钟"
     completed = overview.action.completed()
     if completed:
         return f"{len(completed)} 项待领取"
@@ -475,12 +776,17 @@ def _number(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:g}"
 
 
+def _resource_name(projector, resource_id: str) -> str:
+    return projector.name(resource_id).removeprefix("当前")
+
+
 def _now() -> datetime:
     return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = [
     "create_character",
+    "auto_medicine",
     "mood",
     "view_character",
 ]

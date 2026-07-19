@@ -36,6 +36,7 @@ from game.core.gameplay import (  # noqa: E402
 )
 from game.core.gameplay.registry import DefinitionRegistry  # noqa: E402
 from game.core.gameplay.inventory import (  # noqa: E402
+    AppendStack,
     AssetAvailability,
     ConsumeStack,
     GrantInstance,
@@ -70,6 +71,7 @@ TIME = datetime(2026, 7, 12, 20, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 def main() -> None:
     _assert_definition_and_container_boundaries()
+    _assert_append_stack()
     _assert_asset_transactions_and_provenance()
     _assert_reservations_and_escrow()
     _assert_atomic_cross_owner_failure()
@@ -200,7 +202,7 @@ def _assert_definition_and_container_boundaries() -> None:
     catalog = _catalog()
     engine = InventoryEngine(catalog)
     assert catalog.finalized
-    assert INVENTORY_FOUNDATION_VERSION == "inventory.foundation.v2"
+    assert INVENTORY_FOUNDATION_VERSION == "inventory.foundation.v3"
     state = InventoryState(containers=_containers())
     rejected = engine.execute(
         InventoryTransaction(
@@ -255,6 +257,24 @@ def _base_assets() -> tuple[InventoryEngine, InventoryState]:
     }
     assert result.state.next_reference_number == 4
     return engine, result.state
+
+
+def _assert_append_stack() -> None:
+    engine, state = _base_assets()
+    appended = _execute(
+        engine,
+        state,
+        "append-ore",
+        AppendStack("ore-a", 5, _receipt("receipt-appended")),
+    )
+    stack = appended.state.stacks["ore-a"]
+    assert stack.quantity == 35
+    assert stack.revision == 1
+    assert [(lot.receipt.id, lot.quantity) for lot in stack.lots] == [
+        ("receipt-a", 30),
+        ("receipt-appended", 5),
+    ]
+    assert appended.state.reference_number("ore-a") == 1
 
 
 def _assert_asset_transactions_and_provenance() -> None:

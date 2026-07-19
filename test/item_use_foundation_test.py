@@ -20,6 +20,7 @@ from game.core.gameplay import (  # noqa: E402
     AbilityEngine,
     AbilityUse,
     AttributeResolver,
+    AttributeGrant,
     ChangeResource,
     EffectDefinition,
     EffectEngine,
@@ -27,6 +28,9 @@ from game.core.gameplay import (  # noqa: E402
     EffectTarget,
     FixedMagnitude,
     GameplayExecutor,
+    CharacterContribution,
+    ContributionSpec,
+    ModifierLayer,
     ResourceCost,
     RuleContext,
     Ruleset,
@@ -84,6 +88,7 @@ INVENTORY_ID = "inventory-character-a"
 def main() -> None:
     with TemporaryDirectory() as directory:
         _assert_persisted_item_use(Path(directory) / "item-use.db")
+        _assert_equipped_maximum_item_use(Path(directory) / "item-use-equipped.db")
     print("item use foundation tests passed")
 
 
@@ -278,6 +283,60 @@ def _grant(asset_id: str, definition_id: str, quantity: int) -> GrantStack:
             TIME,
         ),
     )
+
+
+def _assert_equipped_maximum_item_use(path: Path) -> None:
+    database, snapshots, service = _environment(path)
+    with database.unit_of_work() as uow:
+        character = snapshots.require(
+            uow,
+            CHARACTER_AGGREGATE,
+            "character-a",
+            CharacterState,
+        )
+        updated = replace(
+            character,
+            resources={HEALTH_CURRENT: 100, SPIRIT_CURRENT: 60},
+            revision=character.revision + 1,
+        )
+        snapshots.update(
+            uow,
+            CHARACTER_AGGREGATE,
+            character.id,
+            character,
+            updated,
+            TIME,
+        )
+        uow.commit()
+    contribution = CharacterContribution(
+        "equipment.health.maximum",
+        "source.equipment_instance",
+        "equipment-health",
+        ContributionSpec(
+            attributes=(
+                AttributeGrant(
+                    HEALTH_MAXIMUM,
+                    ModifierLayer.GLOBAL_FLAT,
+                    50,
+                ),
+            ),
+        ),
+    )
+    outcome = service.use(
+        CharacterItemUse(
+            "item-use-equipped-maximum",
+            "character-a",
+            "character-a",
+            "healing-stack",
+            AbilityUse("ability-use-equipped-maximum", "ability.healing_pill"),
+        ),
+        inventory_id=INVENTORY_ID,
+        contributions={"character-a": (contribution,)},
+        context=_context(9),
+    )
+    assert outcome.ok and outcome.value, outcome.failure
+    _, character, _ = _load(database, snapshots)
+    assert character.resources[HEALTH_CURRENT] == 120
 
 
 def _assert_persisted_item_use(path: Path) -> None:

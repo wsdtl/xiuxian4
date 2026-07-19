@@ -12,8 +12,10 @@ from message.schema import Text
 
 PENDING_ACTIONS_INTENT = "reply.pending_actions"
 NOTIFICATIONS_INTENT = "reply.notifications"
+NOTIFICATION_READ_INTENT = "reply.notification_read"
 WORLD_EVENTS_INTENT = "reply.world_events"
 WORLD_EVENT_DETAIL_INTENT = "reply.world_event_detail"
+DIMENSIONAL_DISASTER_INTENT = "reply.dimensional_disaster"
 _INTENT_ID = re.compile(r"^[a-z][a-z0-9_.-]*$")
 IntentResolver = Callable[[Mapping[str, object]], str]
 
@@ -132,7 +134,9 @@ reply_intents = ReplyIntentRegistry()
 
 __all__ = [
     "NOTIFICATIONS_INTENT",
+    "NOTIFICATION_READ_INTENT",
     "PENDING_ACTIONS_INTENT",
+    "DIMENSIONAL_DISASTER_INTENT",
     "ReplyIntentDefinition",
     "ReplyIntentRegistry",
     "WORLD_EVENT_DETAIL_INTENT",

@@ -1,0 +1,15 @@
+"""全服活动可调展示策略。"""
+
+from datetime import timedelta
+
+
+GLOBAL_ACTIVITY_OPENING_WINDOW = timedelta(hours=12)
+GLOBAL_ACTIVITY_CLOSING_WINDOW = timedelta(hours=12)
+GLOBAL_ACTIVITY_SPOTLIGHT_LIMIT = 2
+
+
+__all__ = [
+    "GLOBAL_ACTIVITY_CLOSING_WINDOW",
+    "GLOBAL_ACTIVITY_OPENING_WINDOW",
+    "GLOBAL_ACTIVITY_SPOTLIGHT_LIMIT",
+]

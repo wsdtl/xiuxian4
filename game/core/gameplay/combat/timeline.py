@@ -114,6 +114,7 @@ class BattleAction:
     targets: TargetRequest
     parameters: Mapping[str, float] = field(default_factory=dict)
     context_tags: TagSet = EMPTY_TAGS
+    decision_rule_id: StableId | None = None
 
     def __post_init__(self) -> None:
         if not self.action_id.strip():
@@ -126,6 +127,12 @@ class BattleAction:
             "parameters",
             MappingProxyType({str(key): float(value) for key, value in self.parameters.items()}),
         )
+        if self.decision_rule_id is not None:
+            object.__setattr__(
+                self,
+                "decision_rule_id",
+                stable_id(self.decision_rule_id, field="battle decision rule id"),
+            )
 
 
 @dataclass(frozen=True)
@@ -202,6 +209,7 @@ class BattleState:
 class BattleStepResult:
     state: BattleState
     events: tuple[RuleEvent, ...]
+    resolved_target_ids: tuple[str, ...] = ()
 
 
 class BattleEngine:
@@ -309,6 +317,86 @@ class BattleEngine:
         except RuleViolation as exc:
             context.random.restore(checkpoint)
             return RuleOutcome.failed(exc.failure)
+
+    def apply_external(
+        self,
+        state: BattleState,
+        entity_updates: Mapping[str, RuleEntity],
+        events: tuple[RuleEvent, ...],
+        *,
+        context: RuleContext,
+    ) -> RuleOutcome[BattleStepResult]:
+        """通过核心受控入口应用阶段等外部实体变化。"""
+
+        checkpoint = context.random.checkpoint()
+        try:
+            return RuleOutcome.success(
+                self._apply_external(
+                    state,
+                    entity_updates,
+                    events,
+                    context=context,
+                )
+            )
+        except RuleViolation as exc:
+            context.random.restore(checkpoint)
+            return RuleOutcome.failed(exc.failure)
+
+    def _apply_external(
+        self,
+        state: BattleState,
+        entity_updates: Mapping[str, RuleEntity],
+        events: tuple[RuleEvent, ...],
+        *,
+        context: RuleContext,
+    ) -> BattleStepResult:
+        if state.status is not BattleStatus.ACTIVE:
+            raise RuleViolation("battle.not_active", "已经结束的战斗不能应用外部变化")
+        unknown = set(entity_updates) - set(state.entities)
+        if unknown:
+            raise RuleViolation(
+                "battle.external_entity_unknown",
+                "外部变化包含不在战斗中的实体",
+                {"entity_ids": tuple(sorted(unknown))},
+            )
+        for entity_id, entity in entity_updates.items():
+            if entity.id != entity_id:
+                raise ValueError("外部变化的实体键与 RuleEntity.id 不一致")
+        entities = dict(state.entities)
+        entities.update(entity_updates)
+        entities, processed_events = self._process_external_events(
+            tuple(events),
+            entities,
+            context,
+            state.inactive_ids,
+        )
+        next_state = replace(
+            state,
+            entities=entities,
+            revision=state.revision + 1,
+        )
+        alive_teams = self._alive_teams(
+            next_state.participants,
+            next_state.entities,
+            next_state.inactive_ids,
+        )
+        if len(alive_teams) > 1:
+            return BattleStepResult(next_state, processed_events)
+        status = BattleStatus.FINISHED if alive_teams else BattleStatus.DRAW
+        next_state = replace(
+            next_state,
+            status=status,
+            winning_teams=tuple(sorted(alive_teams)),
+        )
+        finished = self._finished_event(next_state, context, "external_transition")
+        final_entities, final_events = self._process_external_events(
+            (finished,),
+            next_state.entities,
+            context,
+            next_state.inactive_ids,
+        )
+        next_state = replace(next_state, entities=final_entities)
+        return BattleStepResult(next_state, (*processed_events, *final_events))
 
     def _join(
         self,
@@ -588,6 +676,7 @@ class BattleEngine:
         )
         entities = dict(state.entities)
         events: list[RuleEvent] = []
+        target_ids: tuple[str, ...] = ()
 
         def process(batch, current_entities):
             if trigger_session is None:
@@ -737,7 +826,7 @@ class BattleEngine:
                         turn_order=remaining_order,
                         turn_index=0,
                     )
-        return BattleStepResult(next_state, tuple(events))
+        return BattleStepResult(next_state, tuple(events), target_ids)
 
     def _apply_timeline_directives(
         self,

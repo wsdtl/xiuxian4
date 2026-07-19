@@ -1,6 +1,6 @@
 """与具体世界皮肤和玩法组件无关的战斗伤害底座。"""
 
-COMBAT_FOUNDATION_VERSION = "combat.foundation.v4"
+COMBAT_FOUNDATION_VERSION = "combat.foundation.v5"
 
 from .engine import DamageEngine
 from .control import (
@@ -31,6 +31,7 @@ from .models import (
     InterceptorSide,
 )
 from .targeting import (
+    AutomaticTargetRequest,
     TargetConstraintDefinition,
     TargetConstraintKind,
     TargetConstraintRegistry,
@@ -70,12 +71,22 @@ from .timeline_operations import (
     RequestTurnDelay,
     register_timeline_operations,
 )
+from .trace import (
+    BATTLE_TRACE_VERSION,
+    BattleFrame,
+    BattleSession,
+    BattleTrace,
+    BattleTransition,
+    BattleTransitionKind,
+)
 
 __all__ = [
     "COMBAT_FOUNDATION_VERSION",
     "BATTLE_AI_FOUNDATION_VERSION",
+    "BATTLE_TRACE_VERSION",
     "CombatStats",
     "ApplyControl",
+    "AutomaticTargetRequest",
     "BattleAction",
     "BattleAbilityTargeting",
     "BattleEngine",
@@ -84,6 +95,11 @@ __all__ = [
     "BattleState",
     "BattleStatus",
     "BattleStepResult",
+    "BattleFrame",
+    "BattleSession",
+    "BattleTrace",
+    "BattleTransition",
+    "BattleTransitionKind",
     "BattleAiCondition",
     "BattleAiConditionKind",
     "BattleAiEngine",

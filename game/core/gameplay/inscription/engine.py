@@ -130,6 +130,8 @@ class InscriptionEngine:
                 instances,
                 paid.value.state.reservations,
                 paid.value.state.revision,
+                paid.value.state.asset_references,
+                paid.value.state.next_reference_number,
             )
             receipt = InscriptionReceipt(
                 command.id,

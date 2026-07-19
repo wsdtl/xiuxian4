@@ -3,6 +3,7 @@
 from game.core.gameplay import SkinEntry
 
 from ...catalog import (
+    INSCRIPTION_FEATHER_ITEM_ID,
     LARGE_HEALTH_MEDICINE_ABILITY_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
     LARGE_SPIRIT_MEDICINE_ABILITY_ID,
@@ -19,6 +20,11 @@ from ...catalog import (
 
 
 MAGIC_ITEM_ENTRIES = {
+    INSCRIPTION_FEATHER_ITEM_ID: SkinEntry(
+        name="铭刻之羽",
+        description="承载一段不可复刻的旧愿，可为武器、装备或武器能力留下私名。",
+        icon="📜",
+    ),
     SMALL_HEALTH_MEDICINE_ABILITY_ID: SkinEntry(name="饮用小型生命药剂"),
     MEDIUM_HEALTH_MEDICINE_ABILITY_ID: SkinEntry(name="饮用中型生命药剂"),
     LARGE_HEALTH_MEDICINE_ABILITY_ID: SkinEntry(name="饮用大型生命药剂"),

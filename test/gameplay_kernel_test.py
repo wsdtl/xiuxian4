@@ -119,7 +119,7 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     cultivation_v1 = SkinPack(
         id="skin.cultivation",
         version=1,
-        name="基础修仙界",
+        name="太玄界",
         entries={
             "item.main_hand.fast_001": SkinEntry(
                 "青锋剑",
@@ -133,7 +133,7 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     cultivation_v2 = SkinPack(
         id="skin.cultivation",
         version=2,
-        name="基础修仙界",
+        name="太玄界",
         entries={
             "item.main_hand.fast_001": SkinEntry("流云剑", "剑势轻灵", aliases=("流云",)),
             "item.consumable.recover_001": SkinEntry("生骨丹", "恢复血气"),
@@ -180,7 +180,7 @@ def _assert_world_skins(content_ids: set[str]) -> None:
     )
     assert catalog.versions("skin.cultivation") == (1, 2)
     assert len(catalog) == 5
-    assert catalog.require("skin.cultivation").name == "基础修仙界"
+    assert catalog.require("skin.cultivation").name == "太玄界"
     cultivation_view = catalog.projector("skin.cultivation", version=1)
     latest_cultivation_view = catalog.projector("skin.cultivation")
     magic_view = catalog.projector("skin.magic")
@@ -196,7 +196,7 @@ def _assert_world_skins(content_ids: set[str]) -> None:
             SkinPack(
                 id="skin.duplicate_name",
                 version=1,
-                name="基础修仙界",
+                name="太玄界",
                 entries=cultivation_v1.entries,
             )
         )

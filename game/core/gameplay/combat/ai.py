@@ -10,11 +10,11 @@ from ..attributes import AttributeResolver, FixedMagnitude, ResourceDefinition
 from ..context import RuleContext
 from ..ids import StableId, stable_id
 from ..registry import DefinitionRegistry
-from .targeting import TargetRequest
+from .targeting import TargetSelectorRegistry, TargetingContext
 from .timeline import BattleAction, BattleState
 
 
-BATTLE_AI_FOUNDATION_VERSION = "combat-ai.foundation.v1"
+BATTLE_AI_FOUNDATION_VERSION = "combat-ai.foundation.v2"
 
 
 class BattleAiConditionKind(str, Enum):
@@ -66,10 +66,12 @@ class BattleAiEngine:
         abilities: DefinitionRegistry[AbilityDefinition],
         attributes: AttributeResolver,
         health: ResourceDefinition,
+        selectors: TargetSelectorRegistry,
     ) -> None:
         self.abilities = abilities
         self.attributes = attributes
         self.health = health
+        self.selectors = selectors
 
     def decide(
         self,
@@ -96,14 +98,26 @@ class BattleAiEngine:
         selected = context.random.choice(
             tuple(sorted((rule for rule in candidates if rule.priority == highest), key=lambda value: value.id))
         )
+        targeting_context = TargetingContext(
+            actor_id=actor_id,
+            entities=state.entities,
+            teams={key: value.team_id for key, value in state.participants.items()},
+            slots={key: value.slot for key, value in state.participants.items()},
+            attributes=self.attributes,
+            health=self.health,
+            random=context.random,
+            inactive_ids=state.inactive_ids,
+        )
         return BattleAction(
             action_id=f"ai:{state.battle_id}:{state.turn_number + 1}:{actor_id}:{selected.id}",
             actor_id=actor_id,
             ability_id=selected.ability_id,
-            targets=TargetRequest(
+            targets=self.selectors.automatic_request(
                 selected.selector_id,
+                targeting_context,
                 maximum_targets=selected.maximum_targets,
             ),
+            decision_rule_id=selected.id,
         )
 
     def _condition_allows(

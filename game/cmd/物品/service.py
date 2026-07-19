@@ -1,0 +1,737 @@
+"""物品查询、实例详情与手动使用的协议中立实现。"""
+
+from __future__ import annotations
+
+import asyncio
+from collections import Counter
+from datetime import datetime
+from math import ceil
+from zoneinfo import ZoneInfo
+
+from game.app import (
+    CharacterOverview,
+    CharacterOverviewResult,
+    CurrentCharacterResult,
+    current_game_services,
+)
+from game.content.catalog.combat import (
+    LARGE_MEDICINE_RECOVERY_RATIO,
+    MEDIUM_MEDICINE_RECOVERY_RATIO,
+    SMALL_MEDICINE_RECOVERY_RATIO,
+)
+from game.content.catalog.item import (
+    ITEM_SALE_COMPONENT_ID,
+    LARGE_HEALTH_MEDICINE_ITEM_ID,
+    LARGE_SPIRIT_MEDICINE_ITEM_ID,
+    MEDIUM_HEALTH_MEDICINE_ITEM_ID,
+    MEDIUM_SPIRIT_MEDICINE_ITEM_ID,
+    SMALL_HEALTH_MEDICINE_ITEM_ID,
+    SMALL_SPIRIT_MEDICINE_ITEM_ID,
+    ItemSaleValue,
+)
+from game.core.gameplay import (
+    HEALTH_CURRENT,
+    HEALTH_MAXIMUM,
+    ITEM_ABILITY_COMPONENT_ID,
+    ITEM_STORAGE_COMPONENT_ID,
+    LOADOUT_ITEM_COMPONENT_ID,
+    SPIRIT_CURRENT,
+    SPIRIT_MAXIMUM,
+    STANDARD_LOADOUT_SLOT_ORDER,
+    AbilityUse,
+    AssetAvailability,
+    CharacterItemUse,
+    EquipmentState,
+    InscriptionMediumData,
+    InscriptionProjector,
+    InventoryState,
+    ItemAbilityComponent,
+    ItemInstance,
+    ItemStack,
+    ItemStorageComponent,
+    LoadoutItemComponent,
+    WeaponContributionProvider,
+    WeaponState,
+    equipment_state_from_instance,
+    weapon_state_from_instance,
+)
+from game.core.gameplay.inscription import INSCRIPTION_MEDIUM_DATA_KEY
+from game.rules import game_operation_context
+from game.rules.character import equipped_character_contributions
+from game.rules.item import asset_reference, resolve_asset_reference
+from launch import C, config, logger
+from launch.adapter import current_message_context
+from message import Action, DocumentMessage, M
+from message.schema import FieldSeparator
+
+from ..reply import send_game_reply
+
+
+PAGE_SIZE = 100
+_MEDICINE_RESOURCE = {
+    SMALL_HEALTH_MEDICINE_ITEM_ID: (HEALTH_CURRENT, HEALTH_MAXIMUM, SMALL_MEDICINE_RECOVERY_RATIO),
+    MEDIUM_HEALTH_MEDICINE_ITEM_ID: (HEALTH_CURRENT, HEALTH_MAXIMUM, MEDIUM_MEDICINE_RECOVERY_RATIO),
+    LARGE_HEALTH_MEDICINE_ITEM_ID: (HEALTH_CURRENT, HEALTH_MAXIMUM, LARGE_MEDICINE_RECOVERY_RATIO),
+    SMALL_SPIRIT_MEDICINE_ITEM_ID: (SPIRIT_CURRENT, SPIRIT_MAXIMUM, SMALL_MEDICINE_RECOVERY_RATIO),
+    MEDIUM_SPIRIT_MEDICINE_ITEM_ID: (SPIRIT_CURRENT, SPIRIT_MAXIMUM, MEDIUM_MEDICINE_RECOVERY_RATIO),
+    LARGE_SPIRIT_MEDICINE_ITEM_ID: (SPIRIT_CURRENT, SPIRIT_MAXIMUM, LARGE_MEDICINE_RECOVERY_RATIO),
+}
+
+
+async def nacre(message: str, result: CharacterOverviewResult) -> None:
+    overview = _overview(result)
+    if overview is None:
+        await send_game_reply(_unavailable("纳戒"))
+        return
+    try:
+        page = _page_number(message)
+    except ValueError as exc:
+        await send_game_reply(_invalid("纳戒", str(exc)))
+        return
+    assets = _container_assets(overview.inventory, "container.special")
+    try:
+        reply = _asset_page("纳戒", "inventory", assets, page, overview)
+    except ValueError as exc:
+        reply = _invalid("纳戒", str(exc))
+    await send_game_reply(reply)
+
+
+async def armory(message: str, result: CharacterOverviewResult) -> None:
+    overview = _overview(result)
+    if overview is None:
+        await send_game_reply(_unavailable("武库"))
+        return
+    requested = str(message or "").strip()
+    if not requested:
+        await send_game_reply(_armory_home(overview))
+        return
+    parts = requested.split()
+    view = _view(overview)
+    slot_id = (
+        parts[0]
+        if parts[0] in STANDARD_LOADOUT_SLOT_ORDER
+        else view.projector.resolve_alias(parts[0])
+    )
+    if slot_id not in STANDARD_LOADOUT_SLOT_ORDER:
+        await send_game_reply(_invalid("武库", "请通过武库中的部位按钮查看"))
+        return
+    try:
+        page = _page_number(parts[1] if len(parts) > 1 else "")
+    except ValueError as exc:
+        await send_game_reply(_invalid("武库", str(exc)))
+        return
+    assets = _armory_assets(overview, slot_id)
+    title = f"武库·{view.projector.name(slot_id)}"
+    try:
+        reply = _asset_page(
+            title,
+            "equipment",
+            assets,
+            page,
+            overview,
+            page_command=f"武库 {slot_id}",
+        )
+    except ValueError as exc:
+        reply = _invalid("武库", str(exc))
+    await send_game_reply(reply)
+
+
+async def backpack(message: str, result: CharacterOverviewResult) -> None:
+    overview = _overview(result)
+    if overview is None:
+        await send_game_reply(_unavailable("背包"))
+        return
+    try:
+        page = _page_number(message)
+    except ValueError as exc:
+        await send_game_reply(_invalid("背包", str(exc)))
+        return
+    assets = _container_assets(overview.inventory, "container.backpack")
+    try:
+        reply = _backpack_page(assets, page, overview)
+    except ValueError as exc:
+        reply = _invalid("背包", str(exc))
+    await send_game_reply(reply)
+
+
+async def inspect(message: str, result: CharacterOverviewResult) -> None:
+    overview = _overview(result)
+    if overview is None:
+        await send_game_reply(_unavailable("查看"))
+        return
+    token = str(message or "").strip()
+    if not token:
+        await send_game_reply(_invalid("查看", "发送: 查看 物品编号"))
+        return
+    try:
+        asset = resolve_asset_reference(
+            overview.inventory,
+            token,
+            current_game_services().content.catalog.items,
+        )
+        message_value = _asset_detail(asset, overview)
+    except (KeyError, TypeError, ValueError) as exc:
+        await send_game_reply(_invalid("查看", str(exc)))
+        return
+    await send_game_reply(message_value)
+
+
+async def use_item(message: str, current: CurrentCharacterResult) -> None:
+    character = current.character if current.status == "ok" else None
+    if character is None:
+        await send_game_reply(_unavailable("使用"))
+        return
+    parts = str(message or "").strip().split()
+    if not parts or len(parts) > 2:
+        await send_game_reply(_invalid("使用", "发送: 使用 物品编号 [数量]"))
+        return
+    try:
+        requested_quantity = int(parts[1]) if len(parts) == 2 else 1
+        if requested_quantity < 1:
+            raise ValueError("使用数量必须大于 0")
+    except ValueError as exc:
+        await send_game_reply(_invalid("使用", str(exc)))
+        return
+
+    services = current_game_services()
+    initial = await _load_overview(character)
+    if initial is None:
+        await send_game_reply(_unavailable("使用"))
+        return
+    try:
+        asset = resolve_asset_reference(initial.inventory, parts[0], services.content.catalog.items)
+        definition = services.content.catalog.items.require(asset.definition_id)
+        component = definition.component(ITEM_ABILITY_COMPONENT_ID, ItemAbilityComponent)
+        if definition.tags.has("item.inscription_medium"):
+            raise ValueError("铭刻之羽只能通过铭刻命令使用")
+        available = initial.inventory.available_quantity(asset.id)
+        if available < 1:
+            raise ValueError("物品当前不可使用")
+    except (KeyError, TypeError, ValueError) as exc:
+        await send_game_reply(_invalid("使用", str(exc)))
+        return
+
+    limit = min(requested_quantity, available)
+    initial_resources = dict(initial.character.resources)
+    consumed = 0
+    executed = 0
+    stopped_full = False
+    failure_message = ""
+    for index in range(limit):
+        overview = await _load_overview(character)
+        if overview is None:
+            failure_message = "物品状态读取失败"
+            break
+        try:
+            current_asset = resolve_asset_reference(
+                overview.inventory,
+                parts[0],
+                services.content.catalog.items,
+            )
+        except ValueError:
+            break
+        medicine = _MEDICINE_RESOURCE.get(current_asset.definition_id)
+        if medicine is not None:
+            resource_id, maximum_id, _ = medicine
+            maximum = _resource_maximum(overview, maximum_id)
+            if overview.character.resources[resource_id] >= maximum:
+                stopped_full = True
+                break
+        transaction_id = f"item-use:{_evidence_id()}:{index}"
+        command = CharacterItemUse(
+            transaction_id,
+            character.id,
+            character.id,
+            current_asset.id,
+            AbilityUse(f"{transaction_id}:ability", component.ability_id),
+        )
+        contributions = equipped_character_contributions(
+            services.content.catalog,
+            overview.inventory,
+            overview.loadout,
+        )
+        try:
+            outcome = await asyncio.to_thread(
+                services.item_use.use,
+                command,
+                inventory_id=character.id,
+                contributions={character.id: contributions},
+                context=game_operation_context(transaction_id, logical_time=_now()),
+            )
+        except Exception as exc:
+            logger.opt(colors=True, exception=exc).error(
+                C.join(C.fail("物品使用失败"), C.kv("character", character.id))
+            )
+            failure_message = "物品使用没有完成"
+            break
+        if outcome.failure:
+            failure_message = outcome.failure.message
+            break
+        assert outcome.value is not None
+        executed += 1
+        consumed += outcome.value.consumed_quantity
+
+    final = await _load_overview(character)
+    if executed < 1 or final is None:
+        message_text = "资源已经恢复至上限" if stopped_full else failure_message or "没有使用任何物品"
+        await send_game_reply(_invalid("使用", message_text))
+        return
+    await send_game_reply(
+        _use_result(
+            definition.id,
+            executed,
+            consumed,
+            initial_resources,
+            final,
+            requested_quantity > limit,
+            stopped_full,
+            failure_message,
+        )
+    )
+
+
+def _armory_home(overview: CharacterOverview) -> DocumentMessage:
+    counts = Counter()
+    catalog = current_game_services().content.catalog.items
+    for instance in overview.inventory.instances.values():
+        definition = catalog.require(instance.definition_id)
+        component = definition.components.get(LOADOUT_ITEM_COMPONENT_ID)
+        if not isinstance(component, LoadoutItemComponent) or len(component.allowed_slot_ids) != 1:
+            continue
+        counts[next(iter(component.allowed_slot_ids))] += 1
+    builder = M.document().section("武库", icon="equipment")
+    actions = []
+    projector = _view(overview).projector
+    for slot_id in STANDARD_LOADOUT_SLOT_ORDER:
+        name = projector.name(slot_id)
+        builder.field(name, counts[slot_id])
+        actions.append(Action(f"armory.{slot_id}", name, f"武库 {slot_id}"))
+    return builder.field("合计", sum(counts.values())).actions(actions).build()
+
+
+def _asset_page(
+    title: str,
+    icon: str,
+    assets,
+    page: int,
+    overview: CharacterOverview,
+    *,
+    page_command: str | None = None,
+) -> DocumentMessage:
+    values, pages = _slice_page(assets, page)
+    builder = M.document().section(title, icon=icon)
+    if not values:
+        builder.line("当前没有物品")
+    for asset in values:
+        reference = _reference(overview.inventory, asset)
+        builder.line(
+            M.command(reference, f"查看 {reference}"),
+            " ",
+            _asset_name(asset, overview),
+            FieldSeparator(),
+            _compact_meta(asset, overview),
+        )
+    if pages > 1:
+        builder.field("页码", f"{page}/{pages}")
+        builder.actions(_page_actions(page_command or title, page, pages))
+    return builder.build()
+
+
+def _backpack_page(assets, page: int, overview: CharacterOverview) -> DocumentMessage:
+    values, pages = _slice_page(assets, page)
+    inventory = overview.inventory
+    container = _container(inventory, "container.backpack")
+    used = _used_space(inventory, container.id)
+    builder = (
+        M.document()
+        .section("背包", icon="inventory")
+        .field("空间", f"{used}/{container.maximum_space}" if container.maximum_space else used)
+    )
+    if not values:
+        builder.line("当前没有物品")
+    total_value = 0
+    for asset in values:
+        reference = _reference(inventory, asset)
+        definition = current_game_services().content.catalog.items.require(asset.definition_id)
+        quantity = asset.quantity if isinstance(asset, ItemStack) else 1
+        value = ""
+        sale = definition.components.get(ITEM_SALE_COMPONENT_ID)
+        if isinstance(sale, ItemSaleValue):
+            subtotal = sale.unit_price * quantity
+            total_value += subtotal
+            value = f"估价 {subtotal}"
+        builder.line(
+            M.command(reference, f"查看 {reference}"),
+            " ",
+            _asset_name(asset, overview),
+            f" x{quantity}",
+            FieldSeparator() if value else None,
+            value or None,
+        )
+    if total_value:
+        builder.field("本页估价", total_value)
+    if pages > 1:
+        builder.field("页码", f"{page}/{pages}").actions(
+            _page_actions("背包", page, pages)
+        )
+    return builder.build()
+
+
+def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
+    services = current_game_services()
+    view = _view(overview)
+    inventory = overview.inventory
+    definition = services.content.catalog.items.require(asset.definition_id)
+    reference = _reference(inventory, asset)
+    name = _asset_name(asset, overview)
+    builder = M.document().section(name, icon="item").field("编号", reference)
+    actions = []
+    if isinstance(asset, ItemStack):
+        builder.field("数量", asset.quantity)
+        available = inventory.available_quantity(asset.id)
+        if available != asset.quantity:
+            builder.field("可用", available)
+        entry = view.projector.entry(definition.id)
+        if entry.description:
+            builder.line(entry.description)
+        sale = definition.components.get(ITEM_SALE_COMPONENT_ID)
+        if isinstance(sale, ItemSaleValue):
+            builder.row(("单价", sale.unit_price), ("总价", sale.unit_price * asset.quantity))
+        medicine = _MEDICINE_RESOURCE.get(definition.id)
+        if medicine is not None:
+            resource_id, maximum_id, ratio = medicine
+            maximum = _resource_maximum(overview, maximum_id)
+            builder.row(
+                ("恢复", view.projector.name(resource_id)),
+                ("单次", _number(maximum * ratio)),
+            )
+        if ITEM_ABILITY_COMPONENT_ID in definition.components:
+            actions.append(Action("item.use", "使用", f"使用 {reference}", behavior="fill"))
+    elif definition.tags.has("item.weapon"):
+        state = weapon_state_from_instance(asset)
+        display = view.gear_projector.weapon(
+            state,
+            asset,
+            inscription_preference=overview.inscription_preference,
+        )
+        builder.row(("品阶", display.quality_name), ("等级", f"Lv{state.level}"))
+        profile = services.content.catalog.weapons.require(state.definition_id).quality_profiles[state.quality_id]
+        required = profile.required_for_next_level(state.level)
+        builder.field("经验", "已满级" if required is None else f"{state.experience}/{required}")
+        if display.score_text:
+            builder.line(display.score_text)
+        _append_roll(builder, state, overview)
+        abilities = WeaponContributionProvider(services.content.catalog.weapons).contribution(state).contribution.abilities
+        if abilities:
+            builder.section("能力", icon="skill")
+            projector = InscriptionProjector(overview.inscription_preference)
+            for ability_id in sorted(abilities):
+                base = view.projector.name(ability_id)
+                builder.line(projector.weapon_ability_name(base, asset, ability_id))
+        _append_gear_status(builder, asset, overview)
+        actions.extend(_gear_actions(asset, overview))
+    elif definition.tags.has("item.equipment"):
+        state = equipment_state_from_instance(asset)
+        display = view.gear_projector.equipment(
+            state,
+            asset,
+            inscription_preference=overview.inscription_preference,
+        )
+        equipment = services.content.catalog.equipment.require(state.definition_id)
+        builder.row(
+            ("品阶", display.quality_name),
+            ("部位", view.projector.name(equipment.slot_id)),
+        )
+        if state.set_id is not None:
+            builder.field("套装", view.projector.name(state.set_id))
+        if display.score_text:
+            builder.line(display.score_text)
+        _append_roll(builder, state, overview)
+        _append_gear_status(builder, asset, overview)
+        actions.extend(_gear_actions(asset, overview))
+    else:
+        data = asset.data.get(INSCRIPTION_MEDIUM_DATA_KEY)
+        if isinstance(data, InscriptionMediumData):
+            builder.field("铭刻", data.title).line(data.flavor_text)
+            actions.append(Action("item.inscription", "铭刻", "铭刻"))
+        else:
+            entry = view.projector.entry(definition.id)
+            if entry.description:
+                builder.line(entry.description)
+    availability = inventory.availability(asset.id)
+    if availability is not AssetAvailability.AVAILABLE:
+        builder.field("状态", _availability_name(availability))
+    return builder.actions(actions).build()
+
+
+def _append_roll(
+    builder,
+    state: WeaponState | EquipmentState,
+    overview: CharacterOverview,
+) -> None:
+    if state.roll is None:
+        return
+    projector = _view(overview).projector
+    builder.section("词条", icon="item")
+    for rolled in state.roll.properties:
+        values = ", ".join(_number(value) for value in rolled.values.values())
+        suffix = f" {values}" if values else ""
+        builder.line(f"{projector.name(rolled.property_id)} T{rolled.tier}{suffix}")
+
+
+def _append_gear_status(builder, asset: ItemInstance, overview: CharacterOverview) -> None:
+    builder.field("归属", _compact_status(asset, overview))
+
+
+def _gear_actions(asset: ItemInstance, overview: CharacterOverview) -> list[Action]:
+    reference = _reference(overview.inventory, asset)
+    slot_id = next(
+        (slot for slot, asset_id in overview.loadout.slots.items() if asset_id == asset.id),
+        None,
+    )
+    if slot_id is not None:
+        equip_action = Action("item.unequip", "卸下", f"卸下 {slot_id}", behavior="fill")
+    else:
+        equip_action = Action("item.equip", "装备", f"装备 {reference}", behavior="fill")
+    return [equip_action, Action("item.inscribe", "铭刻", "铭刻")]
+
+
+def _use_result(
+    definition_id: str,
+    executed: int,
+    consumed: int,
+    before,
+    final: CharacterOverview,
+    exhausted: bool,
+    stopped_full: bool,
+    failure: str,
+) -> DocumentMessage:
+    services = current_game_services()
+    view = _view(final)
+    builder = (
+        M.document()
+        .section("使用完成", icon="item")
+        .field("物品", view.projector.name(definition_id))
+        .field("次数", executed)
+    )
+    if consumed:
+        builder.field("消耗", consumed)
+    for resource_id in (HEALTH_CURRENT, SPIRIT_CURRENT):
+        previous = before[resource_id]
+        current = final.character.resources[resource_id]
+        if current != previous:
+            maximum_id = HEALTH_MAXIMUM if resource_id == HEALTH_CURRENT else SPIRIT_MAXIMUM
+            builder.field(
+                view.projector.name(resource_id),
+                f"{_number(previous)} -> {_number(current)}/{_number(_resource_maximum(final, maximum_id))}",
+            )
+    if stopped_full:
+        builder.note("资源达到上限后已停止继续消耗。")
+    elif exhausted:
+        builder.note("持有数量不足，已使用全部可用物品。")
+    elif failure:
+        builder.note(f"后续使用已停止: {failure}")
+    return builder.build()
+
+
+def _armory_assets(overview: CharacterOverview, slot_id: str):
+    catalog = current_game_services().content.catalog.items
+    values = []
+    for instance in overview.inventory.instances.values():
+        definition = catalog.require(instance.definition_id)
+        component = definition.components.get(LOADOUT_ITEM_COMPONENT_ID)
+        if isinstance(component, LoadoutItemComponent) and component.allowed_slot_ids == frozenset({slot_id}):
+            values.append(instance)
+    return _sorted_assets(overview.inventory, values)
+
+
+def _container_assets(inventory: InventoryState, kind: str):
+    container = _container(inventory, kind)
+    values = [
+        asset
+        for asset in (*inventory.stacks.values(), *inventory.instances.values())
+        if asset.container_id == container.id
+    ]
+    return _sorted_assets(inventory, values)
+
+
+def _sorted_assets(inventory: InventoryState, values):
+    return sorted(values, key=lambda value: inventory.reference_number(value.id), reverse=True)
+
+
+def _slice_page(values, page: int):
+    pages = max(1, ceil(len(values) / PAGE_SIZE))
+    if page > pages:
+        raise ValueError(f"页码不能超过 {pages}")
+    start = (page - 1) * PAGE_SIZE
+    return values[start : start + PAGE_SIZE], pages
+
+
+def _page_actions(command: str, page: int, pages: int):
+    actions = []
+    if page > 1:
+        actions.append(Action(f"page.{page - 1}", "上一页", f"{command} {page - 1}"))
+    if page < pages:
+        actions.append(Action(f"page.{page + 1}", "下一页", f"{command} {page + 1}"))
+    if command.startswith("武库 "):
+        actions.append(Action("page.armory", "返回武库", "武库"))
+    return actions
+
+
+def _page_number(value: object) -> int:
+    text = str(value or "").strip()
+    if not text:
+        return 1
+    try:
+        page = int(text)
+    except ValueError as exc:
+        raise ValueError("页码必须是数字") from exc
+    if page < 1:
+        raise ValueError("页码必须大于 0")
+    return page
+
+
+def _asset_name(asset, overview: CharacterOverview) -> str:
+    services = current_game_services()
+    view = _view(overview)
+    definition = services.content.catalog.items.require(asset.definition_id)
+    if isinstance(asset, ItemInstance) and definition.tags.has("item.weapon"):
+        return view.gear_projector.weapon(
+            weapon_state_from_instance(asset),
+            asset,
+            inscription_preference=overview.inscription_preference,
+        ).name
+    if isinstance(asset, ItemInstance) and definition.tags.has("item.equipment"):
+        return view.gear_projector.equipment(
+            equipment_state_from_instance(asset),
+            asset,
+            inscription_preference=overview.inscription_preference,
+        ).name
+    data = getattr(asset, "data", {}).get(INSCRIPTION_MEDIUM_DATA_KEY)
+    if isinstance(data, InscriptionMediumData):
+        return data.title
+    return view.projector.name(definition.id)
+
+
+def _view(overview: CharacterOverview):
+    return current_game_services().world_view(overview.dimension)
+
+
+def _compact_status(asset, overview: CharacterOverview) -> str:
+    quantity = f"x{asset.quantity}" if isinstance(asset, ItemStack) else ""
+    if isinstance(asset, ItemInstance):
+        active = next(
+            (slot for slot, asset_id in overview.loadout.slots.items() if asset_id == asset.id),
+            None,
+        )
+        if active is not None:
+            return "当前"
+        for index, preset in enumerate(overview.loadout.presets.values()):
+            if asset.id in preset.slots.values():
+                return f"配装{index}"
+    availability = overview.inventory.availability(asset.id)
+    return _availability_name(availability) if availability is not AssetAvailability.AVAILABLE else quantity or "空闲"
+
+
+def _compact_meta(asset, overview: CharacterOverview) -> str:
+    definition = current_game_services().content.catalog.items.require(asset.definition_id)
+    status = _compact_status(asset, overview)
+    if isinstance(asset, ItemInstance) and definition.tags.has("item.weapon"):
+        return f"Lv{weapon_state_from_instance(asset).level} | {status}"
+    return status
+
+
+def _availability_name(value: AssetAvailability) -> str:
+    return {
+        AssetAvailability.AVAILABLE: "可用",
+        AssetAvailability.RESERVED: "预约中",
+        AssetAvailability.LOCKED: "锁定中",
+        AssetAvailability.ESCROWED: "托管中",
+    }[value]
+
+
+def _reference(inventory: InventoryState, asset) -> str:
+    return asset_reference(
+        inventory,
+        asset,
+        current_game_services().content.catalog.items,
+    )
+
+
+def _resource_maximum(overview: CharacterOverview, maximum_id: str) -> float:
+    services = current_game_services()
+    contributions = equipped_character_contributions(
+        services.content.catalog,
+        overview.inventory,
+        overview.loadout,
+    )
+    entity = services.character_projector.project(
+        overview.character,
+        contributions=contributions,
+    ).entity
+    return float(entity.snapshot(services.character_projector.attributes).value(maximum_id))
+
+
+def _used_space(inventory: InventoryState, container_id: str) -> int:
+    catalog = current_game_services().content.catalog.items
+    used = 0
+    for asset in (*inventory.stacks.values(), *inventory.instances.values()):
+        if asset.container_id != container_id:
+            continue
+        definition = catalog.require(asset.definition_id)
+        storage = definition.component(ITEM_STORAGE_COMPONENT_ID, ItemStorageComponent)
+        used += storage.unit_space * (asset.quantity if isinstance(asset, ItemStack) else 1)
+    return used
+
+
+def _container(inventory: InventoryState, kind: str):
+    try:
+        return next(value for value in inventory.containers.values() if value.kind == kind)
+    except StopIteration as exc:
+        raise ValueError(f"库存缺少容器: {kind}") from exc
+
+
+async def _load_overview(character) -> CharacterOverview | None:
+    try:
+        result = await asyncio.to_thread(
+            current_game_services().load_character_overview,
+            character,
+        )
+        return result.overview if result.status == "ok" else None
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("物品状态读取失败"), C.kv("character", character.id))
+        )
+        return None
+
+
+def _overview(result: CharacterOverviewResult) -> CharacterOverview | None:
+    return result.overview if result.status == "ok" else None
+
+
+def _evidence_id() -> str:
+    context = current_message_context()
+    if context is None:
+        raise RuntimeError("物品命令缺少消息上下文")
+    return context.identity.evidence_id
+
+
+def _number(value: float) -> str:
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def _now() -> datetime:
+    return datetime.now(ZoneInfo(config.project.timezone))
+
+
+def _invalid(title: str, message: str) -> DocumentMessage:
+    return M.document().section(title, icon="notice").line(message).build()
+
+
+def _unavailable(title: str) -> DocumentMessage:
+    return M.document().section(title, icon="notice").line(
+        "当前没有读取到角色或物品状态，请稍后重试"
+    ).build()
+
+
+__all__ = ["PAGE_SIZE", "armory", "backpack", "inspect", "nacre", "use_item"]

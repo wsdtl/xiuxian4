@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import unquote
 
-from .config import config
+from .config import DEFAULT_PUBLIC_HOST, config
 
 
 PROJECT_DIR: Path = config.base_dir
@@ -39,6 +39,21 @@ def static_url(*parts: object) -> str:
 
     suffix = "/".join(_url_parts(parts))
     return f"{STATIC_URL_PREFIX}/{suffix}" if suffix else STATIC_URL_PREFIX
+
+
+def public_url(*parts: object) -> str:
+    """为项目公开路径补齐统一域名。
+
+    线上域名未写协议时默认使用 HTTPS；本地未配置域名时使用当前监听端口。
+    """
+
+    domain = str(config.project.domain or "").strip().rstrip("/")
+    if not domain:
+        domain = f"http://{DEFAULT_PUBLIC_HOST}:{config.server.port}"
+    elif "://" not in domain:
+        domain = f"https://{domain}"
+    suffix = "/".join(_url_parts(parts))
+    return f"{domain}/{suffix}" if suffix else domain
 
 
 def static_file_from_url(public_path: str) -> Path:

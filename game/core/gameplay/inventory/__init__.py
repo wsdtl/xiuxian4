@@ -1,6 +1,6 @@
 """协议、数据库与具体玩法无关的物品资产底座。"""
 
-INVENTORY_FOUNDATION_VERSION = "inventory.foundation.v2"
+INVENTORY_FOUNDATION_VERSION = "inventory.foundation.v3"
 
 from .components import (
     ITEM_STORAGE_COMPONENT_ID,
@@ -38,6 +38,7 @@ from .item_use import (
     item_use_fingerprint,
 )
 from .transactions import (
+    AppendStack,
     ConsumeInstance,
     ConsumeStack,
     DestroyAsset,
@@ -56,6 +57,7 @@ from .transactions import (
 )
 
 __all__ = [
+    "AppendStack",
     "AssetAvailability",
     "AssetReservation",
     "CharacterItemUse",

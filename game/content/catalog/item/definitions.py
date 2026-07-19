@@ -18,6 +18,12 @@ from ..combat.definitions import (
     SMALL_HEALTH_MEDICINE_ABILITY_ID,
     SMALL_SPIRIT_MEDICINE_ABILITY_ID,
 )
+from .special import (
+    CONSUMABLE_ITEM_TAG,
+    INSCRIPTION_FEATHER_ITEM_ID,
+    MEDICINE_ITEM_TAG,
+    SPECIAL_STORAGE_TAG,
+)
 
 
 SMALL_HEALTH_MEDICINE_ITEM_ID = "item.consumable.small_health_medicine"
@@ -33,9 +39,9 @@ MEDICINE_ITEMS = tuple(
         item_id,
         ItemAssetKind.STACK,
         TagSet.of(
-            "item.consumable",
-            "item.medicine",
-            "storage.special",
+            CONSUMABLE_ITEM_TAG,
+            MEDICINE_ITEM_TAG,
+            SPECIAL_STORAGE_TAG,
             resource_tag,
             tier_tag,
         ),
@@ -93,6 +99,7 @@ ITEM_DISPLAY_CONTENT_IDS = frozenset(
         SMALL_SPIRIT_MEDICINE_ITEM_ID,
         MEDIUM_SPIRIT_MEDICINE_ITEM_ID,
         LARGE_SPIRIT_MEDICINE_ITEM_ID,
+        INSCRIPTION_FEATHER_ITEM_ID,
         STARTER_WEAPON_ITEM_ID,
     }
 )
@@ -100,6 +107,7 @@ ITEM_DISPLAY_CONTENT_IDS = frozenset(
 
 __all__ = [
     "ITEM_DISPLAY_CONTENT_IDS",
+    "INSCRIPTION_FEATHER_ITEM_ID",
     "LARGE_HEALTH_MEDICINE_ITEM_ID",
     "LARGE_SPIRIT_MEDICINE_ITEM_ID",
     "MEDICINE_ITEMS",

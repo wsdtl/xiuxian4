@@ -8,6 +8,7 @@ from .definitions import (
 )
 from .properties import (
     EQUIPMENT_GENERATION_PROFILE_ID,
+    EQUIPMENT_SET_MARK_CHANCE,
     equipment_property_id,
     equipment_trigger_id,
 )

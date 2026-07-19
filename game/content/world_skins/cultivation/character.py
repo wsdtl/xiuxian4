@@ -1,4 +1,4 @@
-"""基础修仙界的人物与境界展示。"""
+"""太玄界的人物与境界展示。"""
 
 from game.core.gameplay import SkinEntry
 

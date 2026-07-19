@@ -2,7 +2,9 @@
 
 from game.core.gameplay import (
     CurrencyDefinition,
+    ContentDefinition,
     QualityDefinition,
+    STANDARD_LOADOUT_SLOT_IDS,
     core_attribute_definitions,
     persistent_resource_definitions,
 )
@@ -33,12 +35,17 @@ BASE_QUALITIES = (
 BASE_ATTRIBUTES = (*core_attribute_definitions().values(), *DERIVED_COMBAT_ATTRIBUTES)
 BASE_RESOURCES = (*persistent_resource_definitions().values(), *BATTLE_RESOURCES)
 QUALITY_IDS = tuple(definition.id for definition in BASE_QUALITIES)
+LOADOUT_SLOT_CONTENT_DEFINITIONS = tuple(
+    ContentDefinition(slot_id, "content.loadout_slot")
+    for slot_id in sorted(STANDARD_LOADOUT_SLOT_IDS)
+)
 BASE_DISPLAY_CONTENT_IDS = frozenset(
     {
         PRIMARY_CURRENCY_ID,
         *QUALITY_IDS,
         *(value.id for value in BASE_ATTRIBUTES),
         *(value.id for value in BASE_RESOURCES),
+        *STANDARD_LOADOUT_SLOT_IDS,
     }
 )
 
@@ -54,6 +61,7 @@ __all__ = [
     "EPIC_QUALITY_ID",
     "FINE_QUALITY_ID",
     "LEGENDARY_QUALITY_ID",
+    "LOADOUT_SLOT_CONTENT_DEFINITIONS",
     "PRIMARY_CURRENCY_ID",
     "QUALITY_IDS",
     "RARE_QUALITY_ID",

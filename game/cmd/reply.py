@@ -13,6 +13,7 @@ from game.app import (
     message_identity_evidence,
 )
 from game.core.gameplay import SkinProjector
+from game.rules.activity import resolve_global_activity_presentation
 from launch import C, config, logger
 from launch.adapter import MessageIdentity, current_message_context, manager
 from message import DocumentMessage, Message, rich
@@ -116,7 +117,7 @@ async def _decorate_current_player_reply(
         return message
     if result.status != "ok" or result.state is None:
         return message
-    return GameReplyComposer(services.content.projector).compose(
+    return GameReplyComposer(services.world_view(result.state.dimension).projector).compose(
         message,
         result.state,
         logical_time=logical_time,
@@ -158,7 +159,10 @@ def _activity_content(
             parts.append(FieldSeparator())
         parts.append(
             intent_registry.link(
-                projector.compact_name(view.instance.definition_id),
+                resolve_global_activity_presentation(
+                    view.registration,
+                    projector,
+                ).compact_name,
                 WORLD_EVENT_DETAIL_INTENT,
                 {"instance_id": view.instance.id},
             )

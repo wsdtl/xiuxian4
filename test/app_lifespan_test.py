@@ -36,6 +36,7 @@ def main() -> None:
                 paths = {getattr(route, "path", "") for route in client.app.routes}
                 assert "/qq/events" in paths
                 assert "/static" in paths
+                assert "/battle/{share_id}" in paths
         finally:
             runtime_guard.lock_file = original_lock_file
             object.__setattr__(config, "database", original_database)

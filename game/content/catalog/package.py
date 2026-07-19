@@ -9,6 +9,7 @@ from .foundation import (
     BASE_DISPLAY_CONTENT_IDS,
     BASE_QUALITIES,
     BASE_RESOURCES,
+    LOADOUT_SLOT_CONTENT_DEFINITIONS,
 )
 from .character.definitions import (
     CHARACTER_DISPLAY_CONTENT_IDS,
@@ -16,6 +17,7 @@ from .character.definitions import (
     CHARACTER_LEVEL_PROGRESSION,
     DEFAULT_CHARACTER_TEMPLATE,
 )
+from .character.recovery import REST_ACTION_DEFINITION, REST_ACTION_ID
 from .combat.definitions import (
     BASE_ABILITIES,
     BASE_BATTLE_TARGETING,
@@ -36,8 +38,12 @@ from .enemy import (
     STANDARD_ENEMY_LEVEL_PROFILE,
 )
 from .item.definitions import ITEM_DISPLAY_CONTENT_IDS, MEDICINE_ITEMS
+from .item.special import INSCRIPTION_FEATHER_ITEM, validate_nacre_item_categories
+from .item.trade import ITEM_SALE_COMPONENT_TYPE
+from .item.trophies import TROPHY_DISPLAY_CONTENT_IDS, TROPHY_ITEMS
 from .equipment.definitions import EQUIPMENT_CATALOG_CONTENT
 from .equipment.properties import EQUIPMENT_PROPERTY_CONTENT
+from .disaster import DIMENSIONAL_DISASTER_ACTIVITY, DIMENSIONAL_DISASTER_CYCLES
 from .character.realms import (
     CHARACTER_REALM_CONTENT_DEFINITIONS,
     CHARACTER_REALM_DISPLAY_IDS,
@@ -51,8 +57,8 @@ from .weapon.definitions import (
 )
 from .weapon.mechanics import WEAPON_MECHANIC_CONTENT
 from .world.definitions import (
+    ALL_WORLD_LOCATIONS,
     PRIMARY_WORLD_SPACE,
-    STARTING_CITY,
     WORLD_DISPLAY_CONTENT_IDS,
 )
 from .combat.valuation import BASE_ATTRIBUTE_VALUATIONS, BASE_REFERENCE_VALUATIONS
@@ -61,18 +67,51 @@ from .combat.valuation import BASE_ATTRIBUTE_VALUATIONS, BASE_REFERENCE_VALUATIO
 CATALOG_PACKAGE_ID = "content.catalog.base"
 
 
+COMBAT_MECHANISM_DISPLAY_IDS = frozenset(
+    str(definition.id)
+    for definition in (
+        *BASE_DAMAGE_TYPES,
+        *BASE_EFFECTS,
+        *WEAPON_MECHANIC_CONTENT.effects,
+        *EQUIPMENT_PROPERTY_CONTENT.effects,
+        *WEAPON_MECHANIC_CONTENT.triggers,
+        *EQUIPMENT_PROPERTY_CONTENT.triggers,
+        *WEAPON_MECHANIC_CONTENT.interceptors,
+        *WEAPON_MECHANIC_CONTENT.constraints,
+    )
+)
+
+
+OFFICIAL_ITEMS = (
+    *MEDICINE_ITEMS,
+    INSCRIPTION_FEATHER_ITEM,
+    *TROPHY_ITEMS,
+    STARTER_WEAPON_ITEM,
+    *GENERATED_WEAPON_ITEMS,
+    *EQUIPMENT_CATALOG_CONTENT.items,
+)
+validate_nacre_item_categories(OFFICIAL_ITEMS)
+
+
 CATALOG_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=CATALOG_PACKAGE_ID,
-        version=ContentVersion(3, 2, 0),
+        version=ContentVersion(3, 9, 0),
     ),
-    display_definitions=CHARACTER_REALM_CONTENT_DEFINITIONS,
+    item_component_types=(ITEM_SALE_COMPONENT_TYPE,),
+    display_definitions=(
+        *CHARACTER_REALM_CONTENT_DEFINITIONS,
+        *LOADOUT_SLOT_CONTENT_DEFINITIONS,
+    ),
     currencies=BASE_CURRENCIES,
     qualities=BASE_QUALITIES,
     attributes=BASE_ATTRIBUTES,
     resources=BASE_RESOURCES,
     character_features=CHARACTER_FEATURES,
     progressions=(CHARACTER_LEVEL_PROGRESSION,),
+    actions=(REST_ACTION_DEFINITION,),
+    activities=(DIMENSIONAL_DISASTER_ACTIVITY,),
+    cycles=DIMENSIONAL_DISASTER_CYCLES,
     character_templates=(DEFAULT_CHARACTER_TEMPLATE,),
     enemy_level_profiles=(STANDARD_ENEMY_LEVEL_PROFILE,),
     enemy_ranks=ENEMY_RANKS,
@@ -81,12 +120,7 @@ CATALOG_PACKAGE = ContentPackage(
     enemies=ENEMY_DEFINITIONS,
     encounter_scopes=ENCOUNTER_SCOPES,
     enemy_encounters=ENEMY_ENCOUNTERS,
-    items=(
-        *MEDICINE_ITEMS,
-        STARTER_WEAPON_ITEM,
-        *GENERATED_WEAPON_ITEMS,
-        *EQUIPMENT_CATALOG_CONTENT.items,
-    ),
+    items=OFFICIAL_ITEMS,
     weapons=(STARTER_WEAPON, *GENERATED_WEAPONS),
     equipment_families=EQUIPMENT_CATALOG_CONTENT.families,
     equipment_sets=EQUIPMENT_CATALOG_CONTENT.sets,
@@ -132,20 +166,27 @@ CATALOG_PACKAGE = ContentPackage(
     target_constraints=WEAPON_MECHANIC_CONTENT.constraints,
     loot_tables=ENEMY_LOOT_TABLES,
     world_spaces=(PRIMARY_WORLD_SPACE,),
-    world_locations=(STARTING_CITY,),
+    world_locations=ALL_WORLD_LOCATIONS,
     display_content_ids=(
         BASE_DISPLAY_CONTENT_IDS
         | CHARACTER_DISPLAY_CONTENT_IDS
         | CHARACTER_REALM_DISPLAY_IDS
         | COMBAT_DISPLAY_CONTENT_IDS
+        | COMBAT_MECHANISM_DISPLAY_IDS
         | ITEM_DISPLAY_CONTENT_IDS
+        | TROPHY_DISPLAY_CONTENT_IDS
         | WEAPON_DISPLAY_CONTENT_IDS
         | EQUIPMENT_CATALOG_CONTENT.display_ids
         | EQUIPMENT_PROPERTY_CONTENT.display_ids
         | ENEMY_DISPLAY_CONTENT_IDS
+        | {REST_ACTION_ID}
         | WORLD_DISPLAY_CONTENT_IDS
     ),
 )
 
 
-__all__ = ["CATALOG_PACKAGE", "CATALOG_PACKAGE_ID"]
+__all__ = [
+    "CATALOG_PACKAGE",
+    "CATALOG_PACKAGE_ID",
+    "COMBAT_MECHANISM_DISPLAY_IDS",
+]

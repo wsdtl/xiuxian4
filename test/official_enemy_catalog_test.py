@@ -29,15 +29,18 @@ from game.core.gameplay import (  # noqa: E402
     EnemyInstance,
     ENEMY_FOUNDATION_VERSION,
     GameplayExecutor,
+    AbilityUse,
+    RuleEntity,
     RuleContext,
     Ruleset,
     SeededRandomSource,
 )
 from game.rules import EnemyDefeatRewardPlanner, EnemyEncounterGenerator  # noqa: E402
+from game.rules.battle_report import KNOWN_BATTLE_EVENT_KINDS  # noqa: E402
 
 
 def main() -> None:
-    assert BATTLE_AI_FOUNDATION_VERSION == "combat-ai.foundation.v1"
+    assert BATTLE_AI_FOUNDATION_VERSION == "combat-ai.foundation.v2"
     assert ENEMY_FOUNDATION_VERSION == "enemy.foundation.v1"
     cultivation = build_official_content()
     magic = build_official_content("skin.magic")
@@ -102,6 +105,7 @@ def main() -> None:
     assert reward.loot and reward.loot[0].table_id == "loot.enemy.elite"
 
     _assert_ai_executes(cultivation)
+    _assert_all_behavior_abilities_execute(cultivation)
     print("official enemy catalog test passed")
 
 
@@ -172,6 +176,66 @@ def _assert_ai_executes(content) -> None:
     result = engine.execute_turn(state, action, context=context)
     assert result.ok
     assert any(event.kind == "combat.turn.ended" for event in result.value.events)
+
+
+def _assert_all_behavior_abilities_execute(content) -> None:
+    catalog = content.catalog
+    executor = GameplayExecutor(catalog.ability_engine, catalog.trigger_engine)
+    covered = set()
+    for index, behavior in enumerate(catalog.enemies.behaviors):
+        assert len(behavior.contribution.abilities) == 1
+        ability_id = next(iter(behavior.contribution.abilities))
+        actor = _effect_combatant("actor", ability_id)
+        target = _effect_combatant("target")
+        outcome = executor.execute_ability(
+            AbilityUse(f"enemy-behavior:{index}", ability_id),
+            actor=actor,
+            target=target,
+            context=RuleContext(
+                f"enemy-behavior:{index}",
+                "rule.enemy.behavior_test.v1",
+                Ruleset("ruleset.enemy.behavior_test"),
+                datetime.now(timezone.utc),
+                SeededRandomSource(index),
+            ),
+        )
+        assert outcome.failure is None, (behavior.id, outcome.failure)
+        assert outcome.value is not None
+        unknown = {
+            str(event.kind) for event in outcome.value.events
+        } - KNOWN_BATTLE_EVENT_KINDS
+        assert not unknown, (behavior.id, unknown)
+        covered.add(behavior.id)
+    assert covered == set(catalog.enemies.behaviors.ids())
+    phase_behavior_ids = {
+        behavior_id
+        for enemy in catalog.enemies.definitions
+        for phase in enemy.phases
+        for behavior_id in phase.behavior_ids
+    }
+    assert phase_behavior_ids.issubset(covered)
+
+
+def _effect_combatant(entity_id: str, ability_id: str | None = None) -> RuleEntity:
+    return RuleEntity(
+        entity_id,
+        base_attributes={
+            "health.maximum": 100_000,
+            "spirit.maximum": 10_000,
+            "combat.attack": 1_000,
+            "combat.defense.physical": 100,
+            "combat.speed": 100,
+            "combat.accuracy": 1,
+            "combat.critical.chance": 0.5,
+            "combat.critical.damage": 0.5,
+        },
+        resources={
+            "health.current": 50_000,
+            "spirit.current": 10_000,
+            "combat.shield.current": 1_000,
+        },
+        base_abilities=frozenset({ability_id}) if ability_id else frozenset(),
+    )
 
 
 if __name__ == "__main__":

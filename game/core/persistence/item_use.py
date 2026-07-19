@@ -14,10 +14,12 @@ from ..gameplay.inventory import (
     item_use_fingerprint,
 )
 from ..gameplay.character import CharacterState
+from ..gameplay.character import CharacterContribution
 from ..gameplay.inventory import InventoryState
 from .errors import CorruptPersistenceData, TransactionMismatch
 from .snapshots import CHARACTER_AGGREGATE, INVENTORY_AGGREGATE, SnapshotRepository
 from .sqlite import SqliteDatabase
+from typing import Mapping
 
 
 class PersistedItemUseService:
@@ -64,6 +66,7 @@ class PersistedItemUseService:
         command: CharacterItemUse,
         *,
         inventory_id: str,
+        contributions: Mapping[str, tuple[CharacterContribution, ...]] | None = None,
         context: RuleContext,
     ) -> RuleOutcome[ItemUseReceipt]:
         if not inventory_id.strip():
@@ -117,6 +120,7 @@ class PersistedItemUseService:
                     command,
                     inventory=inventory,
                     characters=characters,
+                    contributions=contributions,
                     context=context,
                 )
                 if outcome.failure:

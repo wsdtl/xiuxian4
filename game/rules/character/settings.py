@@ -1,15 +1,6 @@
-"""角色个人设置与本游戏固定恢复策略。"""
+"""只保存角色个人选择，不重复保存全服恢复参数。"""
 
 from dataclasses import dataclass
-
-
-AUTO_HEALTH_TRIGGER_RATIO = 0.25
-AUTO_HEALTH_TARGET_RATIO = 0.55
-AUTO_SPIRIT_TRIGGER_RATIO = 0.15
-AUTO_SPIRIT_TARGET_RATIO = 0.45
-REST_MINIMUM_SECONDS = 60
-REST_FULL_RECOVERY_SECONDS = 30 * 60
-REST_MINIMUM_RECOVERY_RATIO = 0.50
 
 
 @dataclass(frozen=True)
@@ -33,12 +24,5 @@ class CharacterSettingsState:
 
 
 __all__ = [
-    "AUTO_HEALTH_TARGET_RATIO",
-    "AUTO_HEALTH_TRIGGER_RATIO",
-    "AUTO_SPIRIT_TARGET_RATIO",
-    "AUTO_SPIRIT_TRIGGER_RATIO",
     "CharacterSettingsState",
-    "REST_FULL_RECOVERY_SECONDS",
-    "REST_MINIMUM_RECOVERY_RATIO",
-    "REST_MINIMUM_SECONDS",
 ]

@@ -16,12 +16,24 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.rules.character import (  # noqa: E402
+    CHARACTER_DIMENSION_AGGREGATE,
     CHARACTER_SETTINGS_AGGREGATE,
+    CharacterDimensionState,
     CharacterCreationWorkflow,
     CharacterCreationRequest,
 )
 from game.content import (  # noqa: E402
+    AUTO_HEALTH_TARGET_RATIO,
+    AUTO_HEALTH_TRIGGER_RATIO,
+    AUTO_SPIRIT_TARGET_RATIO,
+    AUTO_SPIRIT_TRIGGER_RATIO,
     CHARACTER_LEVEL_EXPERIENCE_REQUIREMENTS,
+    INITIAL_BACKPACK_CAPACITY,
+    INITIAL_CURRENCY_AMOUNT,
+    INITIAL_MEDICINE_QUANTITY,
+    LOADOUT_PRESET_IDS,
+    CULTIVATION_SKIN_ID,
+    MAGIC_SKIN_ID,
     PRIMARY_CURRENCY_ID,
     SMALL_HEALTH_MEDICINE_ITEM_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
@@ -59,18 +71,10 @@ from game.core.persistence import (  # noqa: E402
     ConcurrencyConflict,
 )
 from game.rules.character import (  # noqa: E402
-    AUTO_HEALTH_TARGET_RATIO,
-    AUTO_HEALTH_TRIGGER_RATIO,
-    AUTO_SPIRIT_TARGET_RATIO,
-    AUTO_SPIRIT_TRIGGER_RATIO,
     CharacterIdentityViolation,
     CharacterSettingsState,
 )
 from game.rules.character.creation import (  # noqa: E402
-    INITIAL_BACKPACK_CAPACITY,
-    INITIAL_CURRENCY_AMOUNT,
-    INITIAL_MEDICINE_QUANTITY,
-    LOADOUT_PRESET_IDS,
     PRIMARY_LEDGER_ID,
     PRIMARY_WORLD_ID,
 )
@@ -193,11 +197,13 @@ def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> 
     }
     assert set(containers) == {
         "container.special",
+        "container.inscription",
         "container.armory",
         "container.backpack",
         "container.equipped",
     }
     assert containers["container.special"].required_item_tags.has("storage.special")
+    assert containers["container.inscription"].required_item_tags.has("storage.inscription")
     assert containers["container.armory"].required_item_tags.has("item.armament")
     assert containers["container.backpack"].maximum_space == INITIAL_BACKPACK_CAPACITY
     assert containers["container.backpack"].maximum_assets is None
@@ -238,6 +244,8 @@ def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> 
     )
     assert wallet.balance == INITIAL_CURRENCY_AMOUNT
     assert receipt.settings == CharacterSettingsState(character.id)
+    assert receipt.dimension.character_id == character.id
+    assert receipt.dimension.skin_id in {CULTIVATION_SKIN_ID, MAGIC_SKIN_ID}
     presence = next(
         value for value in receipt.world.presences.values() if value.owner_id == character.id
     )
@@ -245,6 +253,7 @@ def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> 
 
     replay = service.create(request, context=_context(2))
     assert replay.replayed and replay.character == character
+    assert replay.dimension == receipt.dimension
     try:
         service.create(
             CharacterCreationRequest("character-create-a-again", account_id, "第二角色"),
@@ -270,6 +279,12 @@ def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> 
         assert service.snapshots.require(
             uow, CHARACTER_SETTINGS_AGGREGATE, character.id, CharacterSettingsState
         ) == receipt.settings
+        assert service.snapshots.require(
+            uow,
+            CHARACTER_DIMENSION_AGGREGATE,
+            character.id,
+            CharacterDimensionState,
+        ) == receipt.dimension
         assert service.snapshots.require(
             uow, LEDGER_AGGREGATE, PRIMARY_LEDGER_ID, LedgerState
         ) == receipt.ledger

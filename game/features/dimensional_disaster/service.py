@@ -1,0 +1,1001 @@
+"""次元灾厄开放、挑战、封榜和唯一遗羽的联合持久化。"""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from datetime import datetime, timedelta
+from hashlib import sha256
+from math import ceil, sqrt
+import random
+from statistics import median
+from zoneinfo import ZoneInfo
+
+from game.content import (
+    CHARACTER_LEVEL_PROGRESSION_ID,
+    DIMENSIONAL_DISASTER_ACTIVITY_ID,
+    DIMENSIONAL_DISASTER_BUSINESS_DAY_RESET_HOUR,
+    DIMENSIONAL_DISASTER_CYCLE_IDS,
+    DIMENSIONAL_DISASTER_DAILY_ATTEMPTS,
+    DIMENSIONAL_DISASTER_MINIMUM_CONTRIBUTION_RATIO,
+    DIMENSIONAL_DISASTER_RECENT_EXCLUSION,
+    INSCRIPTION_FEATHER_ITEM_ID,
+)
+from game.core.gameplay import (
+    ENEMY_RANK_BOSS_ID,
+    HEALTH_CURRENT,
+    SPIRIT_CURRENT,
+    ActivityCommand,
+    ActivityInstance,
+    ActivityState,
+    ActivityStatus,
+    CharacterExperienceReward,
+    CharacterState,
+    CloseActivity,
+    CreateActivity,
+    FinalizeActivity,
+    InscriptionMediumData,
+    InstanceItemReward,
+    InventoryState,
+    JoinActivity,
+    LoadoutState,
+    OpenActivity,
+    RecordActivityContribution,
+    RewardClaimState,
+    RewardExpectations,
+    RewardSettlement,
+    RuleContext,
+    Ruleset,
+    SeededRandomSource,
+    ActionSlotKind,
+    ActionState,
+    INSCRIPTION_MEDIUM_DATA_KEY,
+)
+from game.rules.activity import GLOBAL_ACTIVITY_SCOPE_ID
+from game.rules.character import PRIMARY_LEDGER_ID
+from game.rules.disaster import (
+    DIMENSIONAL_DISASTER_AGGREGATE,
+    DIMENSIONAL_DISASTER_RULESET_VERSION,
+    DimensionalDisasterOutcome,
+    DimensionalDisasterState,
+    DimensionalDisasterStatus,
+    DisasterChallengeReceipt,
+    DisasterCombatSnapshot,
+    DisasterNarrativeSnapshot,
+    begin_disaster_settlement,
+    close_disaster,
+    mark_disaster_rewarded,
+    record_disaster_challenge,
+)
+from game.rules.exploration import ExplorationState, ExplorationStatus
+from game.rules.battle_report import (
+    BattleReportDraft,
+    BattleReportSegmentDraft,
+    BattleReportSummary,
+    capture_battle_participant,
+    capture_battle_round_states,
+    capture_battle_turn_states,
+    capture_battle_transitions,
+)
+
+from .battle import DimensionalDisasterBattleSimulator
+from .models import (
+    DimensionalDisasterChallengeResult,
+    DimensionalDisasterMaintenanceResult,
+    DimensionalDisasterStorageKinds,
+    DimensionalDisasterView,
+)
+
+
+SOURCE_KIND = "source.dimensional_disaster"
+SYSTEM_ACTOR_ID = "system.dimensional_disaster"
+
+
+class DimensionalDisasterFeature:
+    """具体玩法协调器；不向公共核心增加灾厄专用字段。"""
+
+    def __init__(
+        self,
+        database,
+        content,
+        disasters,
+        playable_skin_ids,
+        snapshots,
+        rewards,
+        player_combat,
+        battle_reports,
+        storage: DimensionalDisasterStorageKinds,
+        reward_keys_factory,
+        *,
+        maximum_battle_rounds: int,
+        timezone: str,
+    ) -> None:
+        self.database = database
+        self.content = content
+        self.disasters = disasters
+        self.playable_skin_ids = tuple(playable_skin_ids)
+        self.snapshots = snapshots
+        self.rewards = rewards
+        self.battle_reports = battle_reports
+        self.storage = storage
+        self.reward_keys_factory = reward_keys_factory
+        self.timezone = ZoneInfo(timezone)
+        self.battles = DimensionalDisasterBattleSimulator(
+            content.catalog,
+            player_combat,
+            maximum_rounds=maximum_battle_rounds,
+        )
+
+    def maintain(self, *, logical_time: datetime) -> DimensionalDisasterMaintenanceResult:
+        _aware(logical_time)
+        settled = self._settle_due(logical_time)
+        opened = 1 if self._open_current_window(logical_time) else 0
+        return DimensionalDisasterMaintenanceResult(opened, settled)
+
+    def view(self, *, logical_time: datetime) -> DimensionalDisasterView:
+        self.maintain(logical_time=logical_time)
+        current = self._current_state(logical_time)
+        if current is not None:
+            return self._view_for(current, active=True)
+        latest = self._latest_state()
+        if latest is None:
+            return DimensionalDisasterView("empty")
+        return self._view_for(latest, active=False)
+
+    def attempts_today(
+        self,
+        event: DimensionalDisasterState,
+        character_id: str,
+        *,
+        logical_time: datetime,
+    ) -> int:
+        return event.attempts_today(
+            character_id,
+            self._business_day(logical_time),
+        )
+
+    def challenge(
+        self,
+        character_id: str,
+        operation_id: str,
+        *,
+        logical_time: datetime,
+    ) -> DimensionalDisasterChallengeResult:
+        _aware(logical_time)
+        self.maintain(logical_time=logical_time)
+        current = self._current_state(logical_time)
+        if current is None:
+            return DimensionalDisasterChallengeResult("no_active")
+        normalized_character_id = str(character_id or "").strip()
+        normalized_operation_id = str(operation_id or "").strip()
+        if not normalized_character_id or not normalized_operation_id:
+            raise ValueError("灾厄挑战缺少角色或操作身份")
+        with self.database.unit_of_work() as uow:
+            event = self.snapshots.require(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                current.event_id,
+                DimensionalDisasterState,
+            )
+            replay = event.challenge_receipts.get(normalized_operation_id)
+            activity_state = self.snapshots.require(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                ActivityState,
+            )
+            activity = activity_state.instances[event.event_id]
+            if replay is not None:
+                return DimensionalDisasterChallengeResult(
+                    "replayed",
+                    event,
+                    activity,
+                    replay.as_replay(),
+                    self.battle_reports.reference(
+                        self._battle_report_id(normalized_operation_id)
+                    ),
+                )
+            if (
+                event.status is not DimensionalDisasterStatus.OPEN
+                or event.outcome is not DimensionalDisasterOutcome.NONE
+                or activity.status is not ActivityStatus.OPEN
+                or not event.opens_at <= logical_time < event.closes_at
+            ):
+                return DimensionalDisasterChallengeResult("ended", event, activity)
+            business_day = self._business_day(logical_time)
+            attempts = event.attempts_today(normalized_character_id, business_day)
+            if attempts >= DIMENSIONAL_DISASTER_DAILY_ATTEMPTS:
+                return DimensionalDisasterChallengeResult(
+                    "attempt_limit",
+                    event,
+                    activity,
+                )
+            action = self.snapshots.load(
+                uow,
+                self.storage.action,
+                normalized_character_id,
+                ActionState,
+            )
+            if action is not None and action.running(ActionSlotKind.MAIN):
+                return DimensionalDisasterChallengeResult("main_action_occupied", event, activity)
+            exploration = self.snapshots.load(
+                uow,
+                self.storage.exploration,
+                normalized_character_id,
+                ExplorationState,
+            )
+            if exploration is not None and exploration.status is ExplorationStatus.RUNNING:
+                return DimensionalDisasterChallengeResult("exploring", event, activity)
+            character = self.snapshots.require(
+                uow,
+                self.storage.character,
+                normalized_character_id,
+                CharacterState,
+            )
+            if character.resources[HEALTH_CURRENT] <= 0:
+                return DimensionalDisasterChallengeResult("health_depleted", event, activity)
+            inventory = self.snapshots.require(
+                uow,
+                self.storage.inventory,
+                normalized_character_id,
+                InventoryState,
+            )
+            loadout = self.snapshots.require(
+                uow,
+                self.storage.loadout,
+                normalized_character_id,
+                LoadoutState,
+            )
+            context = _context(normalized_operation_id, logical_time)
+            battle = self.battles.simulate(
+                event.combat,
+                event.event_id,
+                character=character,
+                inventory=inventory,
+                loadout=loadout,
+                context=context,
+            )
+            damage = min(event.current_health, max(0, battle.damage))
+            receipt = DisasterChallengeReceipt(
+                normalized_operation_id,
+                normalized_character_id,
+                event.event_id,
+                business_day,
+                damage,
+                event.current_health,
+                event.current_health - damage,
+                battle.player_health_after,
+                battle.player_spirit_after,
+                attempts + 1,
+                battle.turns,
+                battle.player_victory,
+                logical_time,
+            )
+            next_event = record_disaster_challenge(event, receipt)
+            next_activity_state = activity_state
+            if normalized_character_id not in activity.participants:
+                next_activity_state, activity = self._persist_activity_operation(
+                    uow,
+                    next_activity_state,
+                    JoinActivity(event.event_id, normalized_character_id),
+                    f"{normalized_operation_id}:join",
+                    normalized_character_id,
+                    logical_time,
+                )
+            next_activity_state, activity = self._persist_activity_operation(
+                uow,
+                next_activity_state,
+                RecordActivityContribution(
+                    event.event_id,
+                    normalized_character_id,
+                    damage,
+                ),
+                f"{normalized_operation_id}:contribution",
+                normalized_character_id,
+                logical_time,
+            )
+            self.snapshots.update(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event.event_id,
+                event,
+                next_event,
+                logical_time,
+            )
+            resources = dict(character.resources)
+            resources[HEALTH_CURRENT] = battle.player_health_after
+            resources[SPIRIT_CURRENT] = battle.player_spirit_after
+            if resources != dict(character.resources):
+                next_character = replace(
+                    character,
+                    resources=resources,
+                    revision=character.revision + 1,
+                )
+                self.snapshots.update(
+                    uow,
+                    self.storage.character,
+                    normalized_character_id,
+                    character,
+                    next_character,
+                    logical_time,
+                )
+            report = self.battle_reports.capture_in_uow(
+                uow,
+                self._battle_report_draft(
+                    event,
+                    character,
+                    battle,
+                    receipt,
+                    normalized_operation_id,
+                    logical_time,
+                ),
+            )
+            uow.commit()
+            return DimensionalDisasterChallengeResult(
+                "defeated" if next_event.outcome is DimensionalDisasterOutcome.DEFEATED else "resolved",
+                next_event,
+                activity,
+                receipt,
+                report,
+            )
+
+    def _battle_report_draft(
+        self,
+        event,
+        character,
+        battle,
+        receipt,
+        operation_id: str,
+        logical_time: datetime,
+    ) -> BattleReportDraft:
+        outcome = "讨伐胜利" if battle.player_victory else "战斗结束"
+        player_entity = battle.trace.initial_frame.state.entities[character.id]
+        enemy_id = f"enemy:{event.event_id}"
+        enemy_entity = battle.trace.initial_frame.state.entities[enemy_id]
+        participants = (
+            capture_battle_participant(
+                player_entity,
+                character.name,
+                "player",
+                self.content.catalog.enemy_projector.attributes,
+            ),
+            capture_battle_participant(
+                enemy_entity,
+                event.narrative.name,
+                "enemy",
+                self.content.catalog.enemy_projector.attributes,
+            ),
+        )
+        return BattleReportDraft(
+            report_id=self._battle_report_id(operation_id),
+            mode_id="battle.mode.dimensional_disaster",
+            presentation_skin_id=str(self.content.skin.id),
+            presentation_skin_version=self.content.skin.version,
+            content_fingerprint=self.content.catalog.report.content_fingerprint,
+            summary=BattleReportSummary(
+                f"讨伐灾厄·{event.narrative.name}",
+                outcome,
+                (
+                    f"造成伤痕: {receipt.damage}",
+                    f"灾厄血量: {receipt.shared_health_after}/{event.maximum_health}",
+                    f"战斗行动: {receipt.turns}",
+                ),
+            ),
+            segment=BattleReportSegmentDraft(
+                segment_id=operation_id,
+                title=event.narrative.name,
+                participants=participants,
+                events=battle.trace.events,
+                outcome=outcome,
+                started_at=logical_time,
+                finished_at=logical_time,
+                final_participants=(
+                    capture_battle_participant(
+                        battle.trace.final_frame.state.entities[character.id],
+                        character.name,
+                        "player",
+                        self.content.catalog.enemy_projector.attributes,
+                    ),
+                    capture_battle_participant(
+                        battle.trace.final_frame.state.entities[enemy_id],
+                        event.narrative.name,
+                        "enemy",
+                        self.content.catalog.enemy_projector.attributes,
+                    ),
+                ),
+                round_states=capture_battle_round_states(
+                    battle.trace,
+                    {
+                        character.id: (character.name, "player"),
+                        enemy_id: (event.narrative.name, "enemy"),
+                    },
+                    self.content.catalog.enemy_projector.attributes,
+                ),
+                turn_states=capture_battle_turn_states(
+                    battle.trace,
+                    {
+                        character.id: (character.name, "player"),
+                        enemy_id: (event.narrative.name, "enemy"),
+                    },
+                    self.content.catalog.enemy_projector.attributes,
+                ),
+                transitions=capture_battle_transitions(
+                    battle.trace,
+                    {
+                        character.id: (character.name, "player"),
+                        enemy_id: (event.narrative.name, "enemy"),
+                    },
+                    self.content.catalog.enemy_projector.attributes,
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _battle_report_id(operation_id: str) -> str:
+        return f"battle-report:dimensional-disaster:{operation_id}"
+
+    def _open_current_window(self, logical_time: datetime) -> bool:
+        windows = self._current_windows(logical_time)
+        if not windows:
+            return False
+        if len(windows) > 1:
+            raise RuntimeError("次元灾厄周期窗口发生重叠")
+        window = windows[0]
+        event_id = self._event_id(window.instance_id)
+        with self.database.unit_of_work() as uow:
+            existing = self.snapshots.load(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event_id,
+                DimensionalDisasterState,
+            )
+            if existing is not None:
+                return False
+            previous_events = self.snapshots.list(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                DimensionalDisasterState,
+                limit=1_000,
+            )
+            recent = tuple(
+                value.definition_id
+                for value in sorted(
+                    previous_events,
+                    key=lambda item: item.opens_at,
+                    reverse=True,
+                )[:DIMENSIONAL_DISASTER_RECENT_EXCLUSION]
+            )
+            definition = self.disasters.select(
+                window.instance_id,
+                source_skin_ids=self.playable_skin_ids,
+                recent_definition_ids=recent,
+            )
+            characters = self.snapshots.list(
+                uow,
+                self.storage.character,
+                CharacterState,
+                limit=100_000,
+            )
+            levels = [
+                value.progressions[CHARACTER_LEVEL_PROGRESSION_ID].level
+                for value in characters
+            ]
+            level = max(1, round(median(levels))) if levels else 1
+            enemy_definition = self.content.catalog.enemies.require(
+                definition.enemy_definition_id
+            )
+            combat = DisasterCombatSnapshot(
+                definition.enemy_definition_id,
+                level,
+                ENEMY_RANK_BOSS_ID,
+                tuple(sorted(enemy_definition.default_behavior_ids)),
+                f"{window.instance_id}:{definition.id}",
+                self.content.catalog.report.content_fingerprint,
+            )
+            local_health = self.battles.enemy_maximum_health(combat, event_id)
+            population_scale = max(
+                4,
+                min(30, ceil(sqrt(max(1, len(characters))) * 4)),
+            )
+            maximum_health = max(1, round(local_health * population_scale))
+            event = DimensionalDisasterState(
+                event_id,
+                window.instance_id,
+                definition.id,
+                definition.source_skin_id,
+                DisasterNarrativeSnapshot(
+                    definition.name,
+                    definition.title,
+                    definition.scene,
+                    definition.story,
+                    definition.farewell,
+                    definition.feather_text,
+                    definition.source_note,
+                ),
+                combat,
+                window.starts_at,
+                window.ends_at,
+                maximum_health,
+                maximum_health,
+            )
+            stored_activity = self.snapshots.load(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                ActivityState,
+            )
+            activity_state = stored_activity or ActivityState(GLOBAL_ACTIVITY_SCOPE_ID)
+            if stored_activity is None:
+                self.snapshots.insert(
+                    uow,
+                    self.storage.activity,
+                    GLOBAL_ACTIVITY_SCOPE_ID,
+                    activity_state,
+                    logical_time,
+                )
+            activity_instance = ActivityInstance(
+                event.event_id,
+                DIMENSIONAL_DISASTER_ACTIVITY_ID,
+                1,
+                event.opens_at,
+                event.closes_at,
+            )
+            activity_state, _ = self._persist_activity_operation(
+                uow,
+                activity_state,
+                CreateActivity(activity_instance),
+                f"{event.event_id}:create",
+                SYSTEM_ACTOR_ID,
+                event.opens_at,
+            )
+            activity_state, _ = self._persist_activity_operation(
+                uow,
+                activity_state,
+                OpenActivity(event.event_id),
+                f"{event.event_id}:open",
+                SYSTEM_ACTOR_ID,
+                logical_time,
+            )
+            self.snapshots.insert(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event.event_id,
+                event,
+                logical_time,
+            )
+            uow.commit()
+            return True
+
+    def _settle_due(self, logical_time: datetime) -> int:
+        with self.database.unit_of_work(write=False) as uow:
+            events = self.snapshots.list(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                DimensionalDisasterState,
+                limit=1_000,
+            )
+        settled = 0
+        for event in events:
+            if event.status is DimensionalDisasterStatus.CLOSED or event.closes_at > logical_time:
+                continue
+            self._prepare_settlement(event.event_id, logical_time)
+            self._settle_participant_rewards(event.event_id, logical_time)
+            if self._finish_settlement(event.event_id, logical_time):
+                settled += 1
+        return settled
+
+    def _prepare_settlement(self, event_id: str, logical_time: datetime) -> None:
+        with self.database.unit_of_work() as uow:
+            event = self.snapshots.require(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event_id,
+                DimensionalDisasterState,
+            )
+            if event.status is not DimensionalDisasterStatus.OPEN:
+                return
+            activity_state = self.snapshots.require(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                ActivityState,
+            )
+            activity_state, activity = self._activity_operation(
+                activity_state,
+                CloseActivity(event_id),
+                f"{event_id}:close",
+                SYSTEM_ACTOR_ID,
+                logical_time,
+            )
+            winner = (
+                self._select_feather_owner(event, activity)
+                if event.outcome is DimensionalDisasterOutcome.DEFEATED
+                else None
+            )
+            next_event = begin_disaster_settlement(
+                event,
+                logical_time=logical_time,
+                feather_owner_id=winner,
+            )
+            self.snapshots.update(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event_id,
+                event,
+                next_event,
+                logical_time,
+            )
+            previous_activity = self.snapshots.require(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                ActivityState,
+            )
+            self.snapshots.update(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                previous_activity,
+                activity_state,
+                logical_time,
+            )
+            uow.commit()
+
+    def _settle_participant_rewards(self, event_id: str, logical_time: datetime) -> None:
+        with self.database.unit_of_work(write=False) as uow:
+            activity_state = self.snapshots.require(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                ActivityState,
+            )
+            participant_ids = tuple(
+                value.subject_id for value in activity_state.instances[event_id].ranking
+            )
+        for character_id in participant_ids:
+            self._settle_one_reward(event_id, character_id, logical_time)
+
+    def _settle_one_reward(
+        self,
+        event_id: str,
+        character_id: str,
+        logical_time: datetime,
+    ) -> None:
+        with self.database.unit_of_work() as uow:
+            event = self.snapshots.require(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event_id,
+                DimensionalDisasterState,
+            )
+            if character_id in event.rewarded_character_ids:
+                return
+            activity_state = self.snapshots.require(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                ActivityState,
+            )
+            activity = activity_state.instances[event_id]
+            entry = next(value for value in activity.ranking if value.subject_id == character_id)
+            character = self.snapshots.require(
+                uow,
+                self.storage.character,
+                character_id,
+                CharacterState,
+            )
+            inventory = self.snapshots.require(
+                uow,
+                self.storage.inventory,
+                character_id,
+                InventoryState,
+            )
+            claim = self.snapshots.require(
+                uow,
+                self.storage.reward_claim,
+                character_id,
+                RewardClaimState,
+            )
+            ratio = entry.contribution / event.maximum_health
+            victory_factor = 1.0 if event.outcome is DimensionalDisasterOutcome.DEFEATED else 0.5
+            rank_bonus = 40 if entry.rank == 1 else 25 if entry.rank == 2 else 15 if entry.rank == 3 else 0
+            experience = max(
+                1,
+                round((40 + 180 * sqrt(max(0.0, min(1.0, ratio))) + rank_bonus) * victory_factor),
+            )
+            reward_specs = [
+                CharacterExperienceReward(
+                    character_id,
+                    CHARACTER_LEVEL_PROGRESSION_ID,
+                    experience,
+                )
+            ]
+            grants_feather = event.feather_owner_id == character_id
+            if grants_feather:
+                container_id = next(
+                    value.id
+                    for value in inventory.containers.values()
+                    if value.kind == "container.inscription"
+                )
+                reward_specs.append(
+                    InstanceItemReward(
+                        event.feather_asset_id,
+                        INSCRIPTION_FEATHER_ITEM_ID,
+                        container_id,
+                        {
+                            INSCRIPTION_MEDIUM_DATA_KEY: InscriptionMediumData(
+                                f"{event.narrative.name}遗羽",
+                                self._feather_history(event, activity, entry),
+                            )
+                        },
+                        {
+                            "disaster_event_id": event.event_id,
+                            "disaster_definition_id": event.definition_id,
+                            "rank": entry.rank,
+                            "contribution": entry.contribution,
+                        },
+                    )
+                )
+            settlement = RewardSettlement(
+                f"reward:{event_id}:{character_id}",
+                SYSTEM_ACTOR_ID,
+                character_id,
+                SOURCE_KIND,
+                f"{event_id}:{character_id}",
+                tuple(reward_specs),
+                RewardExpectations(
+                    claim.revision,
+                    inventory.revision if grants_feather else None,
+                    character_revisions={character_id: character.revision},
+                ),
+                {
+                    "event_id": event_id,
+                    "rank": entry.rank,
+                    "contribution": entry.contribution,
+                    "outcome": event.outcome.value,
+                },
+            )
+            context = _context(settlement.id, logical_time)
+            outcome = self.rewards.settle_in_uow(
+                uow,
+                settlement,
+                self.reward_keys_factory(
+                    character_id,
+                    PRIMARY_LEDGER_ID,
+                    (character_id,),
+                ),
+                context=context,
+            )
+            if outcome.failure:
+                raise RuntimeError(outcome.failure.message)
+            next_event = mark_disaster_rewarded(event, character_id)
+            self.snapshots.update(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event_id,
+                event,
+                next_event,
+                logical_time,
+            )
+            uow.commit()
+
+    def _finish_settlement(self, event_id: str, logical_time: datetime) -> bool:
+        with self.database.unit_of_work() as uow:
+            event = self.snapshots.require(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event_id,
+                DimensionalDisasterState,
+            )
+            if event.status is DimensionalDisasterStatus.CLOSED:
+                return False
+            activity_state = self.snapshots.require(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                ActivityState,
+            )
+            activity = activity_state.instances[event_id]
+            expected = {value.subject_id for value in activity.ranking}
+            if not expected.issubset(event.rewarded_character_ids):
+                return False
+            next_activity_state, _ = self._activity_operation(
+                activity_state,
+                FinalizeActivity(event_id),
+                f"{event_id}:finalize",
+                SYSTEM_ACTOR_ID,
+                logical_time,
+            )
+            next_event = close_disaster(event)
+            self.snapshots.update(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event_id,
+                event,
+                next_event,
+                logical_time,
+            )
+            self.snapshots.update(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                activity_state,
+                next_activity_state,
+                logical_time,
+            )
+            uow.commit()
+            return True
+
+    def _view_for(self, event: DimensionalDisasterState, *, active: bool) -> DimensionalDisasterView:
+        activity_state = self._activity_state()
+        activity = activity_state.instances.get(event.event_id) if activity_state else None
+        return DimensionalDisasterView("ok", event, activity, active)
+
+    def _activity_state(self) -> ActivityState | None:
+        with self.database.unit_of_work(write=False) as uow:
+            return self.snapshots.load(
+                uow,
+                self.storage.activity,
+                GLOBAL_ACTIVITY_SCOPE_ID,
+                ActivityState,
+            )
+
+    def _current_state(self, logical_time: datetime) -> DimensionalDisasterState | None:
+        windows = self._current_windows(logical_time)
+        if not windows:
+            return None
+        event_id = self._event_id(windows[0].instance_id)
+        with self.database.unit_of_work(write=False) as uow:
+            return self.snapshots.load(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                event_id,
+                DimensionalDisasterState,
+            )
+
+    def _latest_state(self) -> DimensionalDisasterState | None:
+        with self.database.unit_of_work(write=False) as uow:
+            states = self.snapshots.list(
+                uow,
+                DIMENSIONAL_DISASTER_AGGREGATE,
+                DimensionalDisasterState,
+                limit=1_000,
+            )
+        return max(states, key=lambda value: value.opens_at) if states else None
+
+    def _current_windows(self, logical_time: datetime):
+        return tuple(
+            window
+            for cycle_id in DIMENSIONAL_DISASTER_CYCLE_IDS
+            if (
+                window := self.content.catalog.cycle_engine.current_window(
+                    cycle_id,
+                    logical_time=logical_time,
+                )
+            ) is not None
+        )
+
+    def _activity_operation(
+        self,
+        state: ActivityState,
+        operation,
+        trace_id: str,
+        actor_id: str,
+        logical_time: datetime,
+    ) -> tuple[ActivityState, ActivityInstance]:
+        outcome = self.content.catalog.activity_engine.execute(
+            ActivityCommand(trace_id, actor_id, state.revision, operation),
+            state=state,
+            context=_context(trace_id, logical_time),
+        )
+        if outcome.failure or outcome.value is None:
+            raise RuntimeError(
+                outcome.failure.message if outcome.failure else "灾厄活动状态变换失败"
+            )
+        return outcome.value.state, outcome.value.instance
+
+    def _persist_activity_operation(
+        self,
+        uow,
+        state: ActivityState,
+        operation,
+        trace_id: str,
+        actor_id: str,
+        logical_time: datetime,
+    ) -> tuple[ActivityState, ActivityInstance]:
+        next_state, instance = self._activity_operation(
+            state,
+            operation,
+            trace_id,
+            actor_id,
+            logical_time,
+        )
+        self.snapshots.update(
+            uow,
+            self.storage.activity,
+            GLOBAL_ACTIVITY_SCOPE_ID,
+            state,
+            next_state,
+            logical_time,
+        )
+        return next_state, instance
+
+    def _select_feather_owner(
+        self,
+        event: DimensionalDisasterState,
+        activity: ActivityInstance,
+    ) -> str | None:
+        minimum = max(
+            1,
+            ceil(event.maximum_health * DIMENSIONAL_DISASTER_MINIMUM_CONTRIBUTION_RATIO),
+        )
+        candidates = tuple(
+            value for value in activity.ranking if value.contribution >= minimum
+        )
+        if not candidates:
+            candidates = tuple(
+                value for value in activity.ranking if value.contribution > 0
+            )
+        if not candidates:
+            return None
+        weights = tuple(
+            max(
+                1,
+                round(
+                    min(
+                        0.35,
+                        sqrt(value.contribution / event.maximum_health),
+                    )
+                    * 1_000_000
+                ),
+            )
+            for value in candidates
+        )
+        seed = int.from_bytes(
+            sha256(f"disaster-feather.v1\0{event.event_id}".encode("utf-8")).digest(),
+            "big",
+        )
+        rng = random.Random(seed)
+        roll = rng.randrange(sum(weights))
+        for candidate, weight in zip(candidates, weights):
+            roll -= weight
+            if roll < 0:
+                return candidate.subject_id
+        return candidates[-1].subject_id
+
+    def _feather_history(self, event, activity, entry) -> str:
+        date_text = event.opens_at.astimezone(self.timezone).strftime("%Y-%m-%d")
+        return (
+            f"{event.narrative.feather_text}\n"
+            f"此羽记得 {date_text} 的降临, "
+            f"{len(activity.participants)} 位登录者共同留下伤痕。"
+            f"最初持有者贡献 {entry.contribution / event.maximum_health:.1%}, "
+            f"位列第 {entry.rank}。"
+        )
+
+    def _business_day(self, logical_time: datetime) -> str:
+        local = logical_time.astimezone(self.timezone) - timedelta(
+            hours=DIMENSIONAL_DISASTER_BUSINESS_DAY_RESET_HOUR
+        )
+        return local.date().isoformat()
+
+    @staticmethod
+    def _event_id(window_id: str) -> str:
+        return f"dimensional-disaster:{window_id}"
+
+
+def _context(trace_id: str, logical_time: datetime) -> RuleContext:
+    return RuleContext(
+        trace_id,
+        DIMENSIONAL_DISASTER_RULESET_VERSION,
+        Ruleset("ruleset.standard"),
+        logical_time,
+        SeededRandomSource(trace_id),
+    )
+
+
+def _aware(value: datetime) -> None:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("次元灾厄逻辑时间必须包含时区")
+
+
+__all__ = ["DimensionalDisasterFeature"]

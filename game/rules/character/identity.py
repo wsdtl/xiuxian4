@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from enum import Enum
 import re
 
+from game.content.catalog.character import (
+    CHARACTERS_PER_ACCOUNT,
+    MAX_CHARACTER_NAME_DISPLAY_WIDTH,
+)
 from game.core.gameplay import character_name_display_width, normalize_character_name
 
 
-CHARACTERS_PER_ACCOUNT = 1
-MAX_CHARACTER_NAME_DISPLAY_WIDTH = 12
 _CHARACTER_NAME_PATTERN = re.compile(r"[A-Za-z0-9\u3400-\u4dbf\u4e00-\u9fff]+")
 
 
@@ -102,8 +104,6 @@ def validate_character_name(value: object) -> str:
 
 
 __all__ = [
-    "CHARACTERS_PER_ACCOUNT",
-    "MAX_CHARACTER_NAME_DISPLAY_WIDTH",
     "CharacterIdentityPolicy",
     "CharacterIdentityViolation",
     "CharacterNameSource",

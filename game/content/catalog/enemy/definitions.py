@@ -76,7 +76,7 @@ ENEMY_REWARD_PROFILES = (
         28.0,
         9.0,
         BOSS_ENEMY_LOOT_TABLE_ID,
-        2,
+        1,
     ),
 )
 

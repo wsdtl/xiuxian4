@@ -20,6 +20,7 @@ class EnemyEncounterGenerator:
         generation_seed: str,
         random: RandomSource,
         instance_id: str | None = None,
+        allowed_enemy_ids: frozenset[str] | None = None,
     ) -> EnemyEncounterInstance:
         definition = self.catalog.encounters.require(encounter_id)
         if not definition.minimum_level <= level <= definition.maximum_level:
@@ -34,8 +35,13 @@ class EnemyEncounterGenerator:
         sequence = 0
         for spawn in definition.spawns:
             count = random.randint(spawn.minimum_count, spawn.maximum_count)
+            candidates = spawn.enemy_ids
+            if allowed_enemy_ids is not None:
+                candidates = candidates & allowed_enemy_ids
+            if not candidates:
+                raise ValueError(f"遭遇 {definition.id} 与指定敌人池没有交集")
             for _ in range(count):
-                enemy_id = random.choice(tuple(sorted(spawn.enemy_ids)))
+                enemy_id = random.choice(tuple(sorted(candidates)))
                 enemy = self.catalog.require(enemy_id)
                 rank = self.catalog.ranks.require(spawn.rank_id)
                 desired = spawn.behavior_count

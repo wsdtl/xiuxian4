@@ -29,7 +29,9 @@ from game.core.gameplay.character import (  # noqa: E402
     GrantExperience,
     ProgressionDefinition,
 )
-from game.rules.character import (  # noqa: E402
+from game.content.catalog.character import (  # noqa: E402
+    CHARACTER_LEVEL_EXPERIENCE_REQUIREMENTS,
+    CHARACTER_MAXIMUM_LEVEL,
     INITIAL_CORE_ATTRIBUTES,
     LEVEL_CORE_ATTRIBUTE_DELTAS,
     character_level_milestones,
@@ -40,6 +42,8 @@ TIME = datetime(2026, 7, 14, 22, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
 def main() -> None:
+    assert CHARACTER_MAXIMUM_LEVEL == len(CHARACTER_LEVEL_EXPERIENCE_REQUIREMENTS) + 1
+    assert CHARACTER_MAXIMUM_LEVEL == 100
     assert dict(INITIAL_CORE_ATTRIBUTES) == {
         HEALTH_MAXIMUM: 100.0,
         SPIRIT_MAXIMUM: 100.0,

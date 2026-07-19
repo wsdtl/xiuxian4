@@ -11,7 +11,10 @@ from game.app import (
     GlobalActivityViewsResult,
     current_game_services,
 )
-from game.rules.activity import GlobalActivityView
+from game.rules.activity import (
+    GlobalActivityView,
+    resolve_global_activity_presentation,
+)
 from launch import C, config, logger
 from message import DocumentMessage, M
 from message.schema import FieldSeparator
@@ -27,7 +30,12 @@ async def view_world_events(
     """只读展示开放活动；传入实例 ID 时展示详情。"""
 
     result = await _load_activities(current)
-    await send_game_reply(_activity_message(result, instance_id.strip()))
+    view = (
+        current_game_services().world_view(current.dimension)
+        if current.dimension is not None
+        else None
+    )
+    await send_game_reply(_activity_message(result, instance_id.strip(), view))
 
 
 async def _load_activities(
@@ -50,31 +58,36 @@ async def _load_activities(
 def _activity_message(
     result: GlobalActivityViewsResult,
     instance_id: str,
+    world_view,
 ) -> DocumentMessage:
-    if result.status != "ok":
+    if result.status != "ok" or world_view is None:
         return _unavailable_message()
     if instance_id:
         view = next(
             (value for value in result.activities if value.instance.id == instance_id),
             None,
         )
-        return _activity_detail_message(view)
-    return _activity_list_message(result.activities)
+        return _activity_detail_message(view, world_view)
+    return _activity_list_message(result.activities, world_view)
 
 
 def _activity_list_message(
     activities: tuple[GlobalActivityView, ...],
+    world_view,
 ) -> DocumentMessage:
     builder = M.document().section("全服活动", icon="system")
     if not activities:
         return builder.line("当前没有开放的全服活动").build()
-    projector = current_game_services().content.projector
+    projector = world_view.projector
     builder.field("数量", len(activities))
     for index, view in enumerate(activities, start=1):
         builder.item(
             index,
             reply_intents.link(
-                projector.name(view.instance.definition_id),
+                resolve_global_activity_presentation(
+                    view.registration,
+                    projector,
+                ).name,
                 WORLD_EVENT_DETAIL_INTENT,
                 {"instance_id": view.instance.id},
             ),
@@ -84,7 +97,10 @@ def _activity_list_message(
     return builder.build()
 
 
-def _activity_detail_message(view: GlobalActivityView | None) -> DocumentMessage:
+def _activity_detail_message(
+    view: GlobalActivityView | None,
+    world_view,
+) -> DocumentMessage:
     if view is None:
         return (
             M.document()
@@ -92,15 +108,17 @@ def _activity_detail_message(view: GlobalActivityView | None) -> DocumentMessage
             .line("活动不存在、尚未开放或已经结束")
             .build()
         )
-    services = current_game_services()
-    projector = services.content.projector
-    entry = projector.entry(view.instance.definition_id)
+    projector = world_view.projector
+    presentation = resolve_global_activity_presentation(
+        view.registration,
+        projector,
+    )
     builder = M.document().section(
-        projector.name(view.instance.definition_id),
+        presentation.name,
         icon="system",
     )
-    if entry.description:
-        builder.line(entry.description)
+    if presentation.description:
+        builder.line(presentation.description)
     builder.row(
         ("开放", _time(view.instance.opens_at)),
         ("结束", _time(view.instance.closes_at)),

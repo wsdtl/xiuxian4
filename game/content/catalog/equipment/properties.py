@@ -87,6 +87,7 @@ from ..weapon.mechanics import DEATH_GUARD_INTERCEPTOR_ID
 
 
 EQUIPMENT_GENERATION_PROFILE_ID = "generation.equipment.open"
+EQUIPMENT_SET_MARK_CHANCE = 0.25
 EQUIPMENT_QUALITY_BANDS = (
     QualityValueBand(COMMON_QUALITY_ID, 0, 23),
     QualityValueBand(FINE_QUALITY_ID, 23, 32),
@@ -551,6 +552,7 @@ EQUIPMENT_PROPERTY_CONTENT = build_equipment_property_content()
 
 __all__ = [
     "EQUIPMENT_GENERATION_PROFILE_ID",
+    "EQUIPMENT_SET_MARK_CHANCE",
     "EQUIPMENT_PROPERTY_CONTENT",
     "EQUIPMENT_QUALITY_BANDS",
     "EquipmentPropertyContent",

@@ -14,7 +14,7 @@ from .errors import (
 )
 
 
-PERSISTENCE_SCHEMA_VERSION = 4
+PERSISTENCE_SCHEMA_VERSION = 5
 SNAPSHOT_CODEC_VERSION = 1
 
 _REQUIRED_TABLES = frozenset(
@@ -40,6 +40,8 @@ _REQUIRED_TABLES = frozenset(
         "grant_entitlement",
         "grant_redemption",
         "migration_manifest",
+        "battle_report",
+        "battle_report_segment",
     }
 )
 
@@ -254,6 +256,30 @@ _EXPECTED_COLUMNS = {
         ("source_digest", "TEXT", 0),
         ("source_payload", "TEXT", 0),
         ("imported_at", "TEXT", 0),
+    ),
+    "battle_report": (
+        ("report_id", "TEXT", 1),
+        ("share_id", "TEXT", 0),
+        ("mode_id", "TEXT", 0),
+        ("presentation_skin_id", "TEXT", 0),
+        ("presentation_skin_version", "INTEGER", 0),
+        ("content_fingerprint", "TEXT", 0),
+        ("summary_payload", "TEXT", 0),
+        ("started_at", "TEXT", 0),
+        ("finished_at", "TEXT", 0),
+        ("detail_expires_at", "TEXT", 0),
+        ("summary_expires_at", "TEXT", 0),
+        ("uncompressed_bytes", "INTEGER", 0),
+        ("compressed_bytes", "INTEGER", 0),
+        ("created_at", "TEXT", 0),
+    ),
+    "battle_report_segment": (
+        ("report_id", "TEXT", 1),
+        ("sequence", "INTEGER", 2),
+        ("segment_id", "TEXT", 0),
+        ("detail_payload", "BLOB", 0),
+        ("uncompressed_bytes", "INTEGER", 0),
+        ("compressed_bytes", "INTEGER", 0),
     ),
 }
 
@@ -550,6 +576,38 @@ CREATE TABLE migration_manifest (
     FOREIGN KEY (entitlement_id) REFERENCES grant_entitlement(entitlement_id) ON DELETE RESTRICT
 ) WITHOUT ROWID;
 
+CREATE TABLE battle_report (
+    report_id TEXT PRIMARY KEY,
+    share_id TEXT NOT NULL UNIQUE,
+    mode_id TEXT NOT NULL,
+    presentation_skin_id TEXT NOT NULL,
+    presentation_skin_version INTEGER NOT NULL CHECK (presentation_skin_version > 0),
+    content_fingerprint TEXT NOT NULL,
+    summary_payload TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT NOT NULL,
+    detail_expires_at TEXT NOT NULL,
+    summary_expires_at TEXT NOT NULL,
+    uncompressed_bytes INTEGER NOT NULL CHECK (uncompressed_bytes >= 0),
+    compressed_bytes INTEGER NOT NULL CHECK (compressed_bytes >= 0),
+    created_at TEXT NOT NULL
+) WITHOUT ROWID;
+
+CREATE INDEX battle_report_expiry_idx
+ON battle_report(summary_expires_at, detail_expires_at);
+
+CREATE TABLE battle_report_segment (
+    report_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL CHECK (sequence >= 0),
+    segment_id TEXT NOT NULL,
+    detail_payload BLOB NOT NULL,
+    uncompressed_bytes INTEGER NOT NULL CHECK (uncompressed_bytes >= 0),
+    compressed_bytes INTEGER NOT NULL CHECK (compressed_bytes >= 0),
+    PRIMARY KEY (report_id, sequence),
+    UNIQUE (report_id, segment_id),
+    FOREIGN KEY (report_id) REFERENCES battle_report(report_id) ON DELETE CASCADE
+) WITHOUT ROWID;
+
 CREATE TABLE outbox_event (
     transaction_id TEXT NOT NULL,
     sequence INTEGER NOT NULL CHECK (sequence >= 0),
@@ -753,6 +811,28 @@ class SqliteUnitOfWork:
         if row is None:
             raise AggregateNotFound(f"缺少聚合快照：{aggregate_kind}/{aggregate_id}")
         return row
+
+    def list_snapshots(
+        self,
+        aggregate_kind: str,
+        *,
+        limit: int = 1_000,
+    ) -> tuple[AggregateSnapshotRow, ...]:
+        """按稳定聚合类型列出快照，供业务调度器发现待处理实例。"""
+
+        if not aggregate_kind.strip() or limit < 1:
+            raise ValueError("聚合类型不能为空且 limit 必须大于 0")
+        rows = self.connection.execute(
+            """
+            SELECT aggregate_kind, aggregate_id, revision, codec_version, payload, updated_at
+            FROM aggregate_snapshot
+            WHERE aggregate_kind = ?
+            ORDER BY aggregate_id
+            LIMIT ?
+            """,
+            (aggregate_kind, limit),
+        ).fetchall()
+        return tuple(AggregateSnapshotRow(**dict(row)) for row in rows)
 
     def insert_snapshot(
         self,
@@ -1366,6 +1446,12 @@ def _validate_schema_shape(connection: sqlite3.Connection) -> None:
             raise SchemaVersionError(
                 f"数据库缺少权益索引：{', '.join(sorted(missing_indexes))}"
             )
+    report_indexes = {
+        str(row[1])
+        for row in connection.execute("PRAGMA index_list(battle_report)").fetchall()
+    }
+    if "battle_report_expiry_idx" not in report_indexes:
+        raise SchemaVersionError("数据库缺少战报保留期索引")
     foreign_keys = connection.execute("PRAGMA foreign_key_list(outbox_event)").fetchall()
     if not any(
         str(row[2]) == "committed_transaction"
@@ -1387,6 +1473,17 @@ def _validate_schema_shape(connection: sqlite3.Connection) -> None:
         ("cycle_id", "cycle_id"),
     }:
         raise SchemaVersionError("周期工作项游标复合外键结构不正确")
+    report_foreign_keys = connection.execute(
+        "PRAGMA foreign_key_list(battle_report_segment)"
+    ).fetchall()
+    if not any(
+        str(row[2]) == "battle_report"
+        and str(row[3]) == "report_id"
+        and str(row[4]) == "report_id"
+        and str(row[6]).upper() == "CASCADE"
+        for row in report_foreign_keys
+    ):
+        raise SchemaVersionError("战报片段外键结构不正确")
     expected_account_foreign_keys = {
         "account_identity": {
             ("account_id", "account_record", "account_id"),

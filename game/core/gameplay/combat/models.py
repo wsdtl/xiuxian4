@@ -82,6 +82,7 @@ class DamageFrame:
     bypass_shield: bool = False
     minimum_health: float = 0.0
     redirects: tuple[DamageRedirect, ...] = ()
+    prevented: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "damage_type", stable_id(self.damage_type, field="damage type id"))

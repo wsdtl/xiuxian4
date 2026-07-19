@@ -29,6 +29,7 @@ from game.content.catalog.equipment.definitions import (  # noqa: E402
 )
 from game.content.catalog.equipment.properties import (  # noqa: E402
     EQUIPMENT_GENERATION_PROFILE_ID,
+    EQUIPMENT_SET_MARK_CHANCE,
     EQUIPMENT_PROPERTY_CONTENT,
     equipment_property_id,
     equipment_trigger_id,
@@ -51,10 +52,10 @@ from game.core.gameplay import (  # noqa: E402
     SeededRandomSource,
 )
 from game.rules import (  # noqa: E402
-    EQUIPMENT_SET_MARK_CHANCE,
     EquipmentGenerationRequest,
     EquipmentInstanceGenerator,
 )
+from game.rules.battle_report import KNOWN_BATTLE_EVENT_KINDS  # noqa: E402
 
 
 def main() -> None:
@@ -64,6 +65,7 @@ def main() -> None:
     _assert_instance_generation(catalog)
     _assert_six_piece_contribution(catalog)
     _assert_real_trigger_execution(catalog)
+    _assert_every_equipment_trigger_executes(catalog)
     _assert_balance(catalog)
     print("official equipment catalog test passed")
 
@@ -100,8 +102,8 @@ def _assert_world_skin_projection(catalog) -> None:
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
     definition_id = equipment_definition_id("mystic_sky", "head")
     item_id = equipment_item_id("mystic_sky", "head")
-    assert cultivation.skin.version == 9
-    assert magic.skin.version == 9
+    assert cultivation.skin.version == 16
+    assert magic.skin.version == 15
     assert cultivation.projector.name(definition_id) == "昆仑冠"
     assert cultivation.projector.name(item_id) == "昆仑冠器胚"
     assert magic.projector.name(definition_id) == "奥林匹斯头冠"
@@ -159,8 +161,7 @@ def _assert_six_piece_contribution(catalog) -> None:
         catalog.itemization_engine,
         set_mark_chance=0,
     )
-    set_id = equipment_set_id("everlife")
-    states = []
+    base_states = []
     family = EQUIPMENT_FAMILY_BLUEPRINTS[0]
     for index, slot in enumerate(EQUIPMENT_SLOT_BLUEPRINTS):
         generated = generator.generate(
@@ -172,18 +173,34 @@ def _assert_six_piece_contribution(catalog) -> None:
             ),
             context=_context(f"equipment-set:{index}", 2000 + index),
         )
-        states.append(replace(generated.state, set_id=set_id))
+        base_states.append(generated.state)
     provider = EquipmentContributionProvider(catalog.equipment)
-    contributions = provider.contributions(tuple(states))
-    assert len(contributions) == 9
-    set_contributions = tuple(
-        value for value in contributions if value.source_kind == "source.equipment_set"
-    )
-    assert tuple(value.id for value in set_contributions) == (
-        f"{set_id}.bonus.pieces_2",
-        f"{set_id}.bonus.pieces_3",
-        f"{set_id}.bonus.pieces_4",
-    )
+    covered = set()
+    for set_id in catalog.equipment.sets.ids():
+        states = tuple(replace(state, set_id=set_id) for state in base_states)
+        contributions = provider.contributions(states)
+        assert len(contributions) == 9
+        set_contributions = tuple(
+            value
+            for value in contributions
+            if value.source_kind == "source.equipment_set"
+        )
+        assert tuple(value.id for value in set_contributions) == (
+            f"{set_id}.bonus.pieces_2",
+            f"{set_id}.bonus.pieces_3",
+            f"{set_id}.bonus.pieces_4",
+        )
+        for contribution in set_contributions:
+            spec = contribution.contribution
+            assert all(catalog.abilities.contains(value) for value in spec.abilities)
+            assert all(catalog.triggers.contains(value) for value in spec.triggers)
+            assert all(catalog.interceptors.contains(value) for value in spec.interceptors)
+            assert all(
+                catalog.target_constraints.contains(value)
+                for value in spec.target_constraints
+            )
+        covered.add(set_id)
+    assert covered == set(catalog.equipment.sets.ids())
 
 
 def _assert_real_trigger_execution(catalog) -> None:
@@ -271,6 +288,71 @@ def _assert_real_trigger_execution(catalog) -> None:
     assert ticked.entity("target").resources["health.current"] < health_before
 
 
+def _assert_every_equipment_trigger_executes(catalog) -> None:
+    trigger_ids = tuple(
+        trigger_id
+        for trigger_id in catalog.triggers.ids()
+        if trigger_id.startswith("trigger.equipment.")
+    )
+    assert len(trigger_ids) == 75
+    for trigger_id in trigger_ids:
+        definition = catalog.triggers.require(trigger_id)
+        owner_id = "target" if definition.owner.value == "event_target" else "actor"
+        actor = _combatant(
+            "actor",
+            trigger_id=trigger_id if owner_id == "actor" else None,
+            cooldowns={BASIC_ATTACK_ABILITY_ID: 3},
+            health=1_000,
+        )
+        target = _combatant(
+            "target",
+            trigger_id=trigger_id if owner_id == "target" else None,
+            cooldowns={BASIC_ATTACK_ABILITY_ID: 3},
+            health=1_000,
+        )
+        activated = None
+        for seed in range(512):
+            context = _context(f"equipment-trigger:{trigger_id}:{seed}", 10_000 + seed)
+            event = RuleEvent.from_context(
+                context,
+                kind=definition.event_kind,
+                source_id="actor",
+                target_id="target",
+                subject_id="combat.test",
+                values={
+                    "is_proc": 0.0,
+                    "damage_type": "damage.physical",
+                    "raw": 100.0,
+                    "effective_damage": 100.0,
+                    "health_damage": 100.0,
+                    "shield_damage": 100.0,
+                    "actual": 100.0,
+                    "delta": -100.0,
+                    "current": 1_000.0,
+                },
+            )
+            result = catalog.trigger_engine.process(
+                (event,),
+                entities={"actor": actor, "target": target},
+                context=context,
+            )
+            if any(
+                value.kind == "trigger.activated" and value.subject_id == trigger_id
+                for value in result.events
+            ):
+                activated = result
+                break
+        assert activated is not None, trigger_id
+        unknown = {
+            str(value.kind)
+            for value in activated.events
+            if str(value.kind).startswith(
+                ("ability.", "combat.", "effect.", "resource.", "trigger.")
+            )
+        } - KNOWN_BATTLE_EVENT_KINDS
+        assert not unknown, (trigger_id, unknown)
+
+
 def _assert_balance(catalog) -> None:
     started = perf_counter()
     report = EquipmentBalanceAuditor(
@@ -310,6 +392,8 @@ def _combatant(
     ability_id: str | None = None,
     trigger_id: str | None = None,
     critical_chance: float = 0,
+    cooldowns=None,
+    health: float = 10_000,
 ) -> RuleEntity:
     active_effects = ()
     if trigger_id:
@@ -335,12 +419,13 @@ def _combatant(
             "combat.critical.damage": 0,
         },
         resources={
-            "health.current": 10_000,
+            "health.current": health,
             "spirit.current": 1_000,
             "combat.shield.current": 0,
         },
         base_abilities=frozenset({ability_id}) if ability_id else frozenset(),
         active_effects=active_effects,
+        cooldowns=cooldowns or {},
     )
 
 

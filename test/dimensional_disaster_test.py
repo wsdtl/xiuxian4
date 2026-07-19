@@ -1,0 +1,307 @@
+"""次元灾厄内容、共享血量、本地命令和唯一遗羽闭环测试。"""
+
+from __future__ import annotations
+
+import asyncio
+from dataclasses import replace
+from datetime import datetime, timedelta
+from pathlib import Path
+import sys
+from tempfile import TemporaryDirectory
+from zoneinfo import ZoneInfo
+
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from game.app import (  # noqa: E402
+    build_game_services,
+    install_game_services,
+    restore_game_services,
+)
+from game.content import (  # noqa: E402
+    CULTIVATION_SKIN_ID,
+    INSCRIPTION_FEATHER_ITEM_ID,
+    MAGIC_SKIN_ID,
+    build_dimensional_disaster_catalog,
+)
+from game.core.gameplay import (  # noqa: E402
+    COMBAT_ATTACK,
+    HEALTH_CURRENT,
+    HEALTH_MAXIMUM,
+    SPIRIT_CURRENT,
+    SPIRIT_MAXIMUM,
+    ActivityState,
+    CharacterState,
+    InscriptionMediumData,
+    InventoryState,
+    INSCRIPTION_MEDIUM_DATA_KEY,
+)
+from game.core.persistence import (  # noqa: E402
+    ACTIVITY_AGGREGATE,
+    CHARACTER_AGGREGATE,
+    INVENTORY_AGGREGATE,
+)
+from game.rules.activity import GLOBAL_ACTIVITY_SCOPE_ID  # noqa: E402
+from game.rules.disaster import (  # noqa: E402
+    DIMENSIONAL_DISASTER_AGGREGATE,
+    DimensionalDisasterOutcome,
+    DimensionalDisasterState,
+    DimensionalDisasterStatus,
+)
+from game.cmd import 次元 as dimension_component  # noqa: E402,F401
+from game.cmd import 多次元灾厄 as disaster_component  # noqa: E402,F401
+from game.cmd import 角色 as character_component  # noqa: E402,F401
+from game.cmd import 铭刻 as inscription_component  # noqa: E402,F401
+from game.cmd.多次元灾厄 import service as disaster_command_service  # noqa: E402
+from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
+from launch.adapter.qq import QqEventHandler  # noqa: E402
+
+
+ZONE = ZoneInfo("Asia/Shanghai")
+TIME = datetime(2026, 7, 13, 8, 0, tzinfo=ZONE)
+
+
+def main() -> None:
+    asyncio.run(_main())
+    print("dimensional disaster tests passed")
+
+
+async def _main() -> None:
+    catalog = build_dimensional_disaster_catalog()
+    assert len(catalog.definitions()) == 20
+    assert len(catalog.for_source(CULTIVATION_SKIN_ID)) == 10
+    assert len(catalog.for_source(MAGIC_SKIN_ID)) == 10
+    audit = catalog.audit()
+    assert not audit.warnings
+    assert all(value.documented == 7 and value.original == 3 for value in audit.sources)
+
+    for command in ("多次元灾厄", "讨伐灾厄", "灾厄排行"):
+        assert len(LocalEventHandler.exact_rules[command]) == 1
+        assert len(QqEventHandler.exact_rules[command]) == 1
+
+    with TemporaryDirectory() as directory:
+        services = build_game_services(
+            database_path=Path(directory) / "dimensional-disaster.db",
+            identity_secret="dimensional-disaster-test-secret",
+        )
+        services.database.initialize()
+        services.activities.initialize(GLOBAL_ACTIVITY_SCOPE_ID, logical_time=TIME)
+        previous = install_game_services(services)
+        original_now = disaster_command_service._now
+        disaster_command_service._now = lambda: TIME
+        try:
+            await LocalEventHandler.run()
+            await _dispatch("player-a", "创建角色 观星客", "create-a")
+            await _dispatch("player-b", "创建角色 守夜人", "create-b")
+            first_character, second_character = _characters(services)
+
+            status = await _dispatch("player-a", "多次元灾厄", "status-a")
+            content = status.replies[0].message.content
+            event = _event(services)
+            assert event.narrative.name in content
+            assert "多次元灾厄" in content and "今日讨伐: _0/2_" in content
+            assert services.global_activities.active(
+                services.activities.load(GLOBAL_ACTIVITY_SCOPE_ID),
+                logical_time=TIME,
+            )
+
+            initial_dimension = services.load_character_overview(first_character).overview.dimension
+            target_skin = (
+                MAGIC_SKIN_ID
+                if initial_dimension.skin_id == CULTIVATION_SKIN_ID
+                else CULTIVATION_SKIN_ID
+            )
+            await _dispatch("player-a", f"跃迁 {target_skin}", "shift-a")
+            shifted = await _dispatch("player-a", "多次元灾厄", "status-shifted")
+            assert event.narrative.name in shifted.replies[0].message.content
+
+            first = await _dispatch("player-a", "讨伐灾厄", "challenge-a-1")
+            assert "伤痕" in first.replies[0].message.content
+            assert "查看完整战报" in first.replies[0].message.content
+            assert "/battle/" in first.replies[0].message.content
+            with services.database.unit_of_work(write=False) as uow:
+                share_id = uow.connection.execute(
+                    "SELECT share_id FROM battle_report ORDER BY created_at LIMIT 1"
+                ).fetchone()[0]
+            battle_report = services.battle_reports.load_public(
+                share_id,
+                logical_time=TIME,
+            )
+            assert battle_report is not None and battle_report.segments
+            first_segment = battle_report.segments[0]
+            assert first_segment.round_states
+            assert first_segment.final_participants
+            assert all(state.participants for state in first_segment.round_states)
+            replay = await _dispatch("player-a", "讨伐灾厄", "challenge-a-1")
+            assert "重复消息" in replay.replies[0].message.content
+            assert _event(services).attempts_today(first_character.id, "2026-07-13") == 1
+
+            _restore_combat_resources(services, first_character.id, attack=10_000)
+            second = await _dispatch("player-a", "讨伐灾厄", "challenge-a-2")
+            assert "今日次数: _2/2_" in second.replies[0].message.content
+            blocked = await _dispatch("player-a", "讨伐灾厄", "challenge-a-3")
+            assert "今日讨伐次数已经用完" in blocked.replies[0].message.content
+
+            event = _event(services)
+            _set_event_health(services, event.event_id, 1)
+            _restore_combat_resources(services, second_character.id, attack=10_000)
+            defeated = await _dispatch("player-b", "讨伐灾厄", "challenge-b-1")
+            assert "全服击破" in defeated.replies[0].message.content
+            assert _event(services).outcome is DimensionalDisasterOutcome.DEFEATED
+
+            ranking = await _dispatch("player-a", "灾厄排行", "ranking-a")
+            assert "灾厄排行" in ranking.replies[0].message.content
+            assert "观星客" in ranking.replies[0].message.content
+            assert "守夜人" in ranking.replies[0].message.content
+
+            event = _event(services)
+            services.dimensional_disasters.maintain(
+                logical_time=event.closes_at + timedelta(minutes=1)
+            )
+            closed = _event(services)
+            assert closed.status is DimensionalDisasterStatus.CLOSED
+            assert closed.feather_owner_id in {first_character.id, second_character.id}
+            assert closed.feather_asset_id is not None
+            assert closed.rewarded_character_ids == {first_character.id, second_character.id}
+
+            feathers = []
+            for character in (first_character, second_character):
+                inventory = _inventory(services, character.id)
+                feathers.extend(
+                    value
+                    for value in inventory.instances.values()
+                    if value.definition_id == INSCRIPTION_FEATHER_ITEM_ID
+                )
+            assert len(feathers) == 1
+            feather = feathers[0]
+            assert feather.id == closed.feather_asset_id
+            medium = feather.data[INSCRIPTION_MEDIUM_DATA_KEY]
+            assert isinstance(medium, InscriptionMediumData)
+            assert medium.title == f"{closed.narrative.name}遗羽"
+            assert "2026-07-13" in medium.flavor_text
+            assert "2 位登录者" in medium.flavor_text
+
+            services.dimensional_disasters.maintain(
+                logical_time=event.closes_at + timedelta(minutes=2)
+            )
+            assert sum(
+                1
+                for character in (first_character, second_character)
+                for value in _inventory(services, character.id).instances.values()
+                if value.definition_id == INSCRIPTION_FEATHER_ITEM_ID
+            ) == 1
+            activity = _activity(services)
+            assert activity.instances[event.event_id].status.value == "closed"
+        finally:
+            disaster_command_service._now = original_now
+            restore_game_services(previous)
+
+
+async def _dispatch(client_id: str, command: str, event_id: str):
+    return await dispatch(
+        client_id=client_id,
+        raw_message=command,
+        sender_name=client_id,
+        event_id=event_id,
+    )
+
+
+def _characters(services) -> tuple[CharacterState, CharacterState]:
+    with services.database.unit_of_work(write=False) as uow:
+        values = services.character_creation.snapshots.list(
+            uow,
+            CHARACTER_AGGREGATE,
+            CharacterState,
+            limit=10,
+        )
+    by_name = {value.name: value for value in values}
+    return by_name["观星客"], by_name["守夜人"]
+
+
+def _event(services) -> DimensionalDisasterState:
+    with services.database.unit_of_work(write=False) as uow:
+        values = services.character_creation.snapshots.list(
+            uow,
+            DIMENSIONAL_DISASTER_AGGREGATE,
+            DimensionalDisasterState,
+            limit=10,
+        )
+    assert len(values) == 1
+    return values[0]
+
+
+def _activity(services) -> ActivityState:
+    with services.database.unit_of_work(write=False) as uow:
+        return services.character_creation.snapshots.require(
+            uow,
+            ACTIVITY_AGGREGATE,
+            GLOBAL_ACTIVITY_SCOPE_ID,
+            ActivityState,
+        )
+
+
+def _inventory(services, character_id: str) -> InventoryState:
+    with services.database.unit_of_work(write=False) as uow:
+        return services.character_creation.snapshots.require(
+            uow,
+            INVENTORY_AGGREGATE,
+            character_id,
+            InventoryState,
+        )
+
+
+def _restore_combat_resources(services, character_id: str, *, attack: float) -> None:
+    snapshots = services.character_creation.snapshots
+    with services.database.unit_of_work() as uow:
+        character = snapshots.require(
+            uow,
+            CHARACTER_AGGREGATE,
+            character_id,
+            CharacterState,
+        )
+        attributes = dict(character.core_attributes)
+        attributes[COMBAT_ATTACK] = attack
+        attributes[HEALTH_MAXIMUM] = 10_000
+        attributes[SPIRIT_MAXIMUM] = 10_000
+        updated = replace(
+            character,
+            core_attributes=attributes,
+            resources={HEALTH_CURRENT: 10_000, SPIRIT_CURRENT: 10_000},
+            revision=character.revision + 1,
+        )
+        snapshots.update(
+            uow,
+            CHARACTER_AGGREGATE,
+            character_id,
+            character,
+            updated,
+            TIME,
+        )
+        uow.commit()
+
+
+def _set_event_health(services, event_id: str, health: int) -> None:
+    snapshots = services.character_creation.snapshots
+    with services.database.unit_of_work() as uow:
+        event = snapshots.require(
+            uow,
+            DIMENSIONAL_DISASTER_AGGREGATE,
+            event_id,
+            DimensionalDisasterState,
+        )
+        updated = replace(event, current_health=health, revision=event.revision + 1)
+        snapshots.update(
+            uow,
+            DIMENSIONAL_DISASTER_AGGREGATE,
+            event_id,
+            event,
+            updated,
+            TIME,
+        )
+        uow.commit()
+
+
+if __name__ == "__main__":
+    main()

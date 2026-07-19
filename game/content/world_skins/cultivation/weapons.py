@@ -1,4 +1,4 @@
-"""基础修仙界的正式武器展示；规则蓝图不保存玩家可见文本。"""
+"""太玄界的正式武器展示；规则蓝图不保存玩家可见文本。"""
 
 from game.core.gameplay import SkinEntry
 
@@ -113,17 +113,17 @@ _AFFIX_DISPLAY = {
 def _build_weapon_entries() -> dict[str, SkinEntry]:
     blueprint_keys = {value.key for value in WEAPON_BLUEPRINTS}
     if set(_WEAPON_DISPLAY) != blueprint_keys:
-        raise ValueError("基础修仙界武器展示键必须完整覆盖正式武器蓝图")
+        raise ValueError("太玄界武器展示键必须完整覆盖正式武器蓝图")
     names = [value[0] for value in _WEAPON_DISPLAY.values()]
     if len(names) != len(set(names)):
-        raise ValueError("基础修仙界正式武器名称不能重复")
+        raise ValueError("太玄界正式武器名称不能重复")
     affix_ids = {
         value.id
         for value in WEAPON_MECHANIC_CONTENT.properties
         if value.id.startswith("property.weapon_affix.")
     }
     if set(_AFFIX_DISPLAY) != affix_ids:
-        raise ValueError("基础修仙界武器随机词条必须完整覆盖规则定义")
+        raise ValueError("太玄界武器随机词条必须完整覆盖规则定义")
     entries = {
         STARTER_WEAPON_ITEM_ID: SkinEntry(name="仙京制式剑器", icon="⚔"),
         STARTER_WEAPON_ID: SkinEntry(

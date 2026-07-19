@@ -1,4 +1,4 @@
-"""基础修仙界的敌人身份、行为术语与精英前缀。"""
+"""太玄界的敌人身份、行为术语与精英前缀。"""
 
 from game.core.gameplay import (
     ENCOUNTER_SCOPE_GLOBAL_ID,
@@ -139,12 +139,12 @@ def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], 
     boss_keys = tuple(value.key for value in BOSS_ENEMY_BLUEPRINTS)
     behavior_keys = {value.key for value in BEHAVIOR_BLUEPRINTS}
     if len(_REGULAR_NAMES) != len(regular_keys) or len(_BOSS_NAMES) != len(boss_keys):
-        raise ValueError("基础修仙界敌人名称必须完整覆盖正式敌人身份")
+        raise ValueError("太玄界敌人名称必须完整覆盖正式敌人身份")
     if set(_BEHAVIOR_DISPLAY) != behavior_keys:
-        raise ValueError("基础修仙界行为名称必须完整覆盖正式行为模板")
+        raise ValueError("太玄界行为名称必须完整覆盖正式行为模板")
     all_names = [*_REGULAR_NAMES, *(value[0] for value in _BOSS_NAMES)]
     if len(all_names) != len(set(all_names)):
-        raise ValueError("基础修仙界敌人完整名称不能重复")
+        raise ValueError("太玄界敌人完整名称不能重复")
     entries = {
         ENEMY_RANK_NORMAL_ID: SkinEntry(name="寻常敌人"),
         ENEMY_RANK_ELITE_ID: SkinEntry(name="精英敌人"),

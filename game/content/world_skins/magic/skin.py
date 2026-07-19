@@ -8,16 +8,18 @@ from .combat import MAGIC_COMBAT_ENTRIES
 from .equipment import MAGIC_EQUIPMENT_ENTRIES
 from .enemies import MAGIC_ENEMY_ENTRIES
 from .items import MAGIC_ITEM_ENTRIES
+from .trophies import MAGIC_TROPHY_ENTRIES
 from .weapons import MAGIC_WEAPON_ENTRIES
 from .world import MAGIC_WORLD_ENTRIES
 
 
 MAGIC_SKIN_ID = "skin.magic"
+MAGIC_SKIN_VERSION = 15
 
 
 MAGIC_SKIN = SkinPack(
     id=MAGIC_SKIN_ID,
-    version=9,
+    version=MAGIC_SKIN_VERSION,
     name="魔法世界",
     icon="✦",
     entries={
@@ -27,10 +29,11 @@ MAGIC_SKIN = SkinPack(
         **MAGIC_EQUIPMENT_ENTRIES,
         **MAGIC_ENEMY_ENTRIES,
         **MAGIC_ITEM_ENTRIES,
+        **MAGIC_TROPHY_ENTRIES,
         **MAGIC_WEAPON_ENTRIES,
         **MAGIC_WORLD_ENTRIES,
     },
 )
 
 
-__all__ = ["MAGIC_SKIN", "MAGIC_SKIN_ID"]
+__all__ = ["MAGIC_SKIN", "MAGIC_SKIN_ID", "MAGIC_SKIN_VERSION"]

@@ -1,4 +1,4 @@
-"""基础修仙界世界皮肤的唯一组装入口。"""
+"""太玄界世界皮肤的唯一组装入口。"""
 
 from game.core.gameplay import SkinPack
 
@@ -8,17 +8,19 @@ from .combat import CULTIVATION_COMBAT_ENTRIES
 from .equipment import CULTIVATION_EQUIPMENT_ENTRIES
 from .enemies import CULTIVATION_ENEMY_ENTRIES
 from .items import CULTIVATION_ITEM_ENTRIES
+from .trophies import CULTIVATION_TROPHY_ENTRIES
 from .weapons import CULTIVATION_WEAPON_ENTRIES
 from .world import CULTIVATION_WORLD_ENTRIES
 
 
 CULTIVATION_SKIN_ID = "skin.cultivation"
+CULTIVATION_SKIN_VERSION = 16
 
 
 CULTIVATION_SKIN = SkinPack(
     id=CULTIVATION_SKIN_ID,
-    version=9,
-    name="基础修仙界",
+    version=CULTIVATION_SKIN_VERSION,
+    name="太玄界",
     icon="☯",
     entries={
         **CULTIVATION_BASE_ENTRIES,
@@ -27,10 +29,11 @@ CULTIVATION_SKIN = SkinPack(
         **CULTIVATION_EQUIPMENT_ENTRIES,
         **CULTIVATION_ENEMY_ENTRIES,
         **CULTIVATION_ITEM_ENTRIES,
+        **CULTIVATION_TROPHY_ENTRIES,
         **CULTIVATION_WEAPON_ENTRIES,
         **CULTIVATION_WORLD_ENTRIES,
     },
 )
 
 
-__all__ = ["CULTIVATION_SKIN", "CULTIVATION_SKIN_ID"]
+__all__ = ["CULTIVATION_SKIN", "CULTIVATION_SKIN_ID", "CULTIVATION_SKIN_VERSION"]

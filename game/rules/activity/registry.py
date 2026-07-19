@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from game.content.catalog.activity import (
+    GLOBAL_ACTIVITY_CLOSING_WINDOW,
+    GLOBAL_ACTIVITY_OPENING_WINDOW,
+    GLOBAL_ACTIVITY_SPOTLIGHT_LIMIT,
+)
 from game.core.gameplay import (
     ActivityCatalog,
     ActivityState,
@@ -16,6 +21,7 @@ from .models import (
     ActivitySpotlightPolicy,
     GLOBAL_ACTIVITY_SCOPE_ID,
     GlobalActivityRegistration,
+    GlobalActivityPresentation,
     GlobalActivitySelection,
     GlobalActivityView,
 )
@@ -54,14 +60,19 @@ class GlobalActivityCatalog:
 
         for registration in self.registrations():
             activities.require(registration.definition_id)
-            entry = projector.entry(registration.definition_id)
-            if not entry.compact_name:
+            if registration.presentation is None:
+                entry = projector.entry(registration.definition_id)
+                if not entry.compact_name:
+                    raise ValueError(
+                        f"全服活动缺少 compact_name: {registration.definition_id}"
+                    )
+            presentation = resolve_global_activity_presentation(
+                registration,
+                projector,
+            )
+            if character_name_display_width(presentation.compact_name) > 8:
                 raise ValueError(
-                    f"全服活动缺少 compact_name: {registration.definition_id}"
-                )
-            if character_name_display_width(entry.compact_name) > 8:
-                raise ValueError(
-                    f"全服活动短名显示宽度超过 8: {entry.compact_name}"
+                    f"全服活动短名显示宽度超过 8: {presentation.compact_name}"
                 )
 
     def active(
@@ -92,7 +103,7 @@ class GlobalActivityCatalog:
         state: ActivityState | None,
         *,
         logical_time: datetime,
-        limit: int = 2,
+        limit: int = GLOBAL_ACTIVITY_SPOTLIGHT_LIMIT,
     ) -> GlobalActivitySelection:
         if limit < 1:
             raise ValueError("活动通栏展示数量必须大于 0")
@@ -128,9 +139,10 @@ def register_global_activity(
     definition_id: object,
     *,
     priority: int = 0,
-    opening_window: timedelta = timedelta(hours=12),
-    closing_window: timedelta = timedelta(hours=12),
+    opening_window: timedelta = GLOBAL_ACTIVITY_OPENING_WINDOW,
+    closing_window: timedelta = GLOBAL_ACTIVITY_CLOSING_WINDOW,
     entry_intent_id: object | None = None,
+    presentation: GlobalActivityPresentation | None = None,
 ) -> GlobalActivityRegistration:
     """供具体活动组件声明全服活动，无需修改活动通栏。"""
 
@@ -140,7 +152,24 @@ def register_global_activity(
             priority,
             ActivitySpotlightPolicy(opening_window, closing_window),
             entry_intent_id,
+            presentation,
         )
+    )
+
+
+def resolve_global_activity_presentation(
+    registration: GlobalActivityRegistration,
+    projector: SkinProjector,
+) -> GlobalActivityPresentation:
+    """固定活动直接返回自身展示，普通活动继续使用当前世界皮肤。"""
+
+    if registration.presentation is not None:
+        return registration.presentation
+    entry = projector.entry(registration.definition_id)
+    return GlobalActivityPresentation(
+        projector.name(registration.definition_id),
+        projector.compact_name(registration.definition_id),
+        entry.description,
     )
 
 
@@ -166,4 +195,5 @@ __all__ = [
     "GlobalActivityCatalog",
     "global_activity_catalog",
     "register_global_activity",
+    "resolve_global_activity_presentation",
 ]

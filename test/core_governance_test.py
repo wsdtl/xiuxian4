@@ -138,11 +138,36 @@ FOUNDATION_TESTS = {
 
 def main() -> None:
     _assert_database_write_boundary()
+    _assert_feature_layer_boundary()
+    _assert_balance_values_live_in_content()
     _assert_cross_domain_state_fields()
     _assert_dynamic_field_registry()
     _assert_foundation_coverage()
+    _assert_battle_modes_use_core_session()
     _assert_changed_core_has_evidence()
     print("core governance tests passed")
+
+
+def _assert_battle_modes_use_core_session() -> None:
+    """连续战斗模式不能绕过核心会话自行维护状态轨迹。"""
+
+    battle_modes = (
+        ROOT / "game" / "rules" / "exploration" / "battle.py",
+        ROOT / "game" / "features" / "dimensional_disaster" / "battle.py",
+    )
+    forbidden = (
+        "self.engine.execute_turn(",
+        "replace(state",
+        "initial_entities",
+        "round_entities",
+        "turn_entities",
+    )
+    for path in battle_modes:
+        source = path.read_text(encoding="utf-8")
+        assert "BattleSession.start(" in source, path
+        assert "session.execute_turn(" in source, path
+        assert "session.apply_external(" in source, path
+        assert not any(value in source for value in forbidden), path
 
 
 def _assert_database_write_boundary() -> None:
@@ -165,6 +190,53 @@ def _assert_database_write_boundary() -> None:
                 failures.append(
                     f"{relative.as_posix()} 绕过持久化协调服务导入 {imported}"
                 )
+    assert not failures, "\n".join(failures)
+
+
+def _assert_feature_layer_boundary() -> None:
+    """正式玩法只能向下依赖内容、规则和公共核心，不能反向吞掉外层。"""
+
+    failures: list[str] = []
+    features = ROOT / "game" / "features"
+    forbidden = ("launch", "message", "game.cmd", "game.app", "组件测试")
+    for path in features.rglob("*.py"):
+        relative = path.relative_to(ROOT).as_posix()
+        for imported in _imports(_parse(path), path):
+            if any(imported == prefix or imported.startswith(f"{prefix}.") for prefix in forbidden):
+                failures.append(f"{relative} 反向导入外层模块 {imported}")
+
+    allowed_root_files = {"__init__.py", "app.py"}
+    unexpected = sorted(
+        path.name
+        for path in (ROOT / "game").glob("*.py")
+        if path.name not in allowed_root_files
+    )
+    failures.extend(f"game 根目录出现业务模块 {name}，请归入 features" for name in unexpected)
+    assert not failures, "\n".join(failures)
+
+
+def _assert_balance_values_live_in_content() -> None:
+    """可调概率、阈值和初始资产不能重新定义在规则或玩法层。"""
+
+    balance_name = re.compile(
+        r"(?:CHANCE|RATIO|WEIGHT|AMOUNT|CAPACITY|QUANTITY|RECOVERY_SECONDS|PRESET_IDS|WINDOW)$"
+        r"|^INITIAL_|^LEVEL_CORE_ATTRIBUTE_|^CHARACTER_MAXIMUM_LEVEL$"
+        r"|^GLOBAL_ACTIVITY_SPOTLIGHT_LIMIT$"
+    )
+    failures: list[str] = []
+    for root in (ROOT / "game" / "rules", ROOT / "game" / "features"):
+        for path in root.rglob("*.py"):
+            tree = _parse(path)
+            for node in tree.body:
+                names: list[str] = []
+                if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    names = [target.id for target in targets if isinstance(target, ast.Name)]
+                for name in names:
+                    if balance_name.search(name):
+                        failures.append(
+                            f"{path.relative_to(ROOT).as_posix()} 在外层声明平衡参数 {name}"
+                        )
     assert not failures, "\n".join(failures)
 
 

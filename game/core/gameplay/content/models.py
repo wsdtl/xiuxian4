@@ -20,6 +20,7 @@ from ..character import (
     ProgressionDefinition,
 )
 from ..combat import (
+    AutomaticTargetRequest,
     BattleAbilityTargeting,
     CombatStats,
     ControlDefinition,
@@ -189,6 +190,7 @@ class InterceptorHandlerRegistration:
 class TargetSelectorRegistration:
     id: StableId
     selector: TargetSelector
+    automatic_request: AutomaticTargetRequest | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "id", stable_id(self.id, field="target selector id"))

@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from game.content.catalog.activity import (
+    GLOBAL_ACTIVITY_CLOSING_WINDOW,
+    GLOBAL_ACTIVITY_OPENING_WINDOW,
+)
 from game.core.gameplay import ActivityInstance, ActivityStatus, StableId, stable_id
 
 
@@ -15,8 +19,8 @@ GLOBAL_ACTIVITY_SCOPE_ID = "activity.scope.global"
 class ActivitySpotlightPolicy:
     """控制长活动只在开放初期和结束前进入顶部活动区。"""
 
-    opening_window: timedelta = timedelta(hours=12)
-    closing_window: timedelta = timedelta(hours=12)
+    opening_window: timedelta = GLOBAL_ACTIVITY_OPENING_WINDOW
+    closing_window: timedelta = GLOBAL_ACTIVITY_CLOSING_WINDOW
 
     def __post_init__(self) -> None:
         if self.opening_window < timedelta(0) or self.closing_window < timedelta(0):
@@ -35,6 +39,24 @@ class ActivitySpotlightPolicy:
 
 
 @dataclass(frozen=True)
+class GlobalActivityPresentation:
+    """不受世界皮肤影响的全服活动固定展示。"""
+
+    name: str
+    compact_name: str
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        name = " ".join(str(self.name or "").split())
+        compact = " ".join(str(self.compact_name or "").split())
+        if not name or not compact:
+            raise ValueError("固定活动展示必须包含名称和短名")
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "compact_name", compact)
+        object.__setattr__(self, "description", str(self.description or "").strip())
+
+
+@dataclass(frozen=True)
 class GlobalActivityRegistration:
     """由活动所属组件声明的全服展示信息。"""
 
@@ -42,6 +64,7 @@ class GlobalActivityRegistration:
     priority: int = 0
     spotlight: ActivitySpotlightPolicy = ActivitySpotlightPolicy()
     entry_intent_id: StableId | None = None
+    presentation: GlobalActivityPresentation | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -57,6 +80,11 @@ class GlobalActivityRegistration:
                 "entry_intent_id",
                 stable_id(self.entry_intent_id, field="global activity entry intent id"),
             )
+        if self.presentation is not None and not isinstance(
+            self.presentation,
+            GlobalActivityPresentation,
+        ):
+            raise TypeError("全服活动固定展示类型不正确")
 
 
 @dataclass(frozen=True)
@@ -88,6 +116,7 @@ __all__ = [
     "ActivitySpotlightPolicy",
     "GLOBAL_ACTIVITY_SCOPE_ID",
     "GlobalActivityRegistration",
+    "GlobalActivityPresentation",
     "GlobalActivitySelection",
     "GlobalActivityView",
 ]

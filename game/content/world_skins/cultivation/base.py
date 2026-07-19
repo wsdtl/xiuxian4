@@ -1,4 +1,4 @@
-"""基础修仙界的公共展示名称。"""
+"""太玄界的公共展示名称。"""
 
 from game.core.gameplay import (
     COMBAT_ATTACK,
@@ -6,8 +6,15 @@ from game.core.gameplay import (
     COMBAT_SPEED,
     HEALTH_CURRENT,
     HEALTH_MAXIMUM,
+    ACCESSORY_SLOT_ID,
+    BODY_SLOT_ID,
+    FEET_SLOT_ID,
+    HANDS_SLOT_ID,
+    HEAD_SLOT_ID,
     SPIRIT_CURRENT,
     SPIRIT_MAXIMUM,
+    WAIST_SLOT_ID,
+    WEAPON_SLOT_ID,
     SkinEntry,
 )
 
@@ -19,6 +26,7 @@ from ...catalog import (
     PRIMARY_CURRENCY_ID,
     RARE_QUALITY_ID,
 )
+from ...catalog.character import REST_ACTION_ID
 from ...catalog.combat.stats import (
     COMBAT_ACCURACY,
     COMBAT_BLOCK_CHANCE,
@@ -69,6 +77,14 @@ CULTIVATION_BASE_ENTRIES = {
     HEALTH_CURRENT: SkinEntry(name="当前气血"),
     SPIRIT_CURRENT: SkinEntry(name="当前灵力"),
     SHIELD_CURRENT: SkinEntry(name="当前护盾"),
+    WEAPON_SLOT_ID: SkinEntry(name="兵器"),
+    HEAD_SLOT_ID: SkinEntry(name="冠首"),
+    BODY_SLOT_ID: SkinEntry(name="法衣"),
+    HANDS_SLOT_ID: SkinEntry(name="护手"),
+    WAIST_SLOT_ID: SkinEntry(name="腰佩"),
+    FEET_SLOT_ID: SkinEntry(name="履靴"),
+    ACCESSORY_SLOT_ID: SkinEntry(name="饰品"),
+    REST_ACTION_ID: SkinEntry(name="休息"),
 }
 
 

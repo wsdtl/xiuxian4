@@ -13,9 +13,11 @@ from game.core.gameplay import (
 )
 
 from .catalog import CATALOG_PACKAGE
+from .catalog.exploration import EXPLORATION_REGION_CATALOG, ExplorationRegionCatalog
 from .presentation import EnemyNameProjector, GearProjector
 from .world_skins import (
     CULTIVATION_SKIN_ID,
+    PLAYABLE_WORLD_SKIN_IDS,
     WORLD_SKIN_PACKAGE,
     enemy_presentation_style,
     gear_presentation_style,
@@ -35,6 +37,58 @@ class OfficialContent:
     projector: SkinProjector
     gear_projector: GearProjector
     enemy_projector: EnemyNameProjector
+    exploration_regions: ExplorationRegionCatalog
+
+
+class WorldViewCatalog:
+    """复用同一规则目录，按世界皮肤缓存完整玩家展示投影。"""
+
+    def __init__(
+        self,
+        catalog: ContentRuntime,
+        playable_skin_ids: tuple[StableId, ...] | None = None,
+    ) -> None:
+        self.catalog = catalog
+        values = tuple(playable_skin_ids or catalog.skins.skin_ids())
+        normalized = tuple(catalog.skins.require(value).id for value in values)
+        if not normalized or len(normalized) != len(set(normalized)):
+            raise ValueError("可进入世界皮肤必须存在且不能重复")
+        self._playable_skin_ids = normalized
+        self._views: dict[tuple[StableId, int], OfficialContent] = {}
+
+    def require(
+        self,
+        skin_id: StableId,
+        version: int | None = None,
+    ) -> OfficialContent:
+        skin = self.catalog.skins.require(skin_id, version)
+        key = (skin.id, skin.version)
+        view = self._views.get(key)
+        if view is None:
+            view = select_world_skin(self.catalog, skin.id, version=skin.version)
+            self._views[key] = view
+        return view
+
+    def resolve(self, value: object) -> OfficialContent | None:
+        """按稳定 ID 或玩家可见世界名解析最新世界皮肤。"""
+
+        token = " ".join(str(value or "").strip().casefold().split())
+        if not token:
+            return None
+        for skin_id in self.skin_ids():
+            view = self.require(skin_id)
+            if token in {view.skin.id.casefold(), view.skin.name.casefold()}:
+                return view
+        return None
+
+    def skin_ids(self) -> tuple[StableId, ...]:
+        return self._playable_skin_ids
+
+    def registered_skin_ids(self) -> tuple[StableId, ...]:
+        return self.catalog.skins.skin_ids()
+
+    def latest_views(self) -> tuple[OfficialContent, ...]:
+        return tuple(self.require(skin_id) for skin_id in self.skin_ids())
 
 
 def assemble_official_catalog() -> ContentRuntime:
@@ -53,6 +107,7 @@ def select_world_skin(
 
     skin = catalog.skins.require(skin_id, version)
     projector = SkinProjector(skin)
+    EXPLORATION_REGION_CATALOG.validate(catalog)
     return OfficialContent(
         catalog,
         skin,
@@ -65,6 +120,7 @@ def select_world_skin(
             projector,
             enemy_presentation_style(skin.id, skin.version),
         ),
+        EXPLORATION_REGION_CATALOG,
     )
 
 
@@ -82,11 +138,22 @@ def build_official_content(
     )
 
 
+def build_world_view_catalog() -> WorldViewCatalog:
+    """装配一次正式规则目录，并为角色级世界投影提供缓存入口。"""
+
+    return WorldViewCatalog(
+        assemble_official_catalog(),
+        PLAYABLE_WORLD_SKIN_IDS,
+    )
+
+
 __all__ = [
     "DEFAULT_SKIN_ID",
     "OFFICIAL_PACKAGES",
     "OfficialContent",
+    "WorldViewCatalog",
     "assemble_official_catalog",
     "build_official_content",
+    "build_world_view_catalog",
     "select_world_skin",
 ]

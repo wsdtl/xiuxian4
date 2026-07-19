@@ -1,29 +1,22 @@
 """角色创世、成长和恢复规则。"""
 
 from .identity import (
-    CHARACTERS_PER_ACCOUNT,
-    MAX_CHARACTER_NAME_DISPLAY_WIDTH,
     CharacterIdentityPolicy,
     CharacterIdentityViolation,
     CharacterNameSource,
     PreparedCharacterIdentity,
     validate_character_name,
 )
-from .initialization import (
-    INITIAL_CORE_ATTRIBUTES,
-    LEVEL_CORE_ATTRIBUTE_DELTAS,
-    character_level_milestone,
-    character_level_milestones,
-)
 from .settings import (
-    AUTO_HEALTH_TARGET_RATIO,
-    AUTO_HEALTH_TRIGGER_RATIO,
-    AUTO_SPIRIT_TARGET_RATIO,
-    AUTO_SPIRIT_TRIGGER_RATIO,
     CharacterSettingsState,
-    REST_FULL_RECOVERY_SECONDS,
-    REST_MINIMUM_RECOVERY_RATIO,
-    REST_MINIMUM_SECONDS,
+)
+from .dimension import (
+    CHARACTER_DIMENSION_AGGREGATE,
+    CHARACTER_DIMENSION_RULE_VERSION,
+    CharacterDimensionState,
+    DimensionShiftResult,
+    assign_initial_dimension,
+    shift_dimension,
 )
 from .creation import (
     CHARACTER_CREATION_PROTOCOL_VERSION,
@@ -36,26 +29,20 @@ from .creation import (
     CharacterCreationViolation,
     CharacterCreationWorkflow,
     character_creation_context,
-    INITIAL_BACKPACK_CAPACITY,
-    INITIAL_CURRENCY_AMOUNT,
-    INITIAL_MEDICINE_QUANTITY,
-    LOADOUT_PRESET_IDS,
     PRIMARY_ISSUER_ACCOUNT_ID,
     PRIMARY_LEDGER_ID,
     PRIMARY_WORLD_ID,
 )
+from .loadout import equipped_character_contributions
 
 
 __all__ = [
-    "CHARACTERS_PER_ACCOUNT",
-    "MAX_CHARACTER_NAME_DISPLAY_WIDTH",
     "CHARACTER_CREATION_PROTOCOL_VERSION",
+    "CHARACTER_DIMENSION_AGGREGATE",
+    "CHARACTER_DIMENSION_RULE_VERSION",
     "CHARACTER_SETTINGS_AGGREGATE",
-    "AUTO_HEALTH_TARGET_RATIO",
-    "AUTO_HEALTH_TRIGGER_RATIO",
-    "AUTO_SPIRIT_TARGET_RATIO",
-    "AUTO_SPIRIT_TRIGGER_RATIO",
     "CharacterIdentityPolicy",
+    "CharacterDimensionState",
     "CharacterCreationIds",
     "CharacterCreationPlan",
     "CharacterCreationPlanner",
@@ -67,20 +54,13 @@ __all__ = [
     "CharacterIdentityViolation",
     "CharacterNameSource",
     "CharacterSettingsState",
-    "INITIAL_CORE_ATTRIBUTES",
-    "INITIAL_BACKPACK_CAPACITY",
-    "INITIAL_CURRENCY_AMOUNT",
-    "INITIAL_MEDICINE_QUANTITY",
-    "LEVEL_CORE_ATTRIBUTE_DELTAS",
-    "LOADOUT_PRESET_IDS",
+    "DimensionShiftResult",
     "PRIMARY_ISSUER_ACCOUNT_ID",
     "PRIMARY_LEDGER_ID",
     "PRIMARY_WORLD_ID",
     "PreparedCharacterIdentity",
-    "REST_FULL_RECOVERY_SECONDS",
-    "REST_MINIMUM_RECOVERY_RATIO",
-    "REST_MINIMUM_SECONDS",
-    "character_level_milestone",
-    "character_level_milestones",
     "validate_character_name",
+    "equipped_character_contributions",
+    "assign_initial_dimension",
+    "shift_dimension",
 ]

@@ -777,7 +777,11 @@ class ContentAssembler:
         selectors = TargetSelectorRegistry.with_defaults(constraint_runtime)
         for package in ordered:
             for registration in package.target_selector_registrations:
-                selectors.register(registration.id, registration.selector)
+                selectors.register(
+                    registration.id,
+                    registration.selector,
+                    automatic_request=registration.automatic_request,
+                )
 
         known_ability_ids = set(abilities.ids())
         known_selector_ids = set(selectors.ids())
@@ -806,6 +810,7 @@ class ContentAssembler:
             abilities,
             attribute_resolver,
             resources[profile.combat_stats.health_resource],
+            selectors,
         )
 
         ability_engine = AbilityEngine(

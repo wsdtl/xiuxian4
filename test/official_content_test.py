@@ -25,6 +25,7 @@ from game.content import (  # noqa: E402
     DEFAULT_SKIN_ID,
     EPIC_QUALITY_ID,
     FINE_QUALITY_ID,
+    INSCRIPTION_FEATHER_ITEM_ID,
     LARGE_HEALTH_MEDICINE_ABILITY_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
     LARGE_MEDICINE_RECOVERY_RATIO,
@@ -46,6 +47,9 @@ from game.content import (  # noqa: E402
     SMALL_MEDICINE_RECOVERY_RATIO,
     SMALL_SPIRIT_MEDICINE_ABILITY_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
+    SPECIAL_ITEM_STACK_LIMIT,
+    SPECIAL_ITEM_TAG,
+    SPECIAL_STORAGE_TAG,
     STARTING_CITY_ID,
     STARTER_WEAPON_ITEM_ID,
     coordinate_token,
@@ -55,6 +59,7 @@ from game.content import (  # noqa: E402
     assemble_official_catalog,
     character_realm_for_level,
     select_world_skin,
+    special_item_definition,
 )
 from game.core.gameplay import (  # noqa: E402
     AttributeMagnitude,
@@ -62,6 +67,7 @@ from game.core.gameplay import (  # noqa: E402
     CurrencyDefinition,
     ITEM_ABILITY_COMPONENT_ID,
     ITEM_STORAGE_COMPONENT_ID,
+    ItemAssetKind,
     ItemAbilityComponent,
     ItemStorageComponent,
     LoadoutState,
@@ -77,8 +83,8 @@ def main() -> None:
         CATALOG_PACKAGE_ID,
         WORLD_SKIN_PACKAGE_ID,
     )
-    assert str(CATALOG_PACKAGE.manifest.version) == "3.2.0"
-    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.5.0"
+    assert str(CATALOG_PACKAGE.manifest.version) == "3.9.0"
+    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.10.0"
     assert len(catalog.report.content_fingerprint) == 64
     assert catalog.report.display_content_ids == CATALOG_PACKAGE.display_content_ids
     progression = catalog.characters.progressions.require("progression.character_level")
@@ -106,6 +112,7 @@ def main() -> None:
         range(5)
     )
     _assert_medicine_catalog(catalog)
+    _assert_nacre_item_categories(catalog)
     assert catalog.items.require(STARTER_WEAPON_ITEM_ID).tags.has("item.armament")
     basic_combat = catalog.characters.features.require(BASIC_COMBAT_FEATURE_ID)
     assert BASIC_ATTACK_ABILITY_ID in basic_combat.contribution.abilities
@@ -133,8 +140,8 @@ def main() -> None:
     cultivation = select_world_skin(catalog, DEFAULT_SKIN_ID)
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
     assert cultivation.catalog is magic.catalog
-    assert cultivation.skin.name == "基础修仙界"
-    assert cultivation.skin.version == 9
+    assert cultivation.skin.name == "太玄界"
+    assert cultivation.skin.version == 16
     assert cultivation.skin.icon == "☯"
     assert cultivation.projector.name(PRIMARY_CURRENCY_ID) == "灵石"
     assert tuple(cultivation.projector.name(value) for value in QUALITY_IDS) == (
@@ -145,10 +152,12 @@ def main() -> None:
         "圣",
     )
     assert magic.skin.name == "魔法世界"
-    assert magic.skin.version == 9
+    assert magic.skin.version == 15
     assert magic.skin.icon == "✦"
     assert magic.projector.name(PRIMARY_CURRENCY_ID) == "魔晶"
     assert magic.projector.name(COMMON_QUALITY_ID) == "普通"
+    assert cultivation.projector.name(INSCRIPTION_FEATHER_ITEM_ID) == "铭刻之羽"
+    assert magic.projector.name(INSCRIPTION_FEATHER_ITEM_ID) == "铭刻之羽"
     assert tuple(magic.projector.name(value) for value in QUALITY_IDS) == (
         "普通",
         "精良",
@@ -236,6 +245,34 @@ def _assert_medicine_catalog(catalog) -> None:
         magnitude = effect.operations[0].magnitude
         assert isinstance(magnitude, AttributeMagnitude)
         assert magnitude.scale == recovery_ratio
+
+
+def _assert_nacre_item_categories(catalog) -> None:
+    feather = catalog.items.require(INSCRIPTION_FEATHER_ITEM_ID)
+    assert feather.asset_kind is ItemAssetKind.INSTANCE
+    assert feather.tags.has("item.inscription_medium")
+    assert feather.tags.has("storage.inscription")
+    assert not feather.tags.has(SPECIAL_STORAGE_TAG)
+    assert not feather.tags.has("item.consumable")
+    assert not feather.tags.has(SPECIAL_ITEM_TAG)
+
+    special = special_item_definition(
+        "item.special.test_talisman",
+        use_components={
+            ITEM_ABILITY_COMPONENT_ID: ItemAbilityComponent("ability.test_talisman")
+        },
+    )
+    assert special.asset_kind is ItemAssetKind.STACK
+    assert special.stack_limit == SPECIAL_ITEM_STACK_LIMIT
+    assert special.tags.has("item.consumable")
+    assert special.tags.has(SPECIAL_ITEM_TAG)
+    assert special.tags.has(SPECIAL_STORAGE_TAG)
+    assert not special.tags.has("item.medicine")
+    try:
+        special_item_definition("item.special.invalid", use_components={})
+        raise AssertionError("特殊物品不能缺少类型化使用组件")
+    except ValueError as exc:
+        assert "使用组件" in str(exc)
 
 
 def _assert_new_display_content_requires_both_skins() -> None:

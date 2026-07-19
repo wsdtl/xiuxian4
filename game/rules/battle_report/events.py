@@ -1,0 +1,48 @@
+"""当前战报必须完整翻译的战斗事件契约。"""
+
+KNOWN_BATTLE_EVENT_KINDS = frozenset(
+    {
+        "ability.completed",
+        "ability.cooldown_changed",
+        "ability.cooldown_started",
+        "ability.ready",
+        "ability.started",
+        "combat.action.interrupted",
+        "combat.attack.blocked",
+        "combat.attack.critical",
+        "combat.attack.hit",
+        "combat.attack.missed",
+        "combat.battle.finished",
+        "combat.battle.started",
+        "combat.control.resolved",
+        "combat.damage.dealt",
+        "combat.damage.intercepted",
+        "combat.damage.prevented",
+        "combat.damage.redirected",
+        "combat.healing.resolved",
+        "combat.participant.joined",
+        "combat.participant.left",
+        "combat.phase.activated",
+        "combat.round.started",
+        "combat.shield.broken",
+        "combat.shield.damaged",
+        "combat.shield.granted",
+        "combat.target.defeated",
+        "combat.timeline.delay_requested",
+        "combat.timeline.extra_turn_requested",
+        "combat.turn.ended",
+        "combat.turn.skipped",
+        "combat.turn.started",
+        "effect.applied",
+        "effect.choice.selected",
+        "effect.duration_changed",
+        "effect.expired",
+        "effect.removed",
+        "effect.stacks_changed",
+        "resource.changed",
+        "resource.transferred",
+        "trigger.activated",
+    }
+)
+
+__all__ = ["KNOWN_BATTLE_EVENT_KINDS"]

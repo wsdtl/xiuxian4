@@ -12,6 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from game.content.catalog.activity import (  # noqa: E402
+    GLOBAL_ACTIVITY_CLOSING_WINDOW,
+    GLOBAL_ACTIVITY_OPENING_WINDOW,
+    GLOBAL_ACTIVITY_SPOTLIGHT_LIMIT,
+)
 from game.core.gameplay import (  # noqa: E402
     ActivityCatalog,
     ActivityDefinition,
@@ -34,11 +39,19 @@ TIME = datetime(2026, 7, 15, 12, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
 def main() -> None:
+    _assert_content_defaults()
     _assert_spotlight_windows_and_filtering()
     _assert_sorting_and_limit()
     _assert_registration_validation()
     _assert_scope_and_time_boundaries()
     print("global activity registration tests passed")
+
+
+def _assert_content_defaults() -> None:
+    policy = ActivitySpotlightPolicy()
+    assert policy.opening_window == GLOBAL_ACTIVITY_OPENING_WINDOW
+    assert policy.closing_window == GLOBAL_ACTIVITY_CLOSING_WINDOW
+    assert GLOBAL_ACTIVITY_SPOTLIGHT_LIMIT == 2
 
 
 def _assert_spotlight_windows_and_filtering() -> None:

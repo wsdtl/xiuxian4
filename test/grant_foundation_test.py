@@ -61,7 +61,7 @@ KEYS = RewardSettlementStorageKeys(
 
 def main() -> None:
     assert GRANT_FOUNDATION_VERSION == "grant.foundation.v1"
-    assert PERSISTENCE_SCHEMA_VERSION == 4
+    assert PERSISTENCE_SCHEMA_VERSION == 5
     with TemporaryDirectory() as directory:
         _assert_complete_grant_flow(Path(directory))
     print("grant foundation tests passed")

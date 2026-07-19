@@ -197,7 +197,12 @@ class DamageEngine:
         )
         interceptions += records
         after_block = frame.amount
-        limited = self._limit_damage(effective_request, after_block, target_attributes)
+        limited = self._limit_damage(
+            effective_request,
+            after_block,
+            target_attributes,
+            prevented=frame.prevented,
+        )
         frame = replace(frame, amount=limited)
         frame, records = self._intercept(
             DamageStage.BEFORE_SHIELD,
@@ -404,7 +409,11 @@ class DamageEngine:
         request: DamageRequest,
         value: float,
         target: AttributeSnapshot,
+        *,
+        prevented: bool = False,
     ) -> float:
+        if prevented:
+            return 0.0
         minimum = self.rules.minimum_damage
         if request.minimum_damage is not None:
             minimum = max(minimum, request.minimum_damage)

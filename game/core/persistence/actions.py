@@ -79,28 +79,48 @@ class PersistedActionService:
         checkpoint = context.random.checkpoint()
         try:
             with self.database.unit_of_work() as uow:
-                replay = self._replay(uow, transaction)
-                if replay is not None:
-                    return RuleOutcome.success(PersistedActionExecution(replay, True))
-                state = self.snapshots.require(
-                    uow,
-                    ACTION_AGGREGATE,
-                    transaction.actor_id,
-                    ActionState,
-                )
-                failure = self._unsettled_claim_failure(transaction, state)
-                if failure is not None:
-                    return RuleOutcome.failed(failure)
-                outcome = self.engine.execute(transaction, state=state, context=context)
+                outcome = self.execute_in_uow(uow, transaction, context=context)
                 if outcome.failure:
-                    return RuleOutcome.failed(outcome.failure)
-                assert outcome.value is not None
-                self._commit_execution(uow, transaction, state, outcome.value, context.logical_time)
+                    return outcome
                 uow.commit()
-                return RuleOutcome.success(PersistedActionExecution(outcome.value))
+                return outcome
         except Exception:
             context.random.restore(checkpoint)
             raise
+
+    def execute_in_uow(
+        self,
+        uow: SqliteUnitOfWork,
+        transaction: ActionTransaction,
+        *,
+        context: RuleContext,
+    ) -> RuleOutcome[PersistedActionExecution]:
+        """在调用方工作单元内提交行动，供跨聚合玩法原子组合。"""
+
+        replay = self._replay(uow, transaction)
+        if replay is not None:
+            return RuleOutcome.success(PersistedActionExecution(replay, True))
+        state = self.snapshots.require(
+            uow,
+            ACTION_AGGREGATE,
+            transaction.actor_id,
+            ActionState,
+        )
+        failure = self._unsettled_claim_failure(transaction, state)
+        if failure is not None:
+            return RuleOutcome.failed(failure)
+        outcome = self.engine.execute(transaction, state=state, context=context)
+        if outcome.failure:
+            return RuleOutcome.failed(outcome.failure)
+        assert outcome.value is not None
+        self._commit_execution(
+            uow,
+            transaction,
+            state,
+            outcome.value,
+            context.logical_time,
+        )
+        return RuleOutcome.success(PersistedActionExecution(outcome.value))
 
     def claim_with_reward(
         self,

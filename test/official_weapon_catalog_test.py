@@ -28,6 +28,7 @@ from game.content.world_skins import (  # noqa: E402
 )
 from game.core.gameplay import (  # noqa: E402
     AbilityUse,
+    ActiveEffect,
     GameplayExecutor,
     ItemizationBalanceAuditor,
     RuleContext,
@@ -40,6 +41,7 @@ from game.rules import (  # noqa: E402
     WeaponGenerationRequest,
     WeaponInstanceGenerator,
 )
+from game.rules.battle_report import KNOWN_BATTLE_EVENT_KINDS  # noqa: E402
 
 
 def main() -> None:
@@ -48,6 +50,7 @@ def main() -> None:
     _assert_catalog_shape(catalog)
     _assert_instance_generation(catalog)
     _assert_all_active_abilities_execute(executor)
+    _assert_all_weapon_triggers_execute(catalog)
     _assert_random_branch_is_real(executor)
     _assert_mark_and_detonation_cycle(executor)
     _assert_periodic_damage(executor, catalog)
@@ -165,6 +168,10 @@ def _assert_all_active_abilities_execute(executor: GameplayExecutor) -> None:
         assert outcome.failure is None, (blueprint.key, outcome.failure)
         assert outcome.value is not None
         assert outcome.value.target.resources["health.current"] < 100_000
+        unknown = {
+            str(event.kind) for event in outcome.value.events
+        } - KNOWN_BATTLE_EVENT_KINDS
+        assert not unknown, (blueprint.key, unknown)
 
 
 def _assert_random_branch_is_real(executor: GameplayExecutor) -> None:
@@ -191,6 +198,61 @@ def _assert_random_branch_is_real(executor: GameplayExecutor) -> None:
         )
     assert branches == {0, 1}
     assert len(damage_values) == 2
+
+
+def _assert_all_weapon_triggers_execute(catalog) -> None:
+    trigger_ids = tuple(
+        trigger_id
+        for trigger_id in catalog.triggers.ids()
+        if trigger_id.startswith("trigger.weapon.")
+    )
+    assert len(trigger_ids) == 22
+    for index, trigger_id in enumerate(trigger_ids):
+        definition = catalog.triggers.require(trigger_id)
+        owner_id = "target" if definition.owner.value == "event_target" else "actor"
+        actor = _entity(
+            "actor",
+            trigger_id=trigger_id if owner_id == "actor" else None,
+            cooldowns={"ability.basic_attack": 3},
+        )
+        target = _entity(
+            "target",
+            trigger_id=trigger_id if owner_id == "target" else None,
+            cooldowns={"ability.basic_attack": 3},
+        )
+        context = _context(f"weapon-trigger:{trigger_id}", 20_000 + index)
+        event = RuleEvent.from_context(
+            context,
+            kind=definition.event_kind,
+            source_id="actor",
+            target_id="target",
+            subject_id="combat.test",
+            values={
+                "damage_type": "damage.physical",
+                "is_proc": 0.0,
+                "effective_damage": 100.0,
+                "health_damage": 100.0,
+                "shield_damage": 100.0,
+                "actual": 100.0,
+            },
+        )
+        result = catalog.trigger_engine.process(
+            (event,),
+            entities={"actor": actor, "target": target},
+            context=context,
+        )
+        assert any(
+            value.kind == "trigger.activated" and value.subject_id == trigger_id
+            for value in result.events
+        ), trigger_id
+        unknown = {
+            str(value.kind)
+            for value in result.events
+            if str(value.kind).startswith(
+                ("ability.", "combat.", "effect.", "resource.", "trigger.")
+            )
+        } - KNOWN_BATTLE_EVENT_KINDS
+        assert not unknown, (trigger_id, unknown)
 
 
 def _assert_mark_and_detonation_cycle(executor: GameplayExecutor) -> None:
@@ -313,7 +375,19 @@ def _entity(
     *,
     ability_id: str | None = None,
     cooldowns=None,
+    trigger_id: str | None = None,
 ) -> RuleEntity:
+    active_effects = ()
+    if trigger_id:
+        active_effects = (
+            ActiveEffect(
+                f"weapon-grant:{entity_id}:{trigger_id}",
+                "effect.weapon.test_grant",
+                entity_id,
+                granted_triggers=frozenset({trigger_id}),
+                remaining_turns=None,
+            ),
+        )
     return RuleEntity(
         entity_id,
         base_attributes={
@@ -331,6 +405,7 @@ def _entity(
             "combat.shield.current": 0,
         },
         base_abilities=frozenset({ability_id}) if ability_id else frozenset(),
+        active_effects=active_effects,
         cooldowns=cooldowns or {},
     )
 

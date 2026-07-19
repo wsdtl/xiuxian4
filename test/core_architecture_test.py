@@ -86,9 +86,40 @@ def _assert_physical_layout() -> None:
         "package.py",
     }, "名录根目录只能保留公共入口、跨领域基础和内容包装配"
     catalog_domains = {
-        "character": {"__init__.py", "definitions.py", "realms.py"},
+        "activity": {"__init__.py", "policy.py"},
+        "character": {
+            "__init__.py",
+            "definitions.py",
+            "identity.py",
+            "realms.py",
+            "recovery.py",
+            "starting.py",
+        },
         "combat": {"__init__.py", "definitions.py", "stats.py", "valuation.py"},
-        "item": {"__init__.py", "definitions.py"},
+        "disaster": {
+            "__init__.py",
+            "catalog.py",
+            "cultivation.py",
+            "magic.py",
+            "models.py",
+            "policy.py",
+        },
+        "enemy": {
+            "__init__.py",
+            "behaviors.py",
+            "blueprints.py",
+            "definitions.py",
+            "encounters.py",
+            "loot.py",
+        },
+        "exploration": {"__init__.py", "definitions.py"},
+        "item": {
+            "__init__.py",
+            "definitions.py",
+            "special.py",
+            "trade.py",
+            "trophies.py",
+        },
         "weapon": {
             "__init__.py",
             "balance.py",
@@ -105,6 +136,11 @@ def _assert_physical_layout() -> None:
         },
         "world": {"__init__.py", "definitions.py"},
     }
+    assert {
+        path.name
+        for path in catalog.iterdir()
+        if path.is_dir() and path.name != "__pycache__"
+    } == set(catalog_domains), "名录领域目录必须同步登记到架构契约"
     for domain_name, expected_modules in catalog_domains.items():
         domain = catalog / domain_name
         assert domain.is_dir(), f"名录领域缺失：{domain_name}"
@@ -137,6 +173,7 @@ def _assert_physical_layout() -> None:
             "combat.py",
             "equipment.py",
             "items.py",
+            "trophies.py",
             "presentation.py",
             "skin.py",
             "weapons.py",

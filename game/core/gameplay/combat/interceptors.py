@@ -184,7 +184,8 @@ def _cap(definition, _binding, frame, *_args) -> DamageFrame:
 
 
 def _immunity(_definition, _binding, frame, *_args) -> DamageFrame:
-    return replace(frame, amount=0.0)
+    # 免疫必须穿透场景的最低伤害规则，否则归零后还会被重新抬高。
+    return replace(frame, amount=0.0, prevented=True)
 
 
 def _bypass_shield(_definition, _binding, frame, *_args) -> DamageFrame:

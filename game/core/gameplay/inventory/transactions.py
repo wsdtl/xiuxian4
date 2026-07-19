@@ -40,6 +40,15 @@ class GrantStack:
 
 
 @dataclass(frozen=True)
+class AppendStack:
+    """向既有堆叠追加一个可追溯来源批次。"""
+
+    asset_id: str
+    quantity: int
+    receipt: SourceReceipt
+
+
+@dataclass(frozen=True)
 class GrantInstance:
     asset_id: str
     definition_id: StableId
@@ -201,6 +210,7 @@ class InventoryEngine:
     ) -> None:
         handlers = {
             GrantStack: self._grant_stack,
+            AppendStack: self._append_stack,
             GrantInstance: self._grant_instance,
             ConsumeStack: self._consume_stack,
             ConsumeInstance: self._consume_instance,
@@ -253,6 +263,40 @@ class InventoryEngine:
                 "container_id": container.id,
                 "receipt_id": operation.receipt.id,
                 "reference_number": reference_number,
+            },
+        )
+
+    def _append_stack(
+        self,
+        operation: AppendStack,
+        draft: _Draft,
+        transaction: InventoryTransaction,
+        context: RuleContext,
+    ) -> None:
+        if operation.quantity < 1:
+            self._fail("inventory.invalid_quantity", "追加数量必须大于 0")
+        stack = self._require_stack(operation.asset_id, draft)
+        definition = self._require_kind(stack.definition_id, ItemAssetKind.STACK)
+        self._check_stack_limit(definition, stack.quantity + operation.quantity)
+        container = self._require_container(stack.container_id, draft)
+        draft.stacks[stack.id] = replace(
+            stack,
+            lots=(*stack.lots, ProvenanceLot(operation.receipt, operation.quantity)),
+            revision=stack.revision + 1,
+        )
+        self._event(
+            draft,
+            transaction,
+            context,
+            "inventory.item.granted",
+            definition.id,
+            container.owner_id,
+            {
+                "asset_id": stack.id,
+                "quantity": operation.quantity,
+                "container_id": container.id,
+                "receipt_id": operation.receipt.id,
+                "reference_number": draft.asset_references[stack.id],
             },
         )
 
@@ -1015,6 +1059,7 @@ def _coalesce_lots(lots: tuple[ProvenanceLot, ...]) -> tuple[ProvenanceLot, ...]
 
 
 __all__ = [
+    "AppendStack",
     "ConsumeInstance",
     "ConsumeStack",
     "DestroyAsset",

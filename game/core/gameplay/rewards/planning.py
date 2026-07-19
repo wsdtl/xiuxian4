@@ -12,6 +12,7 @@ from ..economy import IssueFunds, LedgerOperation
 from ..errors import RuleViolation
 from ..equipment import equipment_state_data
 from ..inventory import (
+    AppendStack,
     GrantInstance,
     GrantStack,
     InventoryOperation,
@@ -232,14 +233,32 @@ def _plan_currency(reward: CurrencyReward, index: int, builder: RewardPlanBuilde
 
 
 def _plan_stack_item(reward: StackItemReward, index: int, builder: RewardPlanBuilder) -> None:
-    builder.add_inventory(
-        GrantStack(
+    existing = builder.snapshot.inventory.stacks.get(reward.asset_id)
+    if existing is not None:
+        if (
+            existing.definition_id != reward.definition_id
+            or existing.container_id != reward.container_id
+        ):
+            builder.fail(
+                "reward.stack_identity_conflict",
+                "堆叠奖励资产与既有物品身份不一致",
+                {"asset_id": reward.asset_id},
+            )
+        operation = AppendStack(
+            reward.asset_id,
+            reward.quantity,
+            builder.source_receipt(index, reward.metadata),
+        )
+    else:
+        operation = GrantStack(
             reward.asset_id,
             reward.definition_id,
             reward.container_id,
             reward.quantity,
             builder.source_receipt(index, reward.metadata),
-        ),
+        )
+    builder.add_inventory(
+        operation,
         _line(index, "reward.item_stack", reward.container_id, reward.definition_id, reward.quantity),
     )
 

@@ -76,6 +76,7 @@ class TargetingContext:
 
 
 TargetSelector = Callable[[TargetRequest, TargetingContext], tuple[str, ...]]
+AutomaticTargetRequest = Callable[[TargetingContext, int | None], TargetRequest]
 
 
 class TargetConstraintKind(str, Enum):
@@ -154,16 +155,42 @@ class TargetSelectorRegistry:
 
     def __init__(self, constraints: TargetConstraintRegistry | None = None) -> None:
         self._selectors: dict[StableId, TargetSelector] = {}
+        self._automatic_requests: dict[StableId, AutomaticTargetRequest] = {}
         self._frozen = False
         self.constraints = constraints
 
-    def register(self, selector_id: StableId, selector: TargetSelector) -> None:
+    def register(
+        self,
+        selector_id: StableId,
+        selector: TargetSelector,
+        *,
+        automatic_request: AutomaticTargetRequest | None = None,
+    ) -> None:
         if self._frozen:
             raise RuntimeError("目标选择器注册表已经冻结")
         key = stable_id(selector_id, field="selector id")
         if key in self._selectors:
             raise ValueError(f"目标选择器重复：{key}")
         self._selectors[key] = selector
+        if automatic_request is not None:
+            self._automatic_requests[key] = automatic_request
+
+    def automatic_request(
+        self,
+        selector_id: StableId,
+        context: TargetingContext,
+        *,
+        maximum_targets: int | None = None,
+    ) -> TargetRequest:
+        """把 AI 的目标模式物化为可直接执行的目标请求。"""
+
+        key = stable_id(selector_id, field="selector id")
+        if key not in self._selectors:
+            raise KeyError(f"未知目标选择器：{key}")
+        factory = self._automatic_requests.get(key)
+        if factory is None:
+            return TargetRequest(key, maximum_targets=maximum_targets)
+        return factory(context, maximum_targets)
 
     def select(
         self,
@@ -225,15 +252,27 @@ class TargetSelectorRegistry:
     ) -> "TargetSelectorRegistry":
         result = cls(constraints)
         result.register("target.self", _self)
-        result.register("target.enemy.explicit", _explicit_enemy)
-        result.register("target.ally.explicit", _explicit_ally)
+        result.register(
+            "target.enemy.explicit",
+            _explicit_enemy,
+            automatic_request=_automatic_enemy_request("target.enemy.explicit"),
+        )
+        result.register(
+            "target.ally.explicit",
+            _explicit_ally,
+            automatic_request=_automatic_ally_request,
+        )
         result.register("target.enemy.first", _first_enemy)
         result.register("target.enemy.all", _all_enemies)
         result.register("target.ally.all", _all_allies)
         result.register("target.enemy.random", _random_enemy)
         result.register("target.enemy.lowest_health", _lowest_health_enemy)
         result.register("target.ally.lowest_health", _lowest_health_ally)
-        result.register("target.enemy.adjacent", _adjacent_enemies)
+        result.register(
+            "target.enemy.adjacent",
+            _adjacent_enemies,
+            automatic_request=_automatic_enemy_request("target.enemy.adjacent"),
+        )
         return result
 
     def ids(self) -> tuple[StableId, ...]:
@@ -352,7 +391,34 @@ def _adjacent_enemies(request: TargetRequest, context: TargetingContext) -> tupl
     )
 
 
+def _automatic_enemy_request(selector_id: str) -> AutomaticTargetRequest:
+    def build(context: TargetingContext, maximum_targets: int | None) -> TargetRequest:
+        candidates = _candidates(context, "enemy")
+        explicit_ids = candidates[:1]
+        return TargetRequest(
+            selector_id,
+            explicit_ids,
+            maximum_targets=maximum_targets,
+        )
+
+    return build
+
+
+def _automatic_ally_request(
+    context: TargetingContext,
+    maximum_targets: int | None,
+) -> TargetRequest:
+    candidates = _candidates(context, "ally")
+    explicit_ids = candidates[:1] or ((context.actor_id,) if context.alive(context.actor_id) else ())
+    return TargetRequest(
+        "target.ally.explicit",
+        explicit_ids,
+        maximum_targets=maximum_targets,
+    )
+
+
 __all__ = [
+    "AutomaticTargetRequest",
     "TargetRequest",
     "TargetConstraintDefinition",
     "TargetConstraintKind",

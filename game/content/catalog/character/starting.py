@@ -1,0 +1,15 @@
+"""新角色初始资产、容量与装配方案内容。"""
+
+
+INITIAL_CURRENCY_AMOUNT = 100
+INITIAL_BACKPACK_CAPACITY = 40
+INITIAL_MEDICINE_QUANTITY = 2
+LOADOUT_PRESET_IDS = tuple(f"loadout_preset.p{index}" for index in range(6))
+
+
+__all__ = [
+    "INITIAL_BACKPACK_CAPACITY",
+    "INITIAL_CURRENCY_AMOUNT",
+    "INITIAL_MEDICINE_QUANTITY",
+    "LOADOUT_PRESET_IDS",
+]

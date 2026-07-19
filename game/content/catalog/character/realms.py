@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from game.core.gameplay import ContentDefinition, StableId, stable_id
 
+from .definitions import CHARACTER_MAXIMUM_LEVEL
+
 
 @dataclass(frozen=True)
 class CharacterRealmDefinition:
@@ -48,10 +50,10 @@ CHARACTER_REALM_CONTENT_DEFINITIONS = tuple(
 
 
 def character_realm_for_level(level: int) -> CharacterRealmDefinition:
-    """返回等级对应境界；人物正式等级范围固定为 1-100。"""
+    """返回正式人物等级对应的境界。"""
 
     normalized_level = int(level)
-    if not 1 <= normalized_level <= 100:
+    if not 1 <= normalized_level <= CHARACTER_MAXIMUM_LEVEL:
         raise ValueError(f"人物等级不在境界范围内: {normalized_level}")
     index = (
         (normalized_level - 1) // 10

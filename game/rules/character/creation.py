@@ -15,6 +15,10 @@ from game.content.catalog import (
     CHARACTER_PRESENCE_KIND_ID,
     COMMON_QUALITY_ID,
     DEFAULT_CHARACTER_TEMPLATE_ID,
+    INITIAL_BACKPACK_CAPACITY,
+    INITIAL_CURRENCY_AMOUNT,
+    INITIAL_MEDICINE_QUANTITY,
+    LOADOUT_PRESET_IDS,
     PRIMARY_CURRENCY_ID,
     PRIMARY_WORLD_SPACE_ID,
     SMALL_HEALTH_MEDICINE_ITEM_ID,
@@ -24,6 +28,7 @@ from game.content.catalog import (
     STARTING_CITY_ID,
 )
 from game.core.gameplay import (
+    EQUIPMENT_SLOT_IDS,
     WEAPON_SLOT_ID,
     IssueFunds,
     ItemAssetKind,
@@ -37,9 +42,11 @@ from game.core.gameplay import (
     LedgerTransaction,
     LoadoutPreset,
     LoadoutState,
+    LootState,
     OpenLedgerAccount,
     ProvenanceLot,
     RuleContext,
+    RewardClaimState,
     Ruleset,
     SeededRandomSource,
     SourceReceipt,
@@ -63,17 +70,21 @@ from .identity import (
     PreparedCharacterIdentity,
 )
 from .settings import CharacterSettingsState
+from .dimension import (
+    CHARACTER_DIMENSION_AGGREGATE,
+    CharacterDimensionState,
+    assign_initial_dimension,
+)
 
 
-INITIAL_CURRENCY_AMOUNT = 100
-INITIAL_BACKPACK_CAPACITY = 40
-INITIAL_MEDICINE_QUANTITY = 2
-LOADOUT_PRESET_IDS = tuple(f"loadout_preset.p{index}" for index in range(6))
 PRIMARY_LEDGER_ID = "ledger.primary"
 PRIMARY_WORLD_ID = "world.primary"
 PRIMARY_ISSUER_ACCOUNT_ID = "ledger_account.issuer.primary"
 CHARACTER_SETTINGS_AGGREGATE = "snapshot.character_settings"
-CHARACTER_CREATION_PROTOCOL_VERSION = "character_creation.v1"
+LOOT_AGGREGATE = "snapshot.loot"
+REWARD_CLAIM_AGGREGATE = "snapshot.reward_claim"
+WEAPON_AGGREGATE = "snapshot.weapon"
+CHARACTER_CREATION_PROTOCOL_VERSION = "character_creation.v2"
 IdFactory = Callable[[str], str]
 
 
@@ -100,6 +111,7 @@ class CharacterCreationIds:
     character_id: str
     inventory_id: str
     special_container_id: str
+    inscription_container_id: str
     armory_container_id: str
     backpack_container_id: str
     equipped_container_id: str
@@ -124,6 +136,7 @@ class CharacterCreationPlan:
     loadout: LoadoutState
     ledger: LedgerState
     world: WorldState
+    dimension: CharacterDimensionState
     settings: CharacterSettingsState
     starter_weapon: WeaponState
 
@@ -131,8 +144,17 @@ class CharacterCreationPlan:
 class CharacterCreationPlanner:
     """只规划规则状态；数据库事务、防重和并发由应用层负责。"""
 
-    def __init__(self, content: ContentRuntime) -> None:
+    def __init__(
+        self,
+        content: ContentRuntime,
+        dimension_skin_ids: tuple[str, ...] | None = None,
+    ) -> None:
         self.content = content
+        candidates = tuple(dimension_skin_ids or content.skins.skin_ids())
+        normalized = tuple(content.skins.require(value).id for value in candidates)
+        if not normalized or len(normalized) != len(set(normalized)):
+            raise ValueError("角色创世可降临世界必须存在且不能重复")
+        self.dimension_skin_ids = normalized
         self.ledger_engine = LedgerEngine(content.currencies)
 
     def build(
@@ -171,6 +193,13 @@ class CharacterCreationPlanner:
                     character.id,
                     required_item_tags=TagSet.of("storage.special"),
                 ),
+                ids.inscription_container_id: ItemContainer(
+                    ids.inscription_container_id,
+                    "container.inscription",
+                    character.id,
+                    accepted_kinds=frozenset({ItemAssetKind.INSTANCE}),
+                    required_item_tags=TagSet.of("storage.inscription"),
+                ),
                 ids.armory_container_id: ItemContainer(
                     ids.armory_container_id,
                     "container.armory",
@@ -191,7 +220,7 @@ class CharacterCreationPlanner:
                     character.id,
                     accepted_kinds=frozenset({ItemAssetKind.INSTANCE}),
                     required_item_tags=TagSet.of("item.armament"),
-                    maximum_assets=7,
+                    maximum_assets=1 + len(EQUIPMENT_SLOT_IDS),
                 ),
             },
             stacks={
@@ -245,6 +274,12 @@ class CharacterCreationPlanner:
             world or WorldState(PRIMARY_WORLD_ID),
             context,
         )
+        dimension = assign_initial_dimension(
+            character.id,
+            self.dimension_skin_ids,
+            random=context.random,
+            logical_time=context.logical_time,
+        )
         return CharacterCreationPlan(
             character,
             identity.name_source,
@@ -253,6 +288,7 @@ class CharacterCreationPlanner:
             loadout,
             next_ledger,
             next_world,
+            dimension,
             CharacterSettingsState(character.id),
             starter_weapon,
         )
@@ -387,6 +423,7 @@ class CharacterCreationReceipt:
     loadout: LoadoutState
     ledger: LedgerState
     world: WorldState
+    dimension: CharacterDimensionState
     settings: CharacterSettingsState
     starter_weapon: WeaponState
     replayed: bool = False
@@ -418,6 +455,7 @@ class CharacterCreationWorkflow:
     def codec_registrations(self) -> tuple[tuple[str, type[object]], ...]:
         return (
             ("product.character_name_source", CharacterNameSource),
+            ("product.character_dimension", CharacterDimensionState),
             ("product.character_settings", CharacterSettingsState),
             ("product.character_creation_receipt", CharacterCreationReceipt),
         )
@@ -434,6 +472,7 @@ class CharacterCreationWorkflow:
             {
                 "protocol": CHARACTER_CREATION_PROTOCOL_VERSION,
                 "content": self.planner.content.report.content_fingerprint,
+                "dimension_skins": self.planner.dimension_skin_ids,
                 "account_id": value.account_id,
                 "requested_name": value.requested_name,
                 "platform_name": value.platform_name,
@@ -510,7 +549,17 @@ class CharacterCreationWorkflow:
     @staticmethod
     def extra_snapshots(prepared: object) -> tuple[tuple[str, str, object], ...]:
         plan = CharacterCreationWorkflow._plan(prepared)
-        return ((CHARACTER_SETTINGS_AGGREGATE, plan.character.id, plan.settings),)
+        return (
+            (CHARACTER_DIMENSION_AGGREGATE, plan.character.id, plan.dimension),
+            (CHARACTER_SETTINGS_AGGREGATE, plan.character.id, plan.settings),
+            (LOOT_AGGREGATE, plan.character.id, LootState(plan.character.id)),
+            (
+                REWARD_CLAIM_AGGREGATE,
+                plan.character.id,
+                RewardClaimState(plan.character.id),
+            ),
+            (WEAPON_AGGREGATE, plan.starter_weapon.asset_id, plan.starter_weapon),
+        )
 
     def build_receipt(
         self,
@@ -531,6 +580,7 @@ class CharacterCreationWorkflow:
             plan.loadout,
             plan.ledger,
             plan.world,
+            plan.dimension,
             plan.settings,
             plan.starter_weapon,
         )
@@ -541,6 +591,7 @@ class CharacterCreationWorkflow:
             character_id,
             character_id,
             self.id_factory("special"),
+            self.id_factory("inscription"),
             self.id_factory("armory"),
             self.id_factory("backpack"),
             self.id_factory("equipped"),
@@ -579,11 +630,10 @@ __all__ = [
     "CharacterCreationViolation",
     "CharacterCreationWorkflow",
     "character_creation_context",
-    "INITIAL_BACKPACK_CAPACITY",
-    "INITIAL_CURRENCY_AMOUNT",
-    "INITIAL_MEDICINE_QUANTITY",
-    "LOADOUT_PRESET_IDS",
     "PRIMARY_ISSUER_ACCOUNT_ID",
     "PRIMARY_LEDGER_ID",
     "PRIMARY_WORLD_ID",
+    "LOOT_AGGREGATE",
+    "REWARD_CLAIM_AGGREGATE",
+    "WEAPON_AGGREGATE",
 ]

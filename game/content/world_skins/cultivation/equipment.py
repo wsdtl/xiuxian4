@@ -1,4 +1,4 @@
-"""基础修仙界的装备、词条与套装展示；规则蓝图不保存玩家可见文本。"""
+"""太玄界的装备、词条与套装展示；规则蓝图不保存玩家可见文本。"""
 
 from game.core.gameplay import SkinEntry
 
@@ -114,7 +114,7 @@ def _build_equipment_entries() -> dict[str, SkinEntry]:
     )
     for blueprint_keys, display_keys, label in expected:
         if blueprint_keys != display_keys:
-            raise ValueError(f"基础修仙界{label}展示键必须完整覆盖规则蓝图")
+            raise ValueError(f"太玄界{label}展示键必须完整覆盖规则蓝图")
     entries: dict[str, SkinEntry] = {}
     for family in EQUIPMENT_FAMILY_BLUEPRINTS:
         family_name, family_description = _FAMILY_DISPLAY[family.key]

@@ -18,6 +18,7 @@ from ..character import (
     CharacterProjector,
     CharacterState,
     CharacterTransaction,
+    CharacterContribution,
 )
 from ..context import RuleContext
 from ..entity import RuleEntity
@@ -122,17 +123,25 @@ class CharacterItemUseEngine:
         *,
         inventory: InventoryState,
         characters: Mapping[str, CharacterState],
+        contributions: Mapping[str, tuple[CharacterContribution, ...]] | None = None,
         context: RuleContext,
     ) -> RuleOutcome[CharacterItemUseExecution]:
         checkpoint = context.random.checkpoint()
         try:
             actor = self._require_character(characters, command.actor_id)
             target = self._require_character(characters, command.target_id)
-            actor_entity = self.projector.project(actor).entity
+            contribution_map = contributions or {}
+            actor_entity = self.projector.project(
+                actor,
+                contributions=contribution_map.get(actor.id, ()),
+            ).entity
             target_entity = (
                 actor_entity
                 if actor.id == target.id
-                else self.projector.project(target).entity
+                else self.projector.project(
+                    target,
+                    contributions=contribution_map.get(target.id, ()),
+                ).entity
             )
             try:
                 asset = inventory.asset(command.asset_id)

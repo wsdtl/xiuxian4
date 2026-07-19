@@ -341,6 +341,8 @@ def _assert_failures_are_atomic(engine, inventory, weapon_state):
 
 def _assert_persistence_replay():
     engine, inventory, weapon_state = _fixture()
+    weapon_reference = inventory.reference_number("weapon-1")
+    next_reference_number = inventory.next_reference_number
     with TemporaryDirectory() as directory:
         database = SqliteDatabase(Path(directory) / "inscription.db")
         database.initialize()
@@ -378,6 +380,8 @@ def _assert_persistence_replay():
             )
             assert stored.revision == 1
             assert "feather-1" not in stored.instances
+            assert stored.reference_number("weapon-1") == weapon_reference
+            assert stored.next_reference_number == next_reference_number
             assert stored.instances["weapon-1"].data[INSCRIPTION_DATA_KEY].asset_name == "青云剑"
             assert len(uow.pending_outbox(limit=10)) == 2
 

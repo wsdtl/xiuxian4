@@ -135,6 +135,7 @@ def _facts(resolution: DamageResolution) -> tuple[EffectFact, ...]:
                 "after_damage_type": record.after.damage_type,
                 "bypass_shield": record.after.bypass_shield,
                 "minimum_health": record.after.minimum_health,
+                "prevented": record.after.prevented,
             },
         )
         for record in resolution.interceptions

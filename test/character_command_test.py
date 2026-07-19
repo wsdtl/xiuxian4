@@ -21,7 +21,11 @@ from game.app import (  # noqa: E402
     install_game_services,
     restore_game_services,
 )
-from game.content import STARTER_WEAPON_ID, STARTING_CITY_ID  # noqa: E402
+from game.content import (  # noqa: E402
+    CHARACTER_LEVEL_PROGRESSION_ID,
+    STARTER_WEAPON_ID,
+    STARTING_CITY_ID,
+)
 from game.core.persistence import CHARACTER_AGGREGATE  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
     ActivityInstance,
@@ -38,7 +42,11 @@ from game.cmd import 提醒 as reminder_component  # noqa: E402,F401
 from game.cmd.command import GameCommand  # noqa: E402
 from game.cmd.dependencies import current_character_overview  # noqa: E402
 from game.cmd.reply import GameReplyComposer, send_game_reply  # noqa: E402
-from game.cmd.reply_intents import ReplyIntentRegistry  # noqa: E402
+from game.cmd.reply_intents import (  # noqa: E402
+    NOTIFICATION_READ_INTENT,
+    ReplyIntentRegistry,
+    reply_intents,
+)
 from launch.adapter import Depends  # noqa: E402
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
@@ -49,7 +57,9 @@ from launch.adapter.qq.render import render_qq_message  # noqa: E402
 
 CREATE_COMMAND = "创建角色"
 PROFILE_COMMAND = "我的角色"
+COMBAT_PANEL_COMMAND = "战斗面板"
 MOOD_COMMAND = "心情"
+AUTO_MEDICINE_COMMAND = "自动用药"
 PROTECTED_COMMAND = "角色守卫测试"
 NOTIFICATION_COMMAND = "notifications"
 PENDING_COMMAND = "pending_actions"
@@ -78,12 +88,19 @@ async def _main() -> None:
     ]
     assert isinstance(overview_parameter.default, Depends)
     assert overview_parameter.default.dependency is current_character_overview
+    assert tuple(inspect.signature(character_component.view_combat_panel).parameters) == (
+        "overview",
+    )
     assert len(LocalEventHandler.exact_rules[CREATE_COMMAND]) == 1
     assert len(QqEventHandler.exact_rules[CREATE_COMMAND]) == 1
     assert len(LocalEventHandler.exact_rules[PROFILE_COMMAND]) == 1
     assert len(QqEventHandler.exact_rules[PROFILE_COMMAND]) == 1
+    assert len(LocalEventHandler.exact_rules[COMBAT_PANEL_COMMAND]) == 1
+    assert len(QqEventHandler.exact_rules[COMBAT_PANEL_COMMAND]) == 1
     assert len(LocalEventHandler.exact_rules[MOOD_COMMAND]) == 1
     assert len(QqEventHandler.exact_rules[MOOD_COMMAND]) == 1
+    assert len(LocalEventHandler.exact_rules[AUTO_MEDICINE_COMMAND]) == 1
+    assert len(QqEventHandler.exact_rules[AUTO_MEDICINE_COMMAND]) == 1
     assert len(LocalEventHandler.exact_rules[PROTECTED_COMMAND]) == 1
     assert len(QqEventHandler.exact_rules[PROTECTED_COMMAND]) == 1
     assert len(LocalEventHandler.exact_rules[NOTIFICATION_COMMAND]) == 1
@@ -97,12 +114,17 @@ async def _main() -> None:
     assert LocalEventHandler.exact_rules[CREATE_COMMAND][0].metadata == {
         "game": {"access": "public"}
     }
+    assert LocalEventHandler.exact_rules[PROFILE_COMMAND][0].metadata == {
+        "game": {"access": "player"}
+    }
     with TemporaryDirectory() as directory:
         services = build_game_services(
             database_path=Path(directory) / "character-command.db",
             identity_secret="character-command-test-secret",
         )
         services.database.initialize()
+        assert services.exploration.settlement.battles.player_combat is services.player_combat
+        assert services.dimensional_disasters.battles.player_combat is services.player_combat
         previous = install_game_services(services)
         try:
             await LocalEventHandler.run()
@@ -172,6 +194,16 @@ async def _main() -> None:
             settings = services.load_character_settings(character_id)
             assert settings.mood_header_enabled and settings.revision == 1
 
+            auto_medicine = await dispatch(
+                client_id="local-user-a",
+                raw_message=f"{AUTO_MEDICINE_COMMAND} 关闭",
+                sender_name="平台昵称甲",
+                event_id="local-auto-medicine-disable",
+            )
+            assert "当前状态: _关闭_" in _content(auto_medicine)
+            settings = services.load_character_settings(character_id)
+            assert not settings.auto_use_medicine and settings.revision == 2
+
             existing_with_mood = await dispatch(
                 client_id="local-user-a",
                 raw_message=f"{CREATE_COMMAND} 第二角色",
@@ -185,6 +217,10 @@ async def _main() -> None:
 
             character = services.characters.load_character(character_id)
             assert character is not None
+            overview_result = services.load_character_overview(character)
+            assert overview_result.overview is not None
+            dimension = overview_result.overview.dimension
+            world_view = services.world_view(dimension)
             notification_time = datetime.now(ZoneInfo("Asia/Shanghai"))
             services.notifications.issue(
                 NotificationEntry(
@@ -235,6 +271,7 @@ async def _main() -> None:
                 PlayerReplyState(
                     character,
                     settings,
+                    dimension,
                     activity_spotlights=activity_spotlights,
                     additional_activity_count=2,
                     unread_notification_count=2,
@@ -267,6 +304,7 @@ async def _main() -> None:
                     PlayerReplyState(
                         character,
                         settings,
+                        dimension,
                         activity_spotlights=activity_spotlights,
                         additional_activity_count=2,
                         unread_notification_count=2,
@@ -293,7 +331,7 @@ async def _main() -> None:
                 try:
                     composer.compose(
                         invalid_body,
-                        PlayerReplyState(character, settings),
+                        PlayerReplyState(character, settings, dimension),
                         logical_time=notification_time,
                     )
                     raise AssertionError("组件不能手写全局通栏或彩色人物头")
@@ -327,6 +365,25 @@ async def _main() -> None:
                 character.account_id,
                 logical_time=notification_time,
             ) == 1
+            read_intent = reply_intents.definition(NOTIFICATION_READ_INTENT)
+            assert read_intent is not None
+            read_command = read_intent.command(
+                {
+                    "notification_id": "notification-character-command",
+                    "revision": 0,
+                }
+            )
+            marked_read = await dispatch(
+                client_id="local-user-a",
+                raw_message=read_command,
+                sender_name="平台昵称甲",
+                event_id="local-notification-read",
+            )
+            assert "已标记为已读" in _content(marked_read)
+            assert services.notifications.count_unread(
+                character.account_id,
+                logical_time=datetime.now(ZoneInfo("Asia/Shanghai")),
+            ) == 0
 
             pending_list = await dispatch(
                 client_id="local-user-a",
@@ -353,20 +410,60 @@ async def _main() -> None:
             assert "活动不存在、尚未开放或已经结束" in _content(activity_detail)
             profile_plain = _plain(profile_content)
             assert "云舟客 Lv1" in profile_plain
-            assert "境界: 未入道" in profile_plain
+            assert (
+                f"{world_view.projector.name(CHARACTER_LEVEL_PROGRESSION_ID)}: 未入道"
+                in profile_plain
+            )
             assert "经验: 0/" in profile_plain
-            assert "血气: 100/100" in profile_plain
+            assert "气血: 100/100" in profile_plain
             assert "灵力: 100/100" in profile_plain
-            assert "最大血气: 100" in profile_plain
-            assert "最大灵力: 100" in profile_plain
-            assert "攻击: 10" in profile_plain
-            assert "防御: 0" in profile_plain
-            assert "速度: 100" in profile_plain
             assert "黄品·仙京制式剑 | Lv1" in profile_plain
-            assert "装备: 0/6 | 无" in profile_plain
+            for slot_name in ("头部", "身体", "手部", "腰部", "足部", "饰品"):
+                assert f"{slot_name}: 未装备" in profile_plain
+            assert "基础属性" not in profile_plain
+            assert "攻击:" not in profile_plain
+            assert "防御:" not in profile_plain
+            assert "速度:" not in profile_plain
             assert "太玄仙城" in profile_plain
             assert "灵石: 100" in profile_plain
             assert "行动: 空闲" in profile_plain
+            assert profile.replies[0].message.actions[0].data == COMBAT_PANEL_COMMAND
+
+            combat_panel = await dispatch(
+                client_id="local-user-a",
+                raw_message=COMBAT_PANEL_COMMAND,
+                sender_name="平台昵称甲",
+                event_id="local-combat-panel-a",
+            )
+            combat_plain = _plain(_content(combat_panel))
+            assert "战斗面板" in combat_plain
+            assert "当前配装: 0" in combat_plain
+            assert "气血上限: 100" in combat_plain
+            assert "灵力上限: 100" in combat_plain
+            assert "攻击: 12" in combat_plain
+            assert "防御: 0" in combat_plain
+            assert "速度: 100" in combat_plain
+            assert "命中修正: 0%" in combat_plain
+            assert "暴击: 0%" in combat_plain
+            assert "承伤修正: 0%" in combat_plain
+            for label in (
+                "闪避",
+                "暴击增伤",
+                "格挡",
+                "格挡减伤",
+                "伤害修正",
+                "固定穿透",
+                "比例穿透",
+                "治疗修正",
+                "受疗修正",
+                "控制修正",
+                "控制抵抗",
+                "韧性",
+            ):
+                assert f"{label}:" in combat_plain
+            assert "基础攻击" in combat_plain and "破势" in combat_plain
+            assert "特效: 无" in combat_plain
+            assert "套装: 无" in combat_plain
 
             mood_disabled = await dispatch(
                 client_id="local-user-a",
@@ -378,7 +475,7 @@ async def _main() -> None:
                 "**未入道 云舟客 Lv1**"
             )
             settings = services.load_character_settings(character_id)
-            assert not settings.mood_header_enabled and settings.revision == 2
+            assert not settings.mood_header_enabled and settings.revision == 3
 
             replayed = await dispatch(
                 client_id="local-user-a",
@@ -438,7 +535,7 @@ async def _main() -> None:
                 event_id="local-profile-c",
             )
             assert _content(not_created) == (
-                "**我的角色**\n"
+                "**创建角色**\n"
                 "> 📌 建档状态\n"
                 "> > 尚未创建角色\n"
                 "> \n"

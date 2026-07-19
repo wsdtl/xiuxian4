@@ -479,6 +479,30 @@ class SnapshotRepository:
             raise AggregateNotFound(f"缺少聚合快照：{aggregate_kind}/{aggregate_id}")
         return value
 
+    def list(
+        self,
+        uow: SqliteUnitOfWork,
+        aggregate_kind: str,
+        expected_type: type[StateT],
+        *,
+        limit: int = 1_000,
+    ) -> tuple[StateT, ...]:
+        """解码同类聚合；业务调度只依赖仓储接口，不直接读取 SQL。"""
+
+        values: list[StateT] = []
+        for row in uow.list_snapshots(aggregate_kind, limit=limit):
+            if row.codec_version != SNAPSHOT_CODEC_VERSION:
+                raise CorruptPersistenceData(
+                    f"快照 codec 版本不匹配：需要 {SNAPSHOT_CODEC_VERSION}，当前 {row.codec_version}"
+                )
+            value = self.codec.loads(row.payload, expected_type)
+            if getattr(value, "revision", None) != row.revision:
+                raise CorruptPersistenceData(
+                    f"快照行 revision 与负载不一致：{aggregate_kind}/{row.aggregate_id}"
+                )
+            values.append(value)
+        return tuple(values)
+
     def insert(
         self,
         uow: SqliteUnitOfWork,
