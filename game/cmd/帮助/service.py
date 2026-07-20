@@ -1,0 +1,112 @@
+"""从命令帮助注册表生成协议中立的玩家消息。"""
+
+from __future__ import annotations
+
+from game.content.presentation import GAME_NAME
+from message import Action, DocumentMessage, M
+
+from ..help_registry import CommandHelpEntry, help_registry
+from ..reply import send_game_reply
+
+
+async def show_help(query: str = "") -> None:
+    """按空查询、分类或命令三级展示帮助。"""
+
+    normalized = " ".join(str(query or "").split())
+    if not normalized:
+        message = _home_message()
+    elif normalized in help_registry.categories():
+        message = _category_message(normalized)
+    elif entry := help_registry.find(normalized):
+        message = _detail_message(entry)
+    else:
+        message = _not_found_message(normalized)
+    await send_game_reply(message)
+
+
+def _home_message() -> DocumentMessage:
+    builder = (
+        M.document()
+        .header(GAME_NAME)
+        .section("帮助", icon="system")
+        .line("按分类查看当前已经开放的命令。")
+    )
+    categories = help_registry.categories()
+    for start in range(0, len(categories), 3):
+        row = categories[start : start + 3]
+        parts: list[object] = []
+        for index, category in enumerate(row):
+            if index:
+                parts.append("　")
+            parts.append(M.command(category, f"帮助 {category}"))
+        builder.line(*parts)
+    return builder.build()
+
+
+def _category_message(category: str) -> DocumentMessage:
+    builder = M.document().header(GAME_NAME).section(category, icon="system")
+    for index, entry in enumerate(help_registry.in_category(category), start=1):
+        builder.item(
+            index,
+            M.command(entry.command, f"帮助 {entry.command}"),
+            " - ",
+            entry.spec.summary,
+        )
+    return builder.actions((_home_action(),)).build()
+
+
+def _detail_message(entry: CommandHelpEntry) -> DocumentMessage:
+    builder = (
+        M.document()
+        .header(GAME_NAME)
+        .section(entry.command, icon="system")
+        .line(entry.spec.summary)
+        .section("写法")
+    )
+    for usage in entry.spec.usage:
+        builder.line(usage)
+    if entry.spec.side_effect:
+        builder.section("影响").line(entry.spec.side_effect)
+    return builder.actions(
+        (
+            Action(
+                "help.execute",
+                "发送命令",
+                entry.command,
+                behavior="send",
+            ),
+            Action(
+                "help.category",
+                "返回分类",
+                f"帮助 {entry.spec.category}",
+                behavior="send",
+                style="secondary",
+            ),
+        )
+    ).build()
+
+
+def _not_found_message(query: str) -> DocumentMessage:
+    builder = (
+        M.document()
+        .header(GAME_NAME)
+        .section("没有找到帮助", icon="notice")
+        .line(f"未登记分类或命令: {query}")
+        .section("可用分类")
+    )
+    for category in help_registry.categories():
+        builder.line(M.command(category, f"帮助 {category}"))
+    return builder.actions((_home_action(),)).build()
+
+
+def _home_action() -> Action:
+    return Action(
+        "help.home",
+        "帮助首页",
+        "帮助",
+        behavior="send",
+        style="secondary",
+    )
+
+
+__all__ = ["show_help"]

@@ -25,21 +25,29 @@ reply_intents.register(
 )
 
 
-@GameCommand.handler(cmd="notifications", intent_ids=(NOTIFICATIONS_INTENT,))
+@GameCommand.handler(
+    cmd="notifications",
+    intent_ids=(NOTIFICATIONS_INTENT,),
+    hidden=True,
+)
 async def view_notifications(current=Depends(current_character)) -> None:
     """查看当前账号的有效未读通知。"""
 
     await service.view_notifications(current)
 
 
-@GameCommand.handler(cmd="pending_actions", intent_ids=(PENDING_ACTIONS_INTENT,))
+@GameCommand.handler(
+    cmd="pending_actions",
+    intent_ids=(PENDING_ACTIONS_INTENT,),
+    hidden=True,
+)
 async def view_pending_actions(current=Depends(current_character)) -> None:
     """查看当前角色已经完成但尚未领取的行动。"""
 
     await service.view_pending_actions(current)
 
 
-@GameCommand.handler(cmd="notification_read")
+@GameCommand.handler(cmd="notification_read", hidden=True)
 async def mark_notification_read(
     message: str = "",
     current=Depends(current_character),

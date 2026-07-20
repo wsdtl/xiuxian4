@@ -4,12 +4,21 @@ from __future__ import annotations
 
 from launch.adapter import Depends
 
-from ..command import GameCommand
+from ..command import GameCommand, HelpSpec
 from ..dependencies import current_character
 from . import service
 
 
-@GameCommand.handler(cmd="跃迁")
+@GameCommand.handler(
+    cmd="跃迁",
+    help=HelpSpec(
+        category="世界",
+        summary="查看当前界相或登录另一个世界",
+        usage=("跃迁", "跃迁 世界名称"),
+        side_effect="成功跃迁会消耗对应特殊物品，角色和资产保持不变",
+        order=10,
+    ),
+)
 async def dimension_shift(
     message: str = "",
     current=Depends(current_character),

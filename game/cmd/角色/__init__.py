@@ -4,19 +4,37 @@ from __future__ import annotations
 
 from launch.adapter import Depends
 
-from ..command import GameCommand
+from ..command import GameCommand, HelpSpec
 from ..dependencies import current_character, current_character_overview
 from . import service
 
 
-@GameCommand.handler(cmd="创建角色", access="public")
+@GameCommand.handler(
+    cmd="创建角色",
+    access="public",
+    help=HelpSpec(
+        category="角色",
+        summary="建立当前账号的唯一化身",
+        usage=("创建角色", "创建角色 名称"),
+        side_effect="每个账号只能创建一个角色",
+        order=10,
+    ),
+)
 async def create_character(message: str = "") -> None:
     """创建当前消息发送者的角色。"""
 
     await service.create_character(message)
 
 
-@GameCommand.handler(cmd="我的角色")
+@GameCommand.handler(
+    cmd="我的角色",
+    help=HelpSpec(
+        category="角色",
+        summary="查看人物、装配、位置、资产和当前行动",
+        usage=("我的角色",),
+        order=20,
+    ),
+)
 async def view_character(
     overview=Depends(current_character_overview),
 ) -> None:
@@ -25,7 +43,15 @@ async def view_character(
     await service.view_character(overview)
 
 
-@GameCommand.handler(cmd="战斗面板")
+@GameCommand.handler(
+    cmd="战斗面板",
+    help=HelpSpec(
+        category="角色",
+        summary="查看当前配装实际生效的全部战斗数值",
+        usage=("战斗面板",),
+        order=30,
+    ),
+)
 async def view_combat_panel(
     overview=Depends(current_character_overview),
 ) -> None:
@@ -34,7 +60,15 @@ async def view_combat_panel(
     await service.view_combat_panel(overview)
 
 
-@GameCommand.handler(cmd="心情")
+@GameCommand.handler(
+    cmd="心情",
+    help=HelpSpec(
+        category="角色",
+        summary="查看或切换人物头的心情颜色",
+        usage=("心情", "心情 开启", "心情 关闭"),
+        order=40,
+    ),
+)
 async def mood(
     message: str = "",
     current=Depends(current_character),
@@ -44,7 +78,16 @@ async def mood(
     await service.mood(message, current)
 
 
-@GameCommand.handler(cmd="自动用药")
+@GameCommand.handler(
+    cmd="自动用药",
+    help=HelpSpec(
+        category="角色",
+        summary="查看或切换探险中的自动恢复药使用",
+        usage=("自动用药", "自动用药 开启", "自动用药 关闭"),
+        side_effect="开启后会在符合条件时消耗纳戒中的恢复药",
+        order=50,
+    ),
+)
 async def auto_medicine(
     message: str = "",
     current=Depends(current_character),

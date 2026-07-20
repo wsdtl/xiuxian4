@@ -21,7 +21,7 @@ reply_intents.register(
 )
 
 
-@GameCommand.handler(cmd="world_events")
+@GameCommand.handler(cmd="world_events", hidden=True)
 async def view_world_events(
     message: str = "",
     current=Depends(current_character),

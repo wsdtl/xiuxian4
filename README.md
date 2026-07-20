@@ -296,6 +296,7 @@ Get-ChildItem test\*_test.py | Sort-Object Name | ForEach-Object {
 - [业务框架与功能规划](game/features/业务框架与功能规划.md)
 - [游戏应用装配](game/应用装配说明.md)
 - [角色组件](game/cmd/角色/说明.md)
+- [帮助组件](game/cmd/帮助/说明.md)
 - [提醒组件](game/cmd/提醒/说明.md)
 - [活动组件](game/cmd/活动/说明.md)
 - [铭刻组件](game/cmd/铭刻/说明.md)

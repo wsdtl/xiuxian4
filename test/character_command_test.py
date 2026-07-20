@@ -66,7 +66,7 @@ PENDING_COMMAND = "pending_actions"
 WORLD_EVENTS_COMMAND = "world_events"
 
 
-@GameCommand.handler(cmd=PROTECTED_COMMAND)
+@GameCommand.handler(cmd=PROTECTED_COMMAND, hidden=True)
 async def protected_command() -> None:
     await send_game_reply(
         M.document().section("角色守卫", icon="status").line("已放行").build()
