@@ -33,6 +33,7 @@ from game.core.gameplay import (
     RewardSettlementEngine,
     GameplayExecutor,
     WeaponEngine,
+    PartyEngine,
 )
 from game.core.persistence import (
     ACTIVITY_AGGREGATE,
@@ -57,6 +58,8 @@ from game.core.persistence import (
     PersistedLoadoutService,
     PersistedRewardSettlementService,
     PersistedSocialService,
+    PersistedPartyAdmissionService,
+    PersistedPartyService,
     REWARD_CLAIM_AGGREGATE,
     RewardSettlementStorageKeys,
     SnapshotRepository,
@@ -146,6 +149,7 @@ from game.features.player import (
     PlayerReplyStateResult,
     PlayerStorageKinds,
 )
+from game.features.party import PartyFeature
 from game.rules.exploration import EXPLORATION_AGGREGATE
 from game.rules.economy import MARKET_AGGREGATE
 from game.rules.sparring import SparringBattleSimulator
@@ -177,6 +181,7 @@ class GameServices:
     global_activities: GlobalActivityCatalog
     battle_reports: BattleReportService
     dimensional_disasters: DimensionalDisasterFeature
+    party: PartyFeature
     companions: CompanionFeature
     player_lineup: PlayerBattleLineupProjector
     exploration: ExplorationFeature
@@ -761,6 +766,20 @@ def build_game_services(
         ),
     )
     social = PersistedSocialService(database, content.catalog.social_engine, snapshots)
+    party_engine = PartyEngine(content.catalog.parties)
+    party_persistence = PersistedPartyService(database, party_engine, snapshots)
+    party_admissions = PersistedPartyAdmissionService(
+        database,
+        content.catalog.social_engine,
+        party_engine,
+        snapshots,
+    )
+    party = PartyFeature(
+        party_persistence,
+        party_admissions,
+        social,
+        content.catalog.parties,
+    )
     sparring = SparringFeature(
         database,
         content,
@@ -797,6 +816,7 @@ def build_game_services(
         global_activities=registered_global_activities,
         battle_reports=battle_reports,
         dimensional_disasters=dimensional_disasters,
+        party=party,
         companions=companions,
         player_lineup=player_lineup,
         exploration=exploration,

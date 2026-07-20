@@ -85,8 +85,8 @@ def main() -> None:
         CATALOG_PACKAGE_ID,
         WORLD_SKIN_PACKAGE_ID,
     )
-    assert str(CATALOG_PACKAGE.manifest.version) == "3.16.0"
-    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.13.0"
+    assert str(CATALOG_PACKAGE.manifest.version) == "3.17.0"
+    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.14.0"
     assert len(catalog.report.content_fingerprint) == 64
     assert catalog.report.display_content_ids == CATALOG_PACKAGE.display_content_ids
     progression = catalog.characters.progressions.require("progression.character_level")

@@ -79,6 +79,12 @@ ACTIVE_BUSINESS_FEATURES = (
         ("game_lottery_draw",),
     ),
     BusinessFeaturePlan(
+        "party",
+        "party",
+        "协调三人队伍、社会邀请、成员关系、队长、站位与准备状态",
+        ("组队",),
+    ),
+    BusinessFeaturePlan(
         "player",
         "player",
         "提供账号到角色入口、角色总览、个人设置、提醒和活动读模型",

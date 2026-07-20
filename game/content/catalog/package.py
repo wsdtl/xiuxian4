@@ -77,7 +77,7 @@ from .world.definitions import (
     PRIMARY_WORLD_SPACE,
     WORLD_DISPLAY_CONTENT_IDS,
 )
-from .social import SPARRING_REQUEST
+from .social import PARTY_INVITATION_REQUEST, PARTY_TYPE_TRIO, SPARRING_REQUEST
 from .combat.valuation import BASE_ATTRIBUTE_VALUATIONS, BASE_REFERENCE_VALUATIONS
 from .draw import DRAW_CATALOG_CONTENT
 
@@ -116,7 +116,7 @@ validate_nacre_item_categories(OFFICIAL_ITEMS)
 CATALOG_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=CATALOG_PACKAGE_ID,
-        version=ContentVersion(3, 16, 0),
+        version=ContentVersion(3, 17, 0),
     ),
     item_component_types=(
         ITEM_RECYCLE_COMPONENT_TYPE,
@@ -197,7 +197,8 @@ CATALOG_PACKAGE = ContentPackage(
     draw_pools=(DRAW_CATALOG_CONTENT.pool,),
     world_spaces=(PRIMARY_WORLD_SPACE,),
     world_locations=ALL_WORLD_LOCATIONS,
-    social_request_types=(SPARRING_REQUEST,),
+    social_request_types=(SPARRING_REQUEST, PARTY_INVITATION_REQUEST),
+    party_types=(PARTY_TYPE_TRIO,),
     display_content_ids=(
         BASE_DISPLAY_CONTENT_IDS
         | CHARACTER_DISPLAY_CONTENT_IDS

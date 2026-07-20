@@ -1,6 +1,6 @@
 """社会互动内容名录。"""
 
-from game.core.gameplay import SocialRequestDefinition
+from game.core.gameplay import PartyDefinition, SocialRequestDefinition
 
 
 SPARRING_REQUEST_ID = "social_request.sparring"
@@ -10,9 +10,24 @@ SPARRING_REQUEST = SocialRequestDefinition(
     SPARRING_REQUEST_LIFETIME_SECONDS,
 )
 
+PARTY_INVITATION_REQUEST_ID = "social_request.party_invitation"
+PARTY_INVITATION_REQUEST_LIFETIME_SECONDS = 600
+PARTY_INVITATION_REQUEST = SocialRequestDefinition(
+    PARTY_INVITATION_REQUEST_ID,
+    PARTY_INVITATION_REQUEST_LIFETIME_SECONDS,
+)
+
+PARTY_TYPE_TRIO_ID = "party_type.trio"
+PARTY_TYPE_TRIO = PartyDefinition(PARTY_TYPE_TRIO_ID, 3)
+
 
 __all__ = [
     "SPARRING_REQUEST",
     "SPARRING_REQUEST_ID",
     "SPARRING_REQUEST_LIFETIME_SECONDS",
+    "PARTY_INVITATION_REQUEST",
+    "PARTY_INVITATION_REQUEST_ID",
+    "PARTY_INVITATION_REQUEST_LIFETIME_SECONDS",
+    "PARTY_TYPE_TRIO",
+    "PARTY_TYPE_TRIO_ID",
 ]

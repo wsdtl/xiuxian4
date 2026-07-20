@@ -136,6 +136,13 @@ from .item import (
     special_item_definition,
 )
 from .package import CATALOG_PACKAGE, CATALOG_PACKAGE_ID
+from .social import (
+    PARTY_INVITATION_REQUEST,
+    PARTY_INVITATION_REQUEST_ID,
+    PARTY_INVITATION_REQUEST_LIFETIME_SECONDS,
+    PARTY_TYPE_TRIO,
+    PARTY_TYPE_TRIO_ID,
+)
 from .weapon import STARTER_WEAPON_ID
 from .world import (
     CHARACTER_PRESENCE_KIND_ID,
