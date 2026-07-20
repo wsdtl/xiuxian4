@@ -39,6 +39,8 @@ BACKPACK_CAPACITY_ITEM_ID = "item.special.backpack_capacity"
 EQUIPMENT_SET_GUARANTEE_ITEM_ID = "item.special.equipment_set_guarantee"
 DIMENSION_SHIFT_ITEM_ID = "item.special.dimension_shift"
 DIMENSION_SHIFT_ITEM_COMPONENT_ID = "item_component.use_dimension_shift"
+COMPANION_SANCTUARY_ITEM_ID = "item.special.companion_sanctuary"
+COMPANION_SANCTUARY_ITEM_COMPONENT_ID = "item_component.use_companion_sanctuary"
 BACKPACK_CAPACITY_INCREMENT = 5
 BACKPACK_CAPACITY_MAXIMUM = 140
 SPECIAL_ITEM_STACK_LIMIT = 99
@@ -58,6 +60,23 @@ class DimensionShiftItemComponent:
 DIMENSION_SHIFT_ITEM_COMPONENT_TYPE = ItemComponentType(
     DIMENSION_SHIFT_ITEM_COMPONENT_ID,
     DimensionShiftItemComponent,
+)
+
+
+@dataclass(frozen=True)
+class CompanionSanctuaryItemComponent:
+    """标记该特殊物品用于开启角色当前世界的伙伴秘境。"""
+
+    quantity: int = 1
+
+    def __post_init__(self) -> None:
+        if self.quantity != 1:
+            raise ValueError("每次开启伙伴秘境必须且只能消耗一枚万灵引")
+
+
+COMPANION_SANCTUARY_ITEM_COMPONENT_TYPE = ItemComponentType(
+    COMPANION_SANCTUARY_ITEM_COMPONENT_ID,
+    CompanionSanctuaryItemComponent,
 )
 
 
@@ -177,17 +196,29 @@ DIMENSION_SHIFT_ITEM = special_item_definition(
         DIMENSION_SHIFT_ITEM_COMPONENT_ID: DimensionShiftItemComponent(),
     },
 )
+COMPANION_SANCTUARY_ITEM = special_item_definition(
+    COMPANION_SANCTUARY_ITEM_ID,
+    use_components={
+        COMPANION_SANCTUARY_ITEM_COMPONENT_ID: CompanionSanctuaryItemComponent(),
+    },
+)
 SPECIAL_ITEMS: tuple[ItemDefinition, ...] = (
     WEAPON_MAXIMUM_LEVEL_ITEM,
     WEAPON_LEVEL_ITEM,
     BACKPACK_CAPACITY_ITEM,
     EQUIPMENT_SET_GUARANTEE_ITEM,
     DIMENSION_SHIFT_ITEM,
+    COMPANION_SANCTUARY_ITEM,
 )
 
 
 __all__ = [
     "CONSUMABLE_ITEM_TAG",
+    "COMPANION_SANCTUARY_ITEM",
+    "COMPANION_SANCTUARY_ITEM_COMPONENT_ID",
+    "COMPANION_SANCTUARY_ITEM_COMPONENT_TYPE",
+    "COMPANION_SANCTUARY_ITEM_ID",
+    "CompanionSanctuaryItemComponent",
     "BACKPACK_CAPACITY_INCREMENT",
     "BACKPACK_CAPACITY_ITEM",
     "BACKPACK_CAPACITY_ITEM_ID",

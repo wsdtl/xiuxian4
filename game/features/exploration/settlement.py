@@ -27,6 +27,7 @@ from game.rules.character import (
     CharacterSettingsState,
     PRIMARY_LEDGER_ID,
 )
+from game.rules.companion import CompanionRosterState
 from game.rules.encounter import EnemyEncounterGenerator
 from game.rules.equipment import (
     EQUIPMENT_SET_GUARANTEE_AGGREGATE,
@@ -76,7 +77,7 @@ class ExplorationSettlementService:
         snapshots,
         rewards,
         inventory_engine,
-        player_combat,
+        player_lineup,
         battle_reports,
         storage: ExplorationStorageKinds,
         reward_keys_factory,
@@ -94,7 +95,7 @@ class ExplorationSettlementService:
             content_version=catalog.report.content_fingerprint,
         )
         self.planner = ExplorationBatchPlanner(content.exploration_regions, encounters)
-        self.battles = ExplorationBattleSimulator(catalog, player_combat)
+        self.battles = ExplorationBattleSimulator(catalog, player_lineup)
         self.reward_factory = ExplorationRewardFactory(content)
         self.medicine = ExplorationMedicineService(
             content,
@@ -187,6 +188,12 @@ class ExplorationSettlementService:
             loadout = self.snapshots.require(
                 uow, self.storage.loadout, character_id, LoadoutState
             )
+            roster = self.snapshots.load(
+                uow,
+                self.storage.companion_roster,
+                character_id,
+                CompanionRosterState,
+            ) or CompanionRosterState(character_id)
             settings = self.snapshots.require(
                 uow,
                 CHARACTER_SETTINGS_AGGREGATE,
@@ -214,6 +221,7 @@ class ExplorationSettlementService:
                     character=character,
                     inventory=inventory,
                     loadout=loadout,
+                    roster=roster,
                     context=context,
                 )
                 victory = battle.victory
@@ -446,6 +454,7 @@ class ExplorationSettlementService:
                         state,
                         next_state,
                         character,
+                        roster,
                         battle,
                         context.trace_id,
                     ),
@@ -458,6 +467,7 @@ class ExplorationSettlementService:
         state: ExplorationState,
         next_state: ExplorationState,
         character: CharacterState,
+        roster: CompanionRosterState,
         battle,
         segment_id: str,
     ) -> BattleReportDraft:
@@ -472,6 +482,21 @@ class ExplorationSettlementService:
                 self.content.catalog.enemy_projector.attributes,
             )
         ]
+        labels = {character.id: (character.name, "player")}
+        if battle.player_companion_id is not None:
+            companion = roster.instances[battle.player_companion_id]
+            companion_name = self.content.companions.species.require(
+                companion.definition_id
+            ).name
+            participants.append(
+                capture_battle_participant(
+                    battle.trace.initial_frame.state.entities[companion.id],
+                    companion_name,
+                    "companion",
+                    self.content.catalog.enemy_projector.attributes,
+                )
+            )
+            labels[companion.id] = (companion_name, "companion")
         enemy_names = []
         for enemy in enemies:
             display = self.content.enemy_projector.enemy(enemy)
@@ -493,6 +518,19 @@ class ExplorationSettlementService:
                 self.content.catalog.enemy_projector.attributes,
             )
         ]
+        if battle.player_companion_id is not None:
+            companion = roster.instances[battle.player_companion_id]
+            companion_name = self.content.companions.species.require(
+                companion.definition_id
+            ).name
+            final_participants.append(
+                capture_battle_participant(
+                    battle.trace.final_frame.state.entities[companion.id],
+                    companion_name,
+                    "companion",
+                    self.content.catalog.enemy_projector.attributes,
+                )
+            )
         final_participants.extend(
             capture_battle_participant(
                 battle.trace.final_frame.state.entities[enemy.id],
@@ -529,7 +567,7 @@ class ExplorationSettlementService:
                 round_states=capture_battle_round_states(
                     battle.trace,
                     {
-                        character.id: (character.name, "player"),
+                        **labels,
                         **{
                             enemy.id: (
                                 self.content.enemy_projector.enemy(enemy).name,
@@ -543,7 +581,7 @@ class ExplorationSettlementService:
                 turn_states=capture_battle_turn_states(
                     battle.trace,
                     {
-                        character.id: (character.name, "player"),
+                        **labels,
                         **{
                             enemy.id: (
                                 self.content.enemy_projector.enemy(enemy).name,
@@ -557,7 +595,7 @@ class ExplorationSettlementService:
                 transitions=capture_battle_transitions(
                     battle.trace,
                     {
-                        character.id: (character.name, "player"),
+                        **labels,
                         **{
                             enemy.id: (
                                 self.content.enemy_projector.enemy(enemy).name,

@@ -19,6 +19,7 @@ from game.content import (  # noqa: E402
     DRAW_REWARD_MID_CURRENCY_ID,
     DRAW_TICKET_ITEM_ID,
     DIMENSION_SHIFT_ITEM_ID,
+    COMPANION_SANCTUARY_ITEM_ID,
     WEAPON_LEVEL_ITEM_ID,
     WEAPON_MAXIMUM_LEVEL_ITEM_ID,
     BACKPACK_CAPACITY_ITEM_ID,
@@ -59,6 +60,7 @@ def main() -> None:
             BACKPACK_CAPACITY_ITEM_ID,
             EQUIPMENT_SET_GUARANTEE_ITEM_ID,
             DIMENSION_SHIFT_ITEM_ID,
+            COMPANION_SANCTUARY_ITEM_ID,
         }
     )
     with TemporaryDirectory() as directory:

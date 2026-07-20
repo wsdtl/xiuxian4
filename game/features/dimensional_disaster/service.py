@@ -55,6 +55,7 @@ from game.core.gameplay import (
 )
 from game.rules.activity import GLOBAL_ACTIVITY_SCOPE_ID
 from game.rules.character import PRIMARY_LEDGER_ID
+from game.rules.companion import CompanionRosterState
 from game.rules.disaster import (
     DIMENSIONAL_DISASTER_AGGREGATE,
     DIMENSIONAL_DISASTER_RULESET_VERSION,
@@ -105,7 +106,7 @@ class DimensionalDisasterFeature:
         playable_skin_ids,
         snapshots,
         rewards,
-        player_combat,
+        player_lineup,
         battle_reports,
         storage: DimensionalDisasterStorageKinds,
         reward_keys_factory,
@@ -125,7 +126,7 @@ class DimensionalDisasterFeature:
         self.timezone = ZoneInfo(timezone)
         self.battles = DimensionalDisasterBattleSimulator(
             content.catalog,
-            player_combat,
+            player_lineup,
             maximum_rounds=maximum_battle_rounds,
         )
 
@@ -249,6 +250,12 @@ class DimensionalDisasterFeature:
                 normalized_character_id,
                 LoadoutState,
             )
+            roster = self.snapshots.load(
+                uow,
+                self.storage.companion_roster,
+                normalized_character_id,
+                CompanionRosterState,
+            ) or CompanionRosterState(normalized_character_id)
             context = _context(normalized_operation_id, logical_time)
             battle = self.battles.simulate(
                 event.combat,
@@ -256,6 +263,7 @@ class DimensionalDisasterFeature:
                 character=character,
                 inventory=inventory,
                 loadout=loadout,
+                roster=roster,
                 context=context,
             )
             damage = min(event.current_health, max(0, battle.damage))
@@ -388,6 +396,7 @@ class DimensionalDisasterFeature:
                 self._battle_report_draft(
                     event,
                     character,
+                    roster,
                     battle,
                     receipt,
                     normalized_operation_id,
@@ -407,28 +416,30 @@ class DimensionalDisasterFeature:
         self,
         event,
         character,
+        roster,
         battle,
         receipt,
         operation_id: str,
         logical_time: datetime,
     ) -> BattleReportDraft:
         outcome = "讨伐胜利" if battle.player_victory else "战斗结束"
-        player_entity = battle.trace.initial_frame.state.entities[character.id]
         enemy_id = f"enemy:{event.event_id}"
-        enemy_entity = battle.trace.initial_frame.state.entities[enemy_id]
-        participants = (
+        labels = {character.id: (character.name, "player")}
+        if battle.player_companion_id is not None:
+            companion = roster.instances[battle.player_companion_id]
+            labels[companion.id] = (
+                self.content.companions.species.require(companion.definition_id).name,
+                "companion",
+            )
+        labels[enemy_id] = (event.narrative.name, "enemy")
+        participants = tuple(
             capture_battle_participant(
-                player_entity,
-                character.name,
-                "player",
+                battle.trace.initial_frame.state.entities[entity_id],
+                name,
+                role,
                 self.content.catalog.enemy_projector.attributes,
-            ),
-            capture_battle_participant(
-                enemy_entity,
-                event.narrative.name,
-                "enemy",
-                self.content.catalog.enemy_projector.attributes,
-            ),
+            )
+            for entity_id, (name, role) in labels.items()
         )
         return BattleReportDraft(
             report_id=self._battle_report_id(operation_id),
@@ -453,42 +464,28 @@ class DimensionalDisasterFeature:
                 outcome=outcome,
                 started_at=logical_time,
                 finished_at=logical_time,
-                final_participants=(
+                final_participants=tuple(
                     capture_battle_participant(
-                        battle.trace.final_frame.state.entities[character.id],
-                        character.name,
-                        "player",
+                        battle.trace.final_frame.state.entities[entity_id],
+                        name,
+                        role,
                         self.content.catalog.enemy_projector.attributes,
-                    ),
-                    capture_battle_participant(
-                        battle.trace.final_frame.state.entities[enemy_id],
-                        event.narrative.name,
-                        "enemy",
-                        self.content.catalog.enemy_projector.attributes,
-                    ),
+                    )
+                    for entity_id, (name, role) in labels.items()
                 ),
                 round_states=capture_battle_round_states(
                     battle.trace,
-                    {
-                        character.id: (character.name, "player"),
-                        enemy_id: (event.narrative.name, "enemy"),
-                    },
+                    labels,
                     self.content.catalog.enemy_projector.attributes,
                 ),
                 turn_states=capture_battle_turn_states(
                     battle.trace,
-                    {
-                        character.id: (character.name, "player"),
-                        enemy_id: (event.narrative.name, "enemy"),
-                    },
+                    labels,
                     self.content.catalog.enemy_projector.attributes,
                 ),
                 transitions=capture_battle_transitions(
                     battle.trace,
-                    {
-                        character.id: (character.name, "player"),
-                        enemy_id: (event.narrative.name, "enemy"),
-                    },
+                    labels,
                     self.content.catalog.enemy_projector.attributes,
                 ),
             ),

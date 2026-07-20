@@ -36,6 +36,7 @@ class ExplorationStorageKinds:
     character: str
     inventory: str
     loadout: str
+    companion_roster: str
     loot: str
     reward_claim: str
     weapon: str

@@ -123,8 +123,8 @@ async def _main() -> None:
             identity_secret="character-command-test-secret",
         )
         services.database.initialize()
-        assert services.exploration.settlement.battles.player_combat is services.player_combat
-        assert services.dimensional_disasters.battles.player_combat is services.player_combat
+        assert services.exploration.settlement.battles.player_lineup is services.player_lineup
+        assert services.dimensional_disasters.battles.player_lineup is services.player_lineup
         previous = install_game_services(services)
         try:
             await LocalEventHandler.run()

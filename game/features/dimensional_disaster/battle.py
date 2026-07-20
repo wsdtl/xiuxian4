@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from game.content.catalog.combat import BASIC_ATTACK_ABILITY_ID
 from game.core.gameplay import (
     COMBAT_SPEED,
     ENEMY_RANK_BOSS_ID,
@@ -12,7 +11,6 @@ from game.core.gameplay import (
     HEALTH_MAXIMUM,
     SPIRIT_CURRENT,
     SPIRIT_MAXIMUM,
-    BattleAiRule,
     BattleEngine,
     BattleParticipant,
     BattleRules,
@@ -27,7 +25,7 @@ from game.core.gameplay import (
     RuleEvent,
     TagSet,
 )
-from game.rules.combat import PlayerCombatProjector
+from game.rules.companion import CompanionRosterState, PlayerBattleLineupProjector
 from game.rules.disaster import DisasterCombatSnapshot
 
 
@@ -40,6 +38,7 @@ class DimensionalDisasterBattleOutcome:
     player_victory: bool
     draw: bool
     trace: BattleTrace
+    player_companion_id: str | None = None
 
 
 class DimensionalDisasterBattleSimulator:
@@ -48,12 +47,12 @@ class DimensionalDisasterBattleSimulator:
     def __init__(
         self,
         content,
-        player_combat: PlayerCombatProjector,
+        player_lineup: PlayerBattleLineupProjector,
         *,
         maximum_rounds: int,
     ) -> None:
         self.content = content
-        self.player_combat = player_combat
+        self.player_lineup = player_lineup
         self.engine = BattleEngine(
             GameplayExecutor(content.ability_engine, content.trigger_engine),
             BattleRules(
@@ -82,22 +81,31 @@ class DimensionalDisasterBattleSimulator:
         character,
         inventory: InventoryState,
         loadout: LoadoutState,
+        roster: CompanionRosterState,
         context: RuleContext,
     ) -> DimensionalDisasterBattleOutcome:
-        player = self._player(character, inventory, loadout)
+        lineup = self.player_lineup.project(
+            character,
+            inventory,
+            loadout,
+            roster,
+            context_tags=TagSet.of("scene.dimensional_disaster"),
+        )
         enemy_instance = self._enemy(combat, event_id)
         enemy = self.content.enemy_projector.project(enemy_instance)
         enemy_maximum = enemy.entity.snapshot(
             self.content.enemy_projector.attributes
         ).value(HEALTH_MAXIMUM)
-        entities = {character.id: player.entity, enemy.instance.id: enemy.entity}
+        entities = lineup.entities
+        entities[enemy.instance.id] = enemy.entity
+        participants = tuple(
+            BattleParticipant(entity_id, "team.player", index)
+            for index, entity_id in enumerate(lineup.participant_ids)
+        ) + (BattleParticipant(enemy.instance.id, "team.enemy", 0),)
         started = BattleSession.start(
             self.engine,
             f"battle:{event_id}:{context.trace_id}",
-            participants=(
-                BattleParticipant(character.id, "team.player", 0),
-                BattleParticipant(enemy.instance.id, "team.enemy", 0),
-            ),
+            participants=participants,
             entities=entities,
             context=context,
         )
@@ -106,10 +114,8 @@ class DimensionalDisasterBattleSimulator:
                 started.failure.message if started.failure else "灾厄战斗启动失败"
             )
         session = started.value
-        rules = {
-            character.id: self._player_ai(player.entity),
-            enemy.instance.id: enemy.ai_rules,
-        }
+        rules = self.player_lineup.ai_rules(lineup)
+        rules[enemy.instance.id] = enemy.ai_rules
         active_phases = frozenset()
         while session.state.status is BattleStatus.ACTIVE:
             state = session.state
@@ -164,46 +170,12 @@ class DimensionalDisasterBattleSimulator:
             "team.player" in state.winning_teams,
             state.status is BattleStatus.DRAW,
             session.trace,
+            (
+                lineup.companion.companion_id
+                if lineup.companion is not None
+                else None
+            ),
         )
-
-    def _player(self, character, inventory, loadout):
-        return self.player_combat.project(
-            character,
-            inventory,
-            loadout,
-            context_tags=TagSet.of("scene.dimensional_disaster"),
-        )
-
-    def _player_ai(self, entity) -> tuple[BattleAiRule, ...]:
-        rules = []
-        for ability_id in sorted(entity.abilities):
-            targeting = self.content.battle_ability_targeting.get(ability_id)
-            if targeting is None:
-                continue
-            selectors = tuple(
-                value
-                for value in sorted(targeting.allowed_selectors)
-                if value != "target.enemy.explicit"
-            )
-            if not selectors:
-                continue
-            selector = (
-                "target.enemy.first"
-                if "target.enemy.first" in selectors
-                else selectors[0]
-            )
-            rules.append(
-                BattleAiRule(
-                    f"ai.dimensional_disaster.player.{ability_id}",
-                    ability_id,
-                    selector,
-                    priority=0 if ability_id == BASIC_ATTACK_ABILITY_ID else 10,
-                    maximum_targets=targeting.maximum_targets,
-                )
-            )
-        if not rules:
-            raise ValueError("角色当前没有可用于讨伐灾厄的能力")
-        return tuple(rules)
 
     def _phase_updates(self, state, instance, enemy_id, active_phases, context):
         entity = state.entities[enemy_id]

@@ -1,0 +1,67 @@
+"""伙伴业务公开结果、存储键和幂等回执。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from game.rules.battle_report import BattleReportReference
+from game.rules.companion import (
+    CompanionInstance,
+    CompanionRosterState,
+    CompanionSanctuaryState,
+)
+
+
+@dataclass(frozen=True)
+class CompanionStorageKinds:
+    action: str
+    character: str
+    dimension: str
+    exploration: str
+    inventory: str
+    loadout: str
+    roster: str
+    sanctuary: str
+
+
+@dataclass(frozen=True)
+class CompanionView:
+    roster: CompanionRosterState
+    sanctuary: CompanionSanctuaryState | None = None
+
+
+@dataclass(frozen=True)
+class CompanionOperationReceipt:
+    transaction_id: str
+    actor_id: str
+    operation: str
+    sanctuary_session_id: str = ""
+    companion_id: str = ""
+    battle_report_id: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.transaction_id.strip() or not self.actor_id.strip():
+            raise ValueError("伙伴业务回执缺少事务或角色 id")
+        if not self.operation.strip():
+            raise ValueError("伙伴业务回执缺少操作类型")
+
+
+@dataclass(frozen=True)
+class CompanionOperationResult:
+    status: str
+    roster: CompanionRosterState | None = None
+    sanctuary: CompanionSanctuaryState | None = None
+    companion: CompanionInstance | None = None
+    battle_report: BattleReportReference | None = None
+    battle: object | None = None
+    previous_preset_id: str | None = None
+    failure_message: str = ""
+    replayed: bool = False
+
+
+__all__ = [
+    "CompanionOperationReceipt",
+    "CompanionOperationResult",
+    "CompanionStorageKinds",
+    "CompanionView",
+]

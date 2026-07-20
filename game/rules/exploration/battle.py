@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from game.content.catalog.combat import BASIC_ATTACK_ABILITY_ID
 from game.core.gameplay import (
     COMBAT_SPEED,
     HEALTH_CURRENT,
     HEALTH_MAXIMUM,
     SPIRIT_CURRENT,
     SPIRIT_MAXIMUM,
-    BattleAiRule,
     BattleEngine,
     BattleParticipant,
     BattleRules,
@@ -26,7 +24,7 @@ from game.core.gameplay import (
     RuleEvent,
     TagSet,
 )
-from game.rules.combat import PlayerCombatProjector
+from game.rules.companion import CompanionRosterState, PlayerBattleLineupProjector
 
 from .models import ExplorationBatchPlan
 
@@ -41,12 +39,13 @@ class ExplorationBattleOutcome:
     spirit_maximum: float
     turns: int
     trace: BattleTrace
+    player_companion_id: str | None = None
 
 
 class ExplorationBattleSimulator:
-    def __init__(self, content, player_combat: PlayerCombatProjector) -> None:
+    def __init__(self, content, player_lineup: PlayerBattleLineupProjector) -> None:
         self.content = content
-        self.player_combat = player_combat
+        self.player_lineup = player_lineup
         self.engine = BattleEngine(
             GameplayExecutor(content.ability_engine, content.trigger_engine),
             BattleRules(HEALTH_CURRENT, COMBAT_SPEED),
@@ -61,20 +60,30 @@ class ExplorationBattleSimulator:
         character: CharacterState,
         inventory: InventoryState,
         loadout: LoadoutState,
+        roster: CompanionRosterState,
         context: RuleContext,
     ) -> ExplorationBattleOutcome:
         if plan.encounter is None:
             raise ValueError("空探险批次不能进入战斗")
-        player = self._player(character, inventory, loadout)
+        lineup = self.player_lineup.project(
+            character,
+            inventory,
+            loadout,
+            roster,
+            context_tags=TagSet.of("scene.exploration"),
+        )
         enemy_projections = tuple(
             self.content.enemy_projector.project(instance)
             for instance in plan.encounter.enemies
         )
-        entities = {character.id: player.entity}
+        entities = lineup.entities
         entities.update(
             {projection.instance.id: projection.entity for projection in enemy_projections}
         )
-        participants = [BattleParticipant(character.id, "team.player", 0)]
+        participants = [
+            BattleParticipant(entity_id, "team.player", index)
+            for index, entity_id in enumerate(lineup.participant_ids)
+        ]
         participants.extend(
             BattleParticipant(projection.instance.id, "team.enemy", index)
             for index, projection in enumerate(enemy_projections)
@@ -89,7 +98,7 @@ class ExplorationBattleSimulator:
         if started.failure or started.value is None:
             raise RuntimeError(started.failure.message if started.failure else "探险战斗启动失败")
         session = started.value
-        rules = {character.id: self._player_ai(player.entity)}
+        rules = self.player_lineup.ai_rules(lineup)
         rules.update(
             {
                 projection.instance.id: projection.ai_rules
@@ -155,46 +164,12 @@ class ExplorationBattleSimulator:
             ),
             turns=state.turn_number,
             trace=session.trace,
+            player_companion_id=(
+                lineup.companion.companion_id
+                if lineup.companion is not None
+                else None
+            ),
         )
-
-    def _player(self, character, inventory, loadout):
-        return self.player_combat.project(
-            character,
-            inventory,
-            loadout,
-            context_tags=TagSet.of("scene.exploration"),
-        )
-
-    def _player_ai(self, entity) -> tuple[BattleAiRule, ...]:
-        rules = []
-        for ability_id in sorted(entity.abilities):
-            targeting = self.content.battle_ability_targeting.get(ability_id)
-            if targeting is None:
-                continue
-            selectors = tuple(
-                value
-                for value in sorted(targeting.allowed_selectors)
-                if value != "target.enemy.explicit"
-            )
-            if not selectors:
-                continue
-            selector = (
-                "target.enemy.first"
-                if "target.enemy.first" in selectors
-                else selectors[0]
-            )
-            rules.append(
-                BattleAiRule(
-                    f"ai.exploration.player.{ability_id}",
-                    ability_id,
-                    selector,
-                    priority=0 if ability_id == BASIC_ATTACK_ABILITY_ID else 10,
-                    maximum_targets=targeting.maximum_targets,
-                )
-            )
-        if not rules:
-            raise ValueError("角色当前没有可用于探险的战斗能力")
-        return tuple(rules)
 
     def _enemy_phase_updates(self, state, rules, enemy_instances, active_phases, context):
         if state.status is not BattleStatus.ACTIVE:

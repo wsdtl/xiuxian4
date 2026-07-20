@@ -5,6 +5,7 @@ from game.core.gameplay import SkinEntry
 from ...catalog import (
     DRAW_TICKET_ITEM_ID,
     BACKPACK_CAPACITY_ITEM_ID,
+    COMPANION_SANCTUARY_ITEM_ID,
     DIMENSION_SHIFT_ITEM_ID,
     EQUIPMENT_SET_GUARANTEE_ITEM_ID,
     INSCRIPTION_FEATHER_ITEM_ID,
@@ -40,6 +41,11 @@ CULTIVATION_ITEM_ENTRIES = {
         name="芥子神砂",
         description="炼入背包后永久增加 5 格空间；背包最多扩展至 140 格。",
         icon="⌛",
+    ),
+    COMPANION_SANCTUARY_ITEM_ID: SkinEntry(
+        name="万灵引",
+        description="在当前世界引动一次伙伴秘境；秘境名额不足时不会消耗。",
+        icon="🧿",
     ),
     DIMENSION_SHIFT_ITEM_ID: SkinEntry(
         name="渡界玉符",

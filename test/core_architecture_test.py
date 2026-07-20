@@ -126,6 +126,7 @@ def _assert_physical_layout() -> None:
     }, "名录根目录只能保留公共入口、跨领域基础和内容包装配"
     catalog_domains = {
         "activity": {"__init__.py", "policy.py"},
+        "companion": {"__init__.py", "definitions.py", "models.py"},
         "character": {
             "__init__.py",
             "definitions.py",

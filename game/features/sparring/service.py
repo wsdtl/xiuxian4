@@ -33,6 +33,7 @@ from game.rules.battle_report import (
     capture_battle_transitions,
 )
 from game.rules.character import CHARACTER_DIMENSION_AGGREGATE, CharacterDimensionState
+from game.rules.companion import CompanionRosterState
 from game.rules.sparring import SparringBattleSimulator
 
 
@@ -51,6 +52,7 @@ class SparringRequestResult:
 class SparringStorageKinds:
     inventory: str
     loadout: str
+    companion_roster: str
 
 
 @dataclass(frozen=True)
@@ -214,15 +216,17 @@ class SparringFeature:
         else:
             return SparringResult("terminal", request=request, failure_message="切磋请求已经处理")
         try:
-            challenger_inventory, challenger_loadout, challenger_dimension = self._snapshot_bundle(challenger.id)
-            defender_inventory, defender_loadout, defender_dimension = self._snapshot_bundle(defender.id)
+            challenger_inventory, challenger_loadout, challenger_dimension, challenger_roster = self._snapshot_bundle(challenger.id)
+            defender_inventory, defender_loadout, defender_dimension, defender_roster = self._snapshot_bundle(defender.id)
             outcome = self.simulator.simulate(
                 challenger,
                 challenger_inventory,
                 challenger_loadout,
+                challenger_roster,
                 defender,
                 defender_inventory,
                 defender_loadout,
+                defender_roster,
                 battle_id=f"battle:{request.id}",
                 context=_context(f"{request.id}:battle", logical_time, "battle"),
             )
@@ -232,6 +236,8 @@ class SparringFeature:
                 defender,
                 challenger_dimension,
                 defender_dimension,
+                challenger_roster,
+                defender_roster,
                 outcome,
                 logical_time,
             )
@@ -289,7 +295,13 @@ class SparringFeature:
                 character_id,
                 CharacterDimensionState,
             )
-        return inventory, loadout, dimension
+            roster = self.snapshots.load(
+                uow,
+                self.storage.companion_roster,
+                character_id,
+                CompanionRosterState,
+            ) or CompanionRosterState(character_id)
+        return inventory, loadout, dimension, roster
 
     def _capture_report(
         self,
@@ -298,6 +310,8 @@ class SparringFeature:
         defender,
         challenger_dimension,
         defender_dimension,
+        challenger_roster,
+        defender_roster,
         outcome,
         logical_time,
     ):
@@ -306,6 +320,17 @@ class SparringFeature:
             challenger.id: (challenger.name, "challenger"),
             defender.id: (defender.name, "defender"),
         }
+        for roster, companion_id, role in (
+            (challenger_roster, outcome.challenger_companion_id, "challenger_companion"),
+            (defender_roster, outcome.defender_companion_id, "defender_companion"),
+        ):
+            if companion_id is None:
+                continue
+            companion = roster.instances[companion_id]
+            labels[companion_id] = (
+                self.content.companions.species.require(companion.definition_id).name,
+                role,
+            )
         initial = outcome.trace.initial_frame.state
         final = outcome.trace.final_frame.state
         initial_participants = tuple(
@@ -315,7 +340,7 @@ class SparringFeature:
                 labels[entity_id][1],
                 self.content.catalog.enemy_projector.attributes,
             )
-            for entity_id in (challenger.id, defender.id)
+            for entity_id in labels
         )
         final_participants = tuple(
             capture_battle_participant(
@@ -324,7 +349,7 @@ class SparringFeature:
                 labels[entity_id][1],
                 self.content.catalog.enemy_projector.attributes,
             )
-            for entity_id in (challenger.id, defender.id)
+            for entity_id in labels
         )
         if outcome.draw:
             result_text = "切磋平局"

@@ -33,6 +33,12 @@ ACTIVE_BUSINESS_FEATURES = (
         ("game_battle_report_cleanup",),
     ),
     BusinessFeaturePlan(
+        "companion",
+        "companion",
+        "协调伙伴秘境、捕获、名册容量、配装独占与放生",
+        ("伙伴",),
+    ),
+    BusinessFeaturePlan(
         "dimension_shift",
         "dimension_shift",
         "原子扣除跃迁凭证并切换角色世界投影",

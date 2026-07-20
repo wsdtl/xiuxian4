@@ -80,6 +80,13 @@ from game.rules.activity import (
     global_activity_catalog,
 )
 from game.rules.combat import PlayerCombatProjector
+from game.rules.companion import (
+    COMPANION_ROSTER_AGGREGATE,
+    COMPANION_SANCTUARY_AGGREGATE,
+    CompanionCombatProjector,
+    CompanionEngine,
+    PlayerBattleLineupProjector,
+)
 from game.features.exploration import (
     ExplorationFeature,
     ExplorationStorageKinds,
@@ -108,6 +115,12 @@ from game.features.lottery import (
     lottery_codec_registrations,
 )
 from game.features.battle_report import BattleReportService
+from game.features.companion import (
+    CompanionFeature,
+    CompanionSanctuaryBattleSimulator,
+    CompanionStorageKinds,
+    companion_codec_registrations,
+)
 from game.features.rest import RestFeature, RestStorageKinds, rest_codec_registrations
 from game.features.sparring import SparringFeature, SparringStorageKinds
 from game.features.special_items import (
@@ -164,6 +177,8 @@ class GameServices:
     global_activities: GlobalActivityCatalog
     battle_reports: BattleReportService
     dimensional_disasters: DimensionalDisasterFeature
+    companions: CompanionFeature
+    player_lineup: PlayerBattleLineupProjector
     exploration: ExplorationFeature
     rest: RestFeature
     sparring: SparringFeature
@@ -485,6 +500,7 @@ def build_game_services(
                 *lottery_codec_registrations(),
                 *draw_codec_registrations(),
                 *special_item_codec_registrations(),
+                *companion_codec_registrations(),
             )
         )
     )
@@ -499,6 +515,16 @@ def build_game_services(
         target_constraint_ids=frozenset(content.catalog.target_constraints.ids()),
     )
     player_combat = PlayerCombatProjector(content.catalog, character_projector)
+    companion_engine = CompanionEngine(content.companions)
+    companion_combat = CompanionCombatProjector(
+        content.catalog,
+        content.companions,
+    )
+    player_lineup = PlayerBattleLineupProjector(
+        content.catalog,
+        player_combat,
+        companion_combat,
+    )
     item_use_service = PersistedItemUseService(
         database,
         CharacterItemUseEngine(
@@ -566,19 +592,44 @@ def build_game_services(
         snapshots,
     )
     battle_reports = BattleReportService(database)
+    companions = CompanionFeature(
+        database,
+        content,
+        world_views,
+        snapshots,
+        inventory_engine,
+        battle_reports,
+        companion_engine,
+        CompanionSanctuaryBattleSimulator(
+            content.catalog,
+            player_lineup,
+            companion_combat,
+        ),
+        CompanionStorageKinds(
+            action=ACTION_AGGREGATE,
+            character=CHARACTER_AGGREGATE,
+            dimension=CHARACTER_DIMENSION_AGGREGATE,
+            exploration=EXPLORATION_AGGREGATE,
+            inventory=INVENTORY_AGGREGATE,
+            loadout=LOADOUT_AGGREGATE,
+            roster=COMPANION_ROSTER_AGGREGATE,
+            sanctuary=COMPANION_SANCTUARY_AGGREGATE,
+        ),
+    )
     exploration = ExplorationFeature(
         database,
         content,
         snapshots,
         reward_settlement,
         inventory_engine,
-        player_combat,
+        player_lineup,
         battle_reports,
         ExplorationStorageKinds(
             ACTION_AGGREGATE,
             CHARACTER_AGGREGATE,
             INVENTORY_AGGREGATE,
             LOADOUT_AGGREGATE,
+            COMPANION_ROSTER_AGGREGATE,
             LOOT_AGGREGATE,
             REWARD_CLAIM_AGGREGATE,
             WEAPON_AGGREGATE,
@@ -593,7 +644,7 @@ def build_game_services(
         world_views.skin_ids(),
         snapshots,
         reward_settlement,
-        player_combat,
+        player_lineup,
         battle_reports,
         DimensionalDisasterStorageKinds(
             ACTION_AGGREGATE,
@@ -602,6 +653,7 @@ def build_game_services(
             EXPLORATION_AGGREGATE,
             INVENTORY_AGGREGATE,
             LOADOUT_AGGREGATE,
+            COMPANION_ROSTER_AGGREGATE,
             REWARD_CLAIM_AGGREGATE,
         ),
         RewardSettlementStorageKeys,
@@ -717,10 +769,11 @@ def build_game_services(
         social,
         characters,
         battle_reports,
-        SparringBattleSimulator(content.catalog, player_combat),
+        SparringBattleSimulator(content.catalog, player_lineup),
         SparringStorageKinds(
             inventory=INVENTORY_AGGREGATE,
             loadout=LOADOUT_AGGREGATE,
+            companion_roster=COMPANION_ROSTER_AGGREGATE,
         ),
     )
     return GameServices(
@@ -744,6 +797,8 @@ def build_game_services(
         global_activities=registered_global_activities,
         battle_reports=battle_reports,
         dimensional_disasters=dimensional_disasters,
+        companions=companions,
+        player_lineup=player_lineup,
         exploration=exploration,
         rest=rest,
         sparring=sparring,

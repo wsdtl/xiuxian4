@@ -17,6 +17,7 @@ class DimensionalDisasterStorageKinds:
     exploration: str
     inventory: str
     loadout: str
+    companion_roster: str
     reward_claim: str
 
 

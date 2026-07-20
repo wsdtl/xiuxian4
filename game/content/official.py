@@ -13,6 +13,7 @@ from game.core.gameplay import (
 )
 
 from .catalog import CATALOG_PACKAGE
+from .catalog.companion import COMPANION_CATALOG, CompanionCatalog
 from .catalog.exploration import EXPLORATION_REGION_CATALOG, ExplorationRegionCatalog
 from .presentation import EnemyNameProjector, GearProjector
 from .world_skins import (
@@ -38,6 +39,7 @@ class OfficialContent:
     gear_projector: GearProjector
     enemy_projector: EnemyNameProjector
     exploration_regions: ExplorationRegionCatalog
+    companions: CompanionCatalog
 
 
 class WorldViewCatalog:
@@ -108,6 +110,7 @@ def select_world_skin(
     skin = catalog.skins.require(skin_id, version)
     projector = SkinProjector(skin)
     EXPLORATION_REGION_CATALOG.validate(catalog)
+    COMPANION_CATALOG.validate(catalog, PLAYABLE_WORLD_SKIN_IDS)
     return OfficialContent(
         catalog,
         skin,
@@ -121,6 +124,7 @@ def select_world_skin(
             enemy_presentation_style(skin.id, skin.version),
         ),
         EXPLORATION_REGION_CATALOG,
+        COMPANION_CATALOG,
     )
 
 

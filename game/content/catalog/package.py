@@ -26,6 +26,7 @@ from .character.definitions import (
     DEFAULT_CHARACTER_TEMPLATE,
 )
 from .character.recovery import REST_ACTION_DEFINITION, REST_ACTION_ID
+from .companion import COMPANION_DISPLAY_DEFINITIONS
 from .combat.definitions import (
     BASE_ABILITIES,
     BASE_BATTLE_TARGETING,
@@ -48,6 +49,7 @@ from .enemy import (
 from .item.definitions import ITEM_DISPLAY_CONTENT_IDS, MEDICINE_ITEMS
 from .item.draw import DRAW_TICKET_ITEM, DRAW_TICKET_ITEM_ID
 from .item.special import (
+    COMPANION_SANCTUARY_ITEM_COMPONENT_TYPE,
     DIMENSION_SHIFT_ITEM_COMPONENT_TYPE,
     INSCRIPTION_FEATHER_ITEM,
     SPECIAL_ITEMS,
@@ -114,7 +116,7 @@ validate_nacre_item_categories(OFFICIAL_ITEMS)
 CATALOG_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=CATALOG_PACKAGE_ID,
-        version=ContentVersion(3, 15, 0),
+        version=ContentVersion(3, 16, 0),
     ),
     item_component_types=(
         ITEM_RECYCLE_COMPONENT_TYPE,
@@ -123,10 +125,12 @@ CATALOG_PACKAGE = ContentPackage(
         ITEM_CONTAINER_CAPACITY_COMPONENT_TYPE,
         EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_TYPE,
         DIMENSION_SHIFT_ITEM_COMPONENT_TYPE,
+        COMPANION_SANCTUARY_ITEM_COMPONENT_TYPE,
     ),
     display_definitions=(
         *CHARACTER_REALM_CONTENT_DEFINITIONS,
         *LOADOUT_SLOT_CONTENT_DEFINITIONS,
+        *COMPANION_DISPLAY_DEFINITIONS,
     ),
     currencies=BASE_CURRENCIES,
     qualities=BASE_QUALITIES,
@@ -209,6 +213,7 @@ CATALOG_PACKAGE = ContentPackage(
         | {DRAW_TICKET_ITEM_ID}
         | {str(value.id) for value in SPECIAL_ITEMS}
         | {REST_ACTION_ID}
+        | {str(value.id) for value in COMPANION_DISPLAY_DEFINITIONS}
         | WORLD_DISPLAY_CONTENT_IDS
     ),
 )

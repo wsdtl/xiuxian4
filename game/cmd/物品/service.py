@@ -20,6 +20,7 @@ from game.content.catalog.combat import (
     SMALL_MEDICINE_RECOVERY_RATIO,
 )
 from game.content.catalog.item import (
+    COMPANION_SANCTUARY_ITEM_COMPONENT_ID,
     DIMENSION_SHIFT_ITEM_COMPONENT_ID,
     ITEM_RECYCLE_COMPONENT_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
@@ -226,6 +227,13 @@ async def use_item(message: str, current: CurrentCharacterResult) -> None:
         await _use_weapon_growth_item(parts, asset, initial)
         return
 
+    if COMPANION_SANCTUARY_ITEM_COMPONENT_ID in definition.components:
+        if len(parts) != 1:
+            await send_game_reply(_invalid("使用", "万灵引每次只能使用一枚"))
+            return
+        await _use_companion_sanctuary(asset, current)
+        return
+
     if any(
         component_id in definition.components
         for component_id in (
@@ -429,6 +437,82 @@ async def _use_specialized_item(item_asset, overview: CharacterOverview) -> None
     await send_game_reply(builder.build())
 
 
+async def _use_companion_sanctuary(item_asset, current: CurrentCharacterResult) -> None:
+    character = current.character
+    dimension = current.dimension
+    if character is None or dimension is None:
+        await send_game_reply(_unavailable("使用"))
+        return
+    services = current_game_services()
+    operation_id = f"companion-sanctuary-open:{_evidence_id()}"
+    try:
+        result = await asyncio.to_thread(
+            services.companions.open_sanctuary,
+            operation_id,
+            character,
+            dimension,
+            item_asset.id,
+            logical_time=_now(),
+        )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("伙伴秘境开启失败"), C.kv("character", character.id))
+        )
+        await send_game_reply(_invalid("使用", "万灵引没有成功生效"))
+        return
+    if result.status != "opened" or result.sanctuary is None:
+        await send_game_reply(
+            _invalid("使用", result.failure_message or "当前不能开启伙伴秘境")
+        )
+        return
+    await send_game_reply(_opened_sanctuary_message(result.sanctuary, dimension))
+
+
+def _opened_sanctuary_message(sanctuary, dimension) -> DocumentMessage:
+    services = current_game_services()
+    view = services.world_view(dimension)
+    title = view.projector.name("term.companion_sanctuary")
+    builder = (
+        M.document()
+        .section(f"{title}已开启", icon="explore")
+        .field("有效期", sanctuary.expires_at.strftime("%m-%d %H:%M"))
+    )
+    actions = []
+    for trace in sanctuary.traces:
+        species = services.content.companions.species.require(trace.definition_id)
+        builder.item(
+            trace.index,
+            species.name,
+            FieldSeparator(),
+            _companion_role(species.role),
+            FieldSeparator(),
+            "危险相当",
+        )
+        actions.append(
+            Action(
+                f"companion.trace.{trace.index}",
+                f"追踪 {trace.index}",
+                f"秘境追踪 {trace.index}",
+                behavior="send",
+            )
+        )
+    return (
+        builder.note("选择一条踪迹后，另外两条会立即消失。跃迁不会刷新踪迹。")
+        .actions(actions)
+        .build()
+    )
+
+
+def _companion_role(role: str) -> str:
+    return {
+        "assault": "强攻",
+        "swift": "迅捷",
+        "guardian": "守护",
+        "control": "控制",
+        "sustain": "续航",
+    }[role]
+
+
 def _armory_home(overview: CharacterOverview) -> DocumentMessage:
     counts = Counter()
     catalog = current_game_services().content.catalog.items
@@ -557,6 +641,7 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
                 WEAPON_LEVEL_ITEM_COMPONENT_ID,
                 ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
                 EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
+                COMPANION_SANCTUARY_ITEM_COMPONENT_ID,
             )
         ):
             actions.append(Action("item.use", "使用", f"使用 {reference}", behavior="fill"))
