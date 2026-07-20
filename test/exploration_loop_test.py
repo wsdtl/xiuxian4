@@ -18,6 +18,7 @@ from game.features.exploration import exploration_battle_report_id  # noqa: E402
 from game.content import build_official_content  # noqa: E402
 from game.content.catalog.enemy import (  # noqa: E402
     AWARD_BOSS_TROPHY_ID,
+    AWARD_PARTY_BOSS_TROPHY_ID,
     AWARD_DRAW_TICKET_ID,
     AWARD_ENEMY_TROPHY_ID,
     AWARD_LARGE_HEALTH_MEDICINE_ID,
@@ -74,7 +75,7 @@ def _assert_content() -> None:
     assert len(EXPLORATION_REGION_CATALOG.definitions()) == 13
     assert len(REGULAR_EXPLORATION_REGIONS) == 10
     assert len(SPECIAL_EXPLORATION_REGIONS) == 3
-    assert len(TROPHY_ITEMS) == 180
+    assert len(TROPHY_ITEMS) == 200
     assert all(len(region.trophy_item_ids) == 6 for region in EXPLORATION_REGION_CATALOG.definitions())
     assert content.projector.name(SPECIAL_EXPLORATION_REGIONS[0].location_id) == "万剑冢"
     assert content.projector.name(SPECIAL_EXPLORATION_REGIONS[1].location_id) == "天工遗府"
@@ -88,6 +89,7 @@ def _assert_content() -> None:
     }
     assert award_ids == {
         AWARD_BOSS_TROPHY_ID,
+        AWARD_PARTY_BOSS_TROPHY_ID,
         AWARD_DRAW_TICKET_ID,
         AWARD_ENEMY_TROPHY_ID,
         AWARD_LARGE_HEALTH_MEDICINE_ID,

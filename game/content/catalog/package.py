@@ -44,9 +44,13 @@ from .enemy import (
     ENEMY_LOOT_TABLES,
     ENEMY_RANKS,
     ENEMY_REWARD_PROFILES,
+    PARTY_BOSS_ENEMIES,
+    PARTY_BOSS_LEVEL_PROFILE,
+    PARTY_BOSS_REWARD_PROFILE,
     STANDARD_ENEMY_LEVEL_PROFILE,
 )
 from .item.definitions import ITEM_DISPLAY_CONTENT_IDS, MEDICINE_ITEMS
+from .item.breakthrough import BREAKTHROUGH_TOKEN_ITEM, BREAKTHROUGH_TOKEN_ITEM_ID
 from .item.draw import DRAW_TICKET_ITEM, DRAW_TICKET_ITEM_ID
 from .item.special import (
     COMPANION_SANCTUARY_ITEM_COMPONENT_TYPE,
@@ -59,7 +63,15 @@ from .item.trade import ITEM_RECYCLE_COMPONENT_TYPE
 from .item.trophies import TROPHY_DISPLAY_CONTENT_IDS, TROPHY_ITEMS
 from .equipment.definitions import EQUIPMENT_CATALOG_CONTENT
 from .equipment.properties import EQUIPMENT_PROPERTY_CONTENT
-from .disaster import DIMENSIONAL_DISASTER_ACTIVITY, DIMENSIONAL_DISASTER_CYCLES
+from .disaster import (
+    DIMENSIONAL_DISASTER_ACTIVITY,
+    DIMENSIONAL_DISASTER_CYCLES,
+)
+from .disaster.combat import (
+    DISASTER_ENEMY_DEFINITIONS,
+    DISASTER_ENEMY_LEVEL_PROFILE,
+    DISASTER_ENEMY_REWARD_PROFILE,
+)
 from .character.realms import (
     CHARACTER_REALM_CONTENT_DEFINITIONS,
     CHARACTER_REALM_DISPLAY_IDS,
@@ -104,6 +116,7 @@ OFFICIAL_ITEMS = (
     *MEDICINE_ITEMS,
     INSCRIPTION_FEATHER_ITEM,
     DRAW_TICKET_ITEM,
+    BREAKTHROUGH_TOKEN_ITEM,
     *SPECIAL_ITEMS,
     *TROPHY_ITEMS,
     STARTER_WEAPON_ITEM,
@@ -116,7 +129,7 @@ validate_nacre_item_categories(OFFICIAL_ITEMS)
 CATALOG_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=CATALOG_PACKAGE_ID,
-        version=ContentVersion(3, 17, 0),
+        version=ContentVersion(3, 18, 0),
     ),
     item_component_types=(
         ITEM_RECYCLE_COMPONENT_TYPE,
@@ -142,11 +155,23 @@ CATALOG_PACKAGE = ContentPackage(
     activities=(DIMENSIONAL_DISASTER_ACTIVITY,),
     cycles=DIMENSIONAL_DISASTER_CYCLES,
     character_templates=(DEFAULT_CHARACTER_TEMPLATE,),
-    enemy_level_profiles=(STANDARD_ENEMY_LEVEL_PROFILE,),
+    enemy_level_profiles=(
+        STANDARD_ENEMY_LEVEL_PROFILE,
+        PARTY_BOSS_LEVEL_PROFILE,
+        DISASTER_ENEMY_LEVEL_PROFILE,
+    ),
     enemy_ranks=ENEMY_RANKS,
     enemy_behaviors=ENEMY_BEHAVIOR_CONTENT.behaviors,
-    enemy_reward_profiles=ENEMY_REWARD_PROFILES,
-    enemies=ENEMY_DEFINITIONS,
+    enemy_reward_profiles=(
+        *ENEMY_REWARD_PROFILES,
+        PARTY_BOSS_REWARD_PROFILE,
+        DISASTER_ENEMY_REWARD_PROFILE,
+    ),
+    enemies=(
+        *ENEMY_DEFINITIONS,
+        *PARTY_BOSS_ENEMIES,
+        *DISASTER_ENEMY_DEFINITIONS,
+    ),
     encounter_scopes=ENCOUNTER_SCOPES,
     enemy_encounters=ENEMY_ENCOUNTERS,
     items=OFFICIAL_ITEMS,
@@ -212,6 +237,7 @@ CATALOG_PACKAGE = ContentPackage(
         | EQUIPMENT_PROPERTY_CONTENT.display_ids
         | ENEMY_DISPLAY_CONTENT_IDS
         | {DRAW_TICKET_ITEM_ID}
+        | {BREAKTHROUGH_TOKEN_ITEM_ID}
         | {str(value.id) for value in SPECIAL_ITEMS}
         | {REST_ACTION_ID}
         | {str(value.id) for value in COMPANION_DISPLAY_DEFINITIONS}

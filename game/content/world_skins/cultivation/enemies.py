@@ -1,7 +1,6 @@
 """太玄界的敌人身份、行为术语与精英前缀。"""
 
 from game.core.gameplay import (
-    ENCOUNTER_SCOPE_GLOBAL_ID,
     ENCOUNTER_SCOPE_PARTY_ID,
     ENCOUNTER_SCOPE_PERSONAL_ID,
     ENEMY_RANK_BOSS_ID,
@@ -12,11 +11,13 @@ from game.core.gameplay import (
 
 from ...catalog.enemy.blueprints import (
     BEHAVIOR_BLUEPRINTS,
-    BOSS_ENEMY_BLUEPRINTS,
+    BOSS_BEHAVIOR_KEYS_BY_TEMPLATE,
+    CULTIVATION_PARTY_BOSS_BLUEPRINTS,
+    MAGIC_PARTY_BOSS_BLUEPRINTS,
+    PERSONAL_BOSS_BLUEPRINTS,
     REGULAR_ENEMY_BLUEPRINTS,
 )
 from ...catalog.enemy.encounters import (
-    GLOBAL_BOSS_ENCOUNTER_ID,
     PARTY_BOSS_ENCOUNTER_ID,
     PERSONAL_BOSS_ENCOUNTER_ID,
     PERSONAL_ELITE_ENCOUNTER_ID,
@@ -35,16 +36,16 @@ _REGULAR_NAMES = (
 
 
 _BOSS_NAMES = (
-    ("九婴·九泉灾主", "九婴"),
-    ("相柳·万毒之源", "相柳"),
-    ("旱魃·赤地魔神", "旱魃"),
-    ("穷奇·食善凶神", "穷奇"),
+    ("化蛇·洪涛妖君", "化蛇"),
+    ("鸣蛇·旱泽毒君", "鸣蛇"),
+    ("祸斗·吞火凶犬", "祸斗"),
+    ("猲狙·兵乱妖兽", "猲狙"),
     ("梼杌·不化顽主", "梼杌"),
     ("饕餮·吞天巨口", "饕餮"),
     ("混沌·无相魔胎", "混沌"),
-    ("烛龙·幽都之瞳", "烛龙"),
-    ("刑天·不屈战神", "刑天"),
-    ("无支祁·淮水妖君", "无支祁"),
+    ("虺龙·暮海玄君", "虺龙"),
+    ("防风氏·断首巨人", "防风氏"),
+    ("赤鱬·疫水妖王", "赤鱬"),
     ("朱厌·兵灾之兆", "朱厌王"),
     ("鬼车·九首夜啼", "鬼车"),
     ("蛊雕·食人凶禽", "蛊雕王"),
@@ -136,13 +137,21 @@ _BEHAVIOR_DISPLAY = {
 
 def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], dict[str, str]]:
     regular_keys = tuple(value.key for value in REGULAR_ENEMY_BLUEPRINTS)
-    boss_keys = tuple(value.key for value in BOSS_ENEMY_BLUEPRINTS)
+    boss_names = dict(zip(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE, _BOSS_NAMES))
+    boss_blueprints = (
+        *PERSONAL_BOSS_BLUEPRINTS,
+        *CULTIVATION_PARTY_BOSS_BLUEPRINTS,
+        *MAGIC_PARTY_BOSS_BLUEPRINTS,
+    )
     behavior_keys = {value.key for value in BEHAVIOR_BLUEPRINTS}
-    if len(_REGULAR_NAMES) != len(regular_keys) or len(_BOSS_NAMES) != len(boss_keys):
+    if len(_REGULAR_NAMES) != len(regular_keys) or len(_BOSS_NAMES) != len(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE):
         raise ValueError("太玄界敌人名称必须完整覆盖正式敌人身份")
     if set(_BEHAVIOR_DISPLAY) != behavior_keys:
         raise ValueError("太玄界行为名称必须完整覆盖正式行为模板")
-    all_names = [*_REGULAR_NAMES, *(value[0] for value in _BOSS_NAMES)]
+    all_names = [
+        *_REGULAR_NAMES,
+        *(boss_names[value.key][0] for value in boss_blueprints),
+    ]
     if len(all_names) != len(set(all_names)):
         raise ValueError("太玄界敌人完整名称不能重复")
     entries = {
@@ -151,17 +160,23 @@ def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], 
         ENEMY_RANK_BOSS_ID: SkinEntry(name="首领敌人"),
         ENCOUNTER_SCOPE_PERSONAL_ID: SkinEntry(name="个人遭遇"),
         ENCOUNTER_SCOPE_PARTY_ID: SkinEntry(name="结伴讨伐"),
-        ENCOUNTER_SCOPE_GLOBAL_ID: SkinEntry(name="天下共诛"),
         PERSONAL_NORMAL_ENCOUNTER_ID: SkinEntry(name="寻常遭遇"),
         PERSONAL_ELITE_ENCOUNTER_ID: SkinEntry(name="精英遭遇"),
         PERSONAL_BOSS_ENCOUNTER_ID: SkinEntry(name="首领挑战"),
         PARTY_BOSS_ENCOUNTER_ID: SkinEntry(name="结伴诛魔"),
-        GLOBAL_BOSS_ENCOUNTER_ID: SkinEntry(name="天灾临世"),
     }
     for key, name in zip(regular_keys, _REGULAR_NAMES):
         entries[f"enemy.{key}"] = SkinEntry(name=name, compact_name=name, icon="♟")
-    for key, (name, compact_name) in zip(boss_keys, _BOSS_NAMES):
-        entries[f"enemy.boss.{key}"] = SkinEntry(name=name, compact_name=compact_name, icon="♛")
+    for blueprint in PERSONAL_BOSS_BLUEPRINTS:
+        name, compact_name = boss_names[blueprint.key]
+        entries[f"enemy.boss.{blueprint.key}"] = SkinEntry(name=name, compact_name=compact_name, icon="♛")
+    for source, blueprints in (
+        ("cultivation", CULTIVATION_PARTY_BOSS_BLUEPRINTS),
+        ("magic", MAGIC_PARTY_BOSS_BLUEPRINTS),
+    ):
+        for blueprint in blueprints:
+            name, compact_name = boss_names[blueprint.key]
+            entries[f"enemy.boss.party.{source}.{blueprint.key}"] = SkinEntry(name=name, compact_name=compact_name, icon="♛")
     prefixes = {}
     behavior_names = {}
     for key, (name, description, values) in _BEHAVIOR_DISPLAY.items():

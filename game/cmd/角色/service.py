@@ -487,7 +487,21 @@ def _character_overview_message(overview: CharacterOverview) -> DocumentMessage:
         progression.definition_id
     )
     required = progression_definition.required_for_next_level(progression.level)
-    experience = "已满级" if required is None else f"{progression.experience}/{required}"
+    level_cap = progression.level_cap or next(
+        (
+            value
+            for value in progression_definition.level_caps
+            if value >= progression.level
+        ),
+        progression_definition.maximum_level,
+    )
+    experience = (
+        "已满级"
+        if required is None
+        else "已满，可突破"
+        if progression.level >= level_cap and progression.experience >= required
+        else f"{progression.experience}/{required}"
+    )
     wallet = next(
         (
             account

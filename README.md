@@ -22,7 +22,7 @@
 - 随机降临、跨世界角色档案与不复制资产的即时跃迁
 - 战斗底座 `combat.foundation.v5`，由核心会话自动产生完整结构化轨迹
 - 已封板的物品与物资底座 `inventory.foundation.v5`
-- 已封板的角色与成长底座 `character.foundation.v4`
+- 已封板的角色、成长与等级关隘底座 `character.foundation.v5`
 - 已封板的原子装配底座 `loadout.foundation.v2`
 - 已封板的武器底座 `weapon.foundation.v4`
 - 已封板的装备底座 `equipment.foundation.v3`
@@ -40,7 +40,7 @@
 - 异步行动槽与生命周期底座 `action.foundation.v1`
 - 已封板的铭刻底座 `inscription.foundation.v1`
 - 已封板的掉落与保底底座 `loot.foundation.v1`
-- 已封板的可信奖池与批量抽取底座 `draw.foundation.v1`
+- 已封板的可信奖池、批量抽取与独立保底槽底座 `draw.foundation.v2`
 - 已封板的世界空间与区域状态底座 `world.foundation.v1`
 - 已封板的交换契约底座 `exchange.foundation.v1`
 - 已封板的活动实例底座 `activity.foundation.v1`

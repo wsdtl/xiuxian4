@@ -60,6 +60,7 @@ from game.core.persistence import (
     PersistedSocialService,
     PersistedPartyAdmissionService,
     PersistedPartyService,
+    PARTY_AGGREGATE,
     REWARD_CLAIM_AGGREGATE,
     RewardSettlementStorageKeys,
     SnapshotRepository,
@@ -99,6 +100,11 @@ from game.features.dimensional_disaster import (
     DimensionalDisasterFeature,
     DimensionalDisasterStorageKinds,
     dimensional_disaster_codec_registrations,
+)
+from game.features.breakthrough import (
+    BreakthroughFeature,
+    BreakthroughStorageKinds,
+    breakthrough_codec_registrations,
 )
 from game.features.economy import (
     EconomyFeature,
@@ -150,6 +156,12 @@ from game.features.player import (
     PlayerStorageKinds,
 )
 from game.features.party import PartyFeature
+from game.features.party_battle import (
+    PartyBattleFeature,
+    PartyBattleStorageKinds,
+    party_battle_codec_registrations,
+)
+from game.features.party.service import PARTY_SCOPE_ID
 from game.rules.exploration import EXPLORATION_AGGREGATE
 from game.rules.economy import MARKET_AGGREGATE
 from game.rules.sparring import SparringBattleSimulator
@@ -174,6 +186,7 @@ class GameServices:
     inventory_engine: InventoryEngine
     player: PlayerFeature
     dimension_shift: DimensionShiftFeature
+    breakthrough: BreakthroughFeature
     loadouts: PersistedLoadoutService
     notifications: NotificationInboxService
     activities: PersistedActivityService
@@ -182,6 +195,7 @@ class GameServices:
     battle_reports: BattleReportService
     dimensional_disasters: DimensionalDisasterFeature
     party: PartyFeature
+    party_battles: PartyBattleFeature
     companions: CompanionFeature
     player_lineup: PlayerBattleLineupProjector
     exploration: ExplorationFeature
@@ -499,6 +513,7 @@ def build_game_services(
             (
                 *workflow.codec_registrations(),
                 *dimensional_disaster_codec_registrations(),
+                *breakthrough_codec_registrations(),
                 *exploration_codec_registrations(),
                 *rest_codec_registrations(),
                 *economy_codec_registrations(),
@@ -506,6 +521,7 @@ def build_game_services(
                 *draw_codec_registrations(),
                 *special_item_codec_registrations(),
                 *companion_codec_registrations(),
+                *party_battle_codec_registrations(),
             )
         )
     )
@@ -765,6 +781,17 @@ def build_game_services(
             inventory=INVENTORY_AGGREGATE,
         ),
     )
+    breakthrough = BreakthroughFeature(
+        database,
+        content,
+        snapshots,
+        inventory_engine,
+        CharacterEngine(content.catalog.characters),
+        BreakthroughStorageKinds(
+            character=CHARACTER_AGGREGATE,
+            inventory=INVENTORY_AGGREGATE,
+        ),
+    )
     social = PersistedSocialService(database, content.catalog.social_engine, snapshots)
     party_engine = PartyEngine(content.catalog.parties)
     party_persistence = PersistedPartyService(database, party_engine, snapshots)
@@ -779,6 +806,29 @@ def build_game_services(
         party_admissions,
         social,
         content.catalog.parties,
+    )
+    party_battles = PartyBattleFeature(
+        database,
+        content,
+        world_views,
+        snapshots,
+        reward_settlement,
+        battle_reports,
+        player_lineup,
+        PartyBattleStorageKinds(
+            party=PARTY_AGGREGATE,
+            character=CHARACTER_AGGREGATE,
+            inventory=INVENTORY_AGGREGATE,
+            loadout=LOADOUT_AGGREGATE,
+            companion_roster=COMPANION_ROSTER_AGGREGATE,
+            action=ACTION_AGGREGATE,
+            exploration=EXPLORATION_AGGREGATE,
+            reward_claim=REWARD_CLAIM_AGGREGATE,
+            weapon=WEAPON_AGGREGATE,
+        ),
+        RewardSettlementStorageKeys,
+        party_scope_id=PARTY_SCOPE_ID,
+        timezone=config.project.timezone,
     )
     sparring = SparringFeature(
         database,
@@ -809,6 +859,7 @@ def build_game_services(
         inventory_engine=inventory_engine,
         player=player,
         dimension_shift=dimension_shift,
+        breakthrough=breakthrough,
         loadouts=loadout_service,
         notifications=notifications,
         activities=activities,
@@ -817,6 +868,7 @@ def build_game_services(
         battle_reports=battle_reports,
         dimensional_disasters=dimensional_disasters,
         party=party,
+        party_battles=party_battles,
         companions=companions,
         player_lineup=player_lineup,
         exploration=exploration,

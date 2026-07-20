@@ -45,6 +45,12 @@ ACTIVE_BUSINESS_FEATURES = (
         ("跃迁",),
     ),
     BusinessFeaturePlan(
+        "breakthrough",
+        "breakthrough",
+        "原子消费破境凭证、解锁成长关隘、结算经验并恢复角色资源",
+        ("突破",),
+    ),
+    BusinessFeaturePlan(
         "dimensional_disaster",
         "dimensional_disaster",
         "协调全服灾厄战斗、贡献、周期和唯一遗羽结算",
@@ -82,6 +88,12 @@ ACTIVE_BUSINESS_FEATURES = (
         "party",
         "party",
         "协调三人队伍、社会邀请、成员关系、队长、站位与准备状态",
+        ("组队",),
+    ),
+    BusinessFeaturePlan(
+        "party_battle",
+        "party_battle",
+        "协调世界专属组队首领、准备指纹、多人战斗、原子奖励与公开战报",
         ("组队",),
     ),
     BusinessFeaturePlan(

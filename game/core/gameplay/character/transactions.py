@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Mapping, Protocol
 
 from ..context import RuleContext
@@ -78,6 +78,21 @@ class UnlockProgression:
         object.__setattr__(self, "source_kind", stable_id(self.source_kind, field="source kind"))
         if not self.source_id.strip():
             raise ValueError("UnlockProgression 缺少 source_id")
+
+
+@dataclass(frozen=True)
+class UnlockProgressionCap:
+    """解锁一条成长轨道的下一个等级关隘并结算已积累经验。"""
+
+    progression_id: StableId
+    source_kind: StableId
+    source_id: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "progression_id", stable_id(self.progression_id, field="progression id"))
+        object.__setattr__(self, "source_kind", stable_id(self.source_kind, field="source kind"))
+        if not self.source_id.strip():
+            raise ValueError("UnlockProgressionCap 缺少 source_id")
 
 
 @dataclass(frozen=True)
@@ -213,6 +228,7 @@ class CharacterEngine:
             GrantCoreAttribute: self._grant_core_attribute,
             UnlockFeature: self._unlock_feature,
             UnlockProgression: self._unlock_progression,
+            UnlockProgressionCap: self._unlock_progression_cap,
             ChangeCharacterResource: self._change_resource,
             RetireCharacter: self._retire_character,
         }
@@ -241,6 +257,7 @@ class CharacterEngine:
                 {"progression_id": operation.progression_id},
             )
         definition = self.catalog.progressions.require(operation.progression_id)
+        cap = self._effective_level_cap(definition, current)
         experience = current.experience + operation.amount
         total = current.total_experience + operation.amount
         level = current.level
@@ -262,6 +279,129 @@ class CharacterEngine:
             },
         )
         while True:
+            required = definition.required_for_next_level(level)
+            if level >= cap:
+                break
+            if required is None or experience < required:
+                break
+            previous = level
+            experience -= required
+            level += 1
+            milestone = definition.milestones.get(level)
+            if milestone is not None:
+                self._apply_milestone(
+                    milestone,
+                    definition.id,
+                    operation,
+                    draft,
+                    original,
+                    transaction,
+                    context,
+                )
+            self._event(
+                draft,
+                original,
+                transaction,
+                context,
+                "character.progression.advanced",
+                definition.id,
+                operation.source_id,
+                {
+                    "from_level": previous,
+                    "to_level": level,
+                    "experience_spent": required,
+                    "experience_remaining": experience,
+                    "source_kind": operation.source_kind,
+                    "source_id": operation.source_id,
+                },
+            )
+        draft.progressions[definition.id] = ProgressionState(
+            definition.id,
+            level,
+            experience,
+            total,
+            cap,
+        )
+
+    def _unlock_progression_cap(
+        self,
+        operation: UnlockProgressionCap,
+        draft: _Draft,
+        original: CharacterState,
+        transaction: CharacterTransaction,
+        context: RuleContext,
+    ) -> None:
+        try:
+            current = draft.progressions[operation.progression_id]
+        except KeyError:
+            self._fail(
+                "character.progression_not_owned",
+                "角色没有指定成长轨道",
+                {"progression_id": operation.progression_id},
+            )
+        definition = self.catalog.progressions.require(operation.progression_id)
+        current_cap = self._effective_level_cap(definition, current)
+        next_cap = definition.next_level_cap(current_cap)
+        if next_cap is None:
+            self._fail("character.progression_at_maximum_cap", "成长轨道已经解锁全部等级")
+        if current.level != current_cap:
+            self._fail(
+                "character.progression_not_at_cap",
+                "角色尚未到达当前等级关隘",
+                {"level": current.level, "level_cap": current_cap},
+            )
+        required = definition.required_for_next_level(current.level)
+        if required is not None and current.experience < required:
+            self._fail(
+                "character.progression_experience_incomplete",
+                "当前境界经验尚未积满",
+                {"required": required, "experience": current.experience},
+            )
+        draft.progressions[definition.id] = replace(current, level_cap=next_cap)
+        self._event(
+            draft,
+            original,
+            transaction,
+            context,
+            "character.progression.cap_unlocked",
+            definition.id,
+            operation.source_id,
+            {
+                "from_cap": current_cap,
+                "to_cap": next_cap,
+                "source_kind": operation.source_kind,
+                "source_id": operation.source_id,
+            },
+        )
+        self._advance_progression(
+            definition,
+            current.experience,
+            current.level,
+            next_cap,
+            operation,
+            draft,
+            original,
+            transaction,
+            context,
+            current.total_experience,
+        )
+
+    def _advance_progression(
+        self,
+        definition,
+        experience: int,
+        level: int,
+        cap: int,
+        operation,
+        draft,
+        original,
+        transaction,
+        context,
+        total: int,
+    ) -> None:
+        while True:
+            if level >= cap:
+                break
             required = definition.required_for_next_level(level)
             if required is None or experience < required:
                 break
@@ -301,7 +441,17 @@ class CharacterEngine:
             level,
             experience,
             total,
+            cap,
         )
+
+    @staticmethod
+    def _effective_level_cap(definition, current: ProgressionState) -> int:
+        if current.level_cap is not None:
+            return current.level_cap
+        for cap in definition.level_caps:
+            if cap >= current.level:
+                return cap
+        return definition.maximum_level
 
     def _apply_milestone(
         self,
@@ -555,6 +705,19 @@ class CharacterEngine:
                     "角色成长等级超过定义上限",
                     {"progression_id": progression_id, "level": progression.level},
                 )
+            if progression.level_cap is not None:
+                if progression.level_cap > definition.maximum_level:
+                    self._fail(
+                        "character.progression_cap_invalid",
+                        "角色成长等级上限超过定义上限",
+                        {"progression_id": progression_id, "level_cap": progression.level_cap},
+                    )
+                if definition.level_caps and progression.level_cap not in definition.level_caps:
+                    self._fail(
+                        "character.progression_cap_invalid",
+                        "角色成长等级上限不是正式关隘",
+                        {"progression_id": progression_id, "level_cap": progression.level_cap},
+                    )
 
     @staticmethod
     def _validate_core_values(values: Mapping[StableId, float]) -> None:
@@ -621,4 +784,5 @@ __all__ = [
     "RetireCharacter",
     "UnlockFeature",
     "UnlockProgression",
+    "UnlockProgressionCap",
 ]

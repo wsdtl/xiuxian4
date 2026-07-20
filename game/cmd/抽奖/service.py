@@ -9,7 +9,11 @@ from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content import (
+    BREAKTHROUGH_TOKEN_ITEM_ID,
     DRAW_CATALOG_CONTENT,
+    DRAW_BREAKTHROUGH_GUARANTEE_SLOT_ID,
+    DRAW_BREAKTHROUGH_PITY_THRESHOLD,
+    DRAW_BREAKTHROUGH_WEIGHT,
     DRAW_HIGH_WEIGHT,
     DRAW_LOW_WEIGHT,
     DRAW_MID_PITY_THRESHOLD,
@@ -17,6 +21,7 @@ from game.content import (
     DRAW_REWARD_LOW_CURRENCY_ID,
     DRAW_REWARD_MID_CURRENCY_ID,
     DRAW_TIER_HIGH,
+    DRAW_TIER_BREAKTHROUGH,
     DRAW_TIER_LOW,
     DRAW_TIER_MID,
     DRAW_TICKET_ITEM_ID,
@@ -31,19 +36,22 @@ from message import Action, DocumentMessage, M
 from ..reply import send_game_reply
 
 
-DRAW_ANIMATION_VERSION = "20260719"
+DRAW_ANIMATION_VERSION = "20260720"
 DRAW_ANIMATION_FILES = {
     (1, DRAW_TIER_LOW): "single-low.gif",
     (1, DRAW_TIER_MID): "single-mid.gif",
     (1, DRAW_TIER_HIGH): "single-high.gif",
+    (1, DRAW_TIER_BREAKTHROUGH): "single-high.gif",
     (10, DRAW_TIER_LOW): "batch-mid.gif",
     (10, DRAW_TIER_MID): "batch-mid.gif",
     (10, DRAW_TIER_HIGH): "batch-high.gif",
+    (10, DRAW_TIER_BREAKTHROUGH): "batch-high.gif",
 }
 TIER_LABELS = {
     DRAW_TIER_LOW: "常规",
     DRAW_TIER_MID: "珍稀",
     DRAW_TIER_HIGH: "特殊",
+    DRAW_TIER_BREAKTHROUGH: "破境",
 }
 
 
@@ -90,7 +98,8 @@ async def pool(current: CurrentCharacterResult) -> None:
             .section("抽奖奖池", icon="reward")
             .row(
                 ("持有", f"{status.ticket_count} 张"),
-                ("保底", f"{status.pity_count}/{DRAW_MID_PITY_THRESHOLD}"),
+                ("珍稀", f"{status.pity_count}/{DRAW_MID_PITY_THRESHOLD}"),
+                ("破境", f"{_breakthrough_pity(status)}/{DRAW_BREAKTHROUGH_PITY_THRESHOLD}"),
             )
             .line(f"常规 {low_weight / 1000:.0f}% | 金币或基础恢复药")
             .line(f"珍稀 {DRAW_MID_WEIGHT / 1000:.0f}% | 金币或进阶恢复药")
@@ -103,8 +112,13 @@ async def pool(current: CurrentCharacterResult) -> None:
             builder.line(f"特殊 {DRAW_HIGH_WEIGHT / 1000:.0f}% | {names}")
         else:
             builder.line("特殊物品尚未开放，对应权重暂时回流常规档")
+        builder.line(
+            f"破境 {DRAW_BREAKTHROUGH_WEIGHT / 1000:.0f}% | "
+            f"{projector.name(BREAKTHROUGH_TOKEN_ITEM_ID)}"
+        )
         builder.note(
             f"每 {DRAW_MID_PITY_THRESHOLD} 抽至少出现一次珍稀或更高档",
+            f"连续 {DRAW_BREAKTHROUGH_PITY_THRESHOLD} 抽未获得破境凭证时额外保底 1 枚",
             f"每次消耗 1 张 {projector.name(DRAW_TICKET_ITEM_ID)}",
         ).actions(_actions())
         await send_game_reply(builder.build())
@@ -169,7 +183,8 @@ def _result_message(result: DrawOperationResult, projector, rolls: int) -> Docum
         builder.line(f"获得 {name} x{quantity}")
     builder.row(
         ("剩余", f"{result.ticket_count} 张"),
-        ("保底", f"{result.pity_count}/{DRAW_MID_PITY_THRESHOLD}"),
+        ("珍稀", f"{result.pity_count}/{DRAW_MID_PITY_THRESHOLD}"),
+        ("破境", f"{_breakthrough_pity(result)}/{DRAW_BREAKTHROUGH_PITY_THRESHOLD}"),
     ).actions(_actions())
     return builder.build()
 
@@ -195,7 +210,12 @@ def _summary(record: DrawHistoryRecord, projector) -> str:
 
 
 def _highest_tier(record: DrawHistoryRecord) -> str:
-    ranks = {DRAW_TIER_LOW: 0, DRAW_TIER_MID: 1, DRAW_TIER_HIGH: 2}
+    ranks = {
+        DRAW_TIER_LOW: 0,
+        DRAW_TIER_MID: 1,
+        DRAW_TIER_HIGH: 2,
+        DRAW_TIER_BREAKTHROUGH: 3,
+    }
     return max(
         (
             DRAW_CATALOG_CONTENT.entry_tiers.get(str(value.entry_id), DRAW_TIER_LOW)
@@ -204,6 +224,10 @@ def _highest_tier(record: DrawHistoryRecord) -> str:
         key=ranks.__getitem__,
         default=DRAW_TIER_LOW,
     )
+
+
+def _breakthrough_pity(result) -> int:
+    return int(result.guarantee_counts.get(DRAW_BREAKTHROUGH_GUARANTEE_SLOT_ID, 0))
 
 
 def _animation_url(rolls: int, tier: str) -> str:

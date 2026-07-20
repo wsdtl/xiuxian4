@@ -16,7 +16,84 @@ from ..loot import (
 )
 
 
-DRAW_FOUNDATION_VERSION = "draw.foundation.v1"
+DRAW_FOUNDATION_VERSION = "draw.foundation.v2"
+
+
+@dataclass(frozen=True)
+class DrawGuaranteeEntry:
+    """保底槽触发后可以发放的一个可信奖励。"""
+
+    id: StableId
+    award_id: StableId
+    weight: int = 1
+    quantity: int = 1
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "id", stable_id(self.id, field="draw guarantee entry id"))
+        object.__setattr__(
+            self,
+            "award_id",
+            stable_id(self.award_id, field="draw guarantee award id"),
+        )
+        if self.weight < 1 or self.quantity < 1:
+            raise ValueError("保底奖励权重和数量必须大于 0")
+
+
+@dataclass(frozen=True)
+class DrawGuaranteeSlotDefinition:
+    """独立于普通概率表推进的追加保底槽。"""
+
+    id: StableId
+    threshold: int
+    entries: tuple[DrawGuaranteeEntry, ...]
+    qualifying_award_ids: frozenset[StableId] = frozenset()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "id", stable_id(self.id, field="draw guarantee slot id"))
+        entries = tuple(self.entries)
+        if self.threshold < 1 or not entries:
+            raise ValueError("保底槽必须包含奖励且阈值大于 0")
+        entry_ids = tuple(value.id for value in entries)
+        if len(entry_ids) != len(set(entry_ids)):
+            raise ValueError("同一保底槽的奖励条目 ID 不能重复")
+        qualifying = frozenset(
+            stable_id(value, field="draw qualifying award id")
+            for value in self.qualifying_award_ids
+        ) or frozenset(value.award_id for value in entries)
+        object.__setattr__(self, "entries", entries)
+        object.__setattr__(self, "qualifying_award_ids", qualifying)
+
+
+@dataclass(frozen=True)
+class DrawGuaranteeDecision:
+    """一次抽取对一个保底槽产生的完整审计结果。"""
+
+    slot_id: StableId
+    roll_index: int
+    counter_before: int
+    counter_after: int
+    naturally_satisfied: bool = False
+    forced: bool = False
+    entry_id: StableId | None = None
+    award_id: StableId | None = None
+    sampled: int = 0
+    scale: int = 0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "slot_id", stable_id(self.slot_id, field="draw guarantee slot id"))
+        if self.roll_index < 0 or self.counter_before < 0 or self.counter_after < 0:
+            raise ValueError("保底判定序号或计数不能小于 0")
+        if self.forced:
+            if self.entry_id is None or self.award_id is None:
+                raise ValueError("触发保底必须记录奖励条目和奖励身份")
+            if self.sampled < 1 or self.scale < 1 or self.sampled > self.scale:
+                raise ValueError("保底随机采样超出边界")
+        elif any(value is not None for value in (self.entry_id, self.award_id)):
+            raise ValueError("未触发保底不能携带保底奖励")
+        if self.entry_id is not None:
+            object.__setattr__(self, "entry_id", stable_id(self.entry_id, field="draw guarantee entry id"))
+        if self.award_id is not None:
+            object.__setattr__(self, "award_id", stable_id(self.award_id, field="draw guarantee award id"))
 
 
 @dataclass(frozen=True)
@@ -28,6 +105,7 @@ class DrawPoolDefinition:
     ticket_item_id: StableId
     loot_table_id: StableId
     award_ids: frozenset[StableId]
+    guarantee_slots: tuple[DrawGuaranteeSlotDefinition, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "id", stable_id(self.id, field="draw pool id"))
@@ -48,7 +126,18 @@ class DrawPoolDefinition:
             raise ValueError("抽取池版本必须大于 0 且至少声明一个奖励奖项")
         if self.ticket_item_id in awards:
             raise ValueError("抽取池不能把自己的抽取签作为奖励")
+        slots = tuple(self.guarantee_slots)
+        slot_ids = tuple(value.id for value in slots)
+        if len(slot_ids) != len(set(slot_ids)):
+            raise ValueError("同一抽取池的保底槽 ID 不能重复")
+        for slot in slots:
+            referenced = slot.qualifying_award_ids | frozenset(
+                value.award_id for value in slot.entries
+            )
+            if not referenced.issubset(awards):
+                raise ValueError(f"保底槽 {slot.id} 引用了抽取池外奖励")
         object.__setattr__(self, "award_ids", awards)
+        object.__setattr__(self, "guarantee_slots", slots)
 
     def validate_table(self, table: LootTableDefinition) -> None:
         """启动期检查奖池表，禁止空结果或越界奖励混入。"""
@@ -134,6 +223,7 @@ class DrawReceipt:
     rolls: int
     awards: tuple[LootAward, ...]
     loot_receipt: LootRollReceipt
+    guarantee_decisions: tuple[DrawGuaranteeDecision, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.command_id.strip() or not self.actor_id.strip() or self.rolls < 1:
@@ -145,6 +235,7 @@ class DrawReceipt:
             stable_id(self.ticket_item_id, field="draw ticket item id"),
         )
         object.__setattr__(self, "awards", tuple(self.awards))
+        object.__setattr__(self, "guarantee_decisions", tuple(self.guarantee_decisions))
 
 
 @dataclass(frozen=True)
@@ -211,6 +302,9 @@ __all__ = [
     "DRAW_FOUNDATION_VERSION",
     "DrawCommand",
     "DrawExecution",
+    "DrawGuaranteeDecision",
+    "DrawGuaranteeEntry",
+    "DrawGuaranteeSlotDefinition",
     "DrawInventoryCommand",
     "DrawInventoryExecution",
     "DrawInventoryReceipt",

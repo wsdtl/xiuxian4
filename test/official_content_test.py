@@ -12,6 +12,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.content import (  # noqa: E402
+    BREAKTHROUGH_TOKEN_ITEM_ID,
+    BREAKTHROUGH_TOKEN_ITEM_TAG,
     BASIC_ATTACK_ABILITY_ID,
     BASIC_COMBAT_FEATURE_ID,
     CATALOG_PACKAGE,
@@ -85,8 +87,8 @@ def main() -> None:
         CATALOG_PACKAGE_ID,
         WORLD_SKIN_PACKAGE_ID,
     )
-    assert str(CATALOG_PACKAGE.manifest.version) == "3.17.0"
-    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.14.0"
+    assert str(CATALOG_PACKAGE.manifest.version) == "3.18.0"
+    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.16.0"
     assert len(catalog.report.content_fingerprint) == 64
     assert catalog.report.display_content_ids == CATALOG_PACKAGE.display_content_ids
     progression = catalog.characters.progressions.require("progression.character_level")
@@ -115,6 +117,10 @@ def main() -> None:
     )
     _assert_medicine_catalog(catalog)
     _assert_nacre_item_categories(catalog)
+    breakthrough = catalog.items.require(BREAKTHROUGH_TOKEN_ITEM_ID)
+    assert breakthrough.tags.has(BREAKTHROUGH_TOKEN_ITEM_TAG)
+    assert not breakthrough.tags.has(SPECIAL_ITEM_TAG)
+    assert breakthrough.tags.has(SPECIAL_STORAGE_TAG)
     assert catalog.items.require(STARTER_WEAPON_ITEM_ID).tags.has("item.armament")
     basic_combat = catalog.characters.features.require(BASIC_COMBAT_FEATURE_ID)
     assert BASIC_ATTACK_ABILITY_ID in basic_combat.contribution.abilities
@@ -143,7 +149,7 @@ def main() -> None:
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
     assert cultivation.catalog is magic.catalog
     assert cultivation.skin.name == "太玄界"
-    assert cultivation.skin.version == 20
+    assert cultivation.skin.version == 22
     assert cultivation.skin.icon == "☯"
     assert cultivation.projector.name(PRIMARY_CURRENCY_ID) == "灵石"
     assert tuple(cultivation.projector.name(value) for value in QUALITY_IDS) == (
@@ -154,7 +160,7 @@ def main() -> None:
         "圣",
     )
     assert magic.skin.name == "魔法世界"
-    assert magic.skin.version == 19
+    assert magic.skin.version == 21
     assert magic.skin.icon == "✦"
     assert magic.projector.name(PRIMARY_CURRENCY_ID) == "魔晶"
     assert magic.projector.name(COMMON_QUALITY_ID) == "普通"
@@ -162,6 +168,8 @@ def main() -> None:
     assert magic.projector.name(INSCRIPTION_FEATHER_ITEM_ID) == "铭刻之羽"
     assert cultivation.projector.name(DRAW_TICKET_ITEM_ID) == "流光签"
     assert magic.projector.name(DRAW_TICKET_ITEM_ID) == "星辉秘券"
+    assert cultivation.projector.name(BREAKTHROUGH_TOKEN_ITEM_ID) == "问道玉契"
+    assert magic.projector.name(BREAKTHROUGH_TOKEN_ITEM_ID) == "星界升格契印"
     assert cultivation.projector.name(DIMENSION_SHIFT_ITEM_ID) == "渡界玉符"
     assert magic.projector.name(DIMENSION_SHIFT_ITEM_ID) == "位面跃迁晶核"
     assert tuple(magic.projector.name(value) for value in QUALITY_IDS) == (

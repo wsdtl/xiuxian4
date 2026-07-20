@@ -5,6 +5,7 @@ from .models import (
     DISASTER_ORIGIN_ORIGINAL,
     DimensionalDisasterDefinition,
 )
+from .templates import DISASTER_BEHAVIOR_KEYS_BY_TEMPLATE
 
 
 MAGIC_DISASTER_SOURCE_ID = "skin.magic"
@@ -25,7 +26,8 @@ def _disaster(
     return DimensionalDisasterDefinition(
         f"disaster.magic.{key}",
         MAGIC_DISASTER_SOURCE_ID,
-        f"enemy.boss.{enemy_key}",
+        f"enemy.boss.disaster.magic.{key}",
+        DISASTER_BEHAVIOR_KEYS_BY_TEMPLATE[enemy_key],
         origin_kind,
         source_note,
         name,

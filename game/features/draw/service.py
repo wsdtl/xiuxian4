@@ -44,7 +44,7 @@ from .models import (
 
 
 DRAW_HISTORY_AGGREGATE = "snapshot.draw_history"
-DRAW_RULESET_VERSION = "rules.draw.v1"
+DRAW_RULESET_VERSION = "rules.draw.v2"
 DRAW_SOURCE_KIND = "source.draw"
 
 
@@ -99,6 +99,7 @@ class DrawFeature:
                     existing,
                     self._ticket_count(inventory),
                     self._pity_count(loot),
+                    guarantee_counts=self._guarantee_counts(loot),
                 )
 
             inventory = self._inventory(uow, character_id)
@@ -117,6 +118,7 @@ class DrawFeature:
                     ticket_count=ticket.quantity if ticket else 0,
                     pity_count=self._pity_count(loot),
                     failure_message=f"抽奖签不足，需要 {rolls} 张",
+                    guarantee_counts=self._guarantee_counts(loot),
                 )
 
             context = _context(operation_id, logical_time)
@@ -249,6 +251,7 @@ class DrawFeature:
                 record,
                 self._ticket_count(final_inventory),
                 self._pity_count(execution.loot_state),
+                guarantee_counts=self._guarantee_counts(execution.loot_state),
             )
 
     def status(self, character_id: str, *, history_limit: int = 10) -> DrawPoolView:
@@ -260,6 +263,7 @@ class DrawFeature:
                 self._ticket_count(inventory),
                 self._pity_count(loot),
                 history.records[: max(0, history_limit)],
+                self._guarantee_counts(loot),
             )
 
     def _rewards(self, character_id, inventory, ledger, awards):
@@ -345,6 +349,13 @@ class DrawFeature:
     @staticmethod
     def _pity_count(loot: LootState) -> int:
         return int(loot.pity_counters.get(DRAW_CATALOG_CONTENT.loot_table.id, 0))
+
+    @staticmethod
+    def _guarantee_counts(loot: LootState) -> dict[str, int]:
+        return {
+            str(slot.id): int(loot.pity_counters.get(slot.id, 0))
+            for slot in DRAW_CATALOG_CONTENT.pool.guarantee_slots
+        }
 
 
 def _wallet(ledger: LedgerState, character_id: str):

@@ -13,7 +13,7 @@ from . import service
     cmd="纳戒",
     help=HelpSpec(
         category="资产",
-        summary="查看恢复药和可堆叠特殊物品",
+        summary="查看恢复药、特殊物品和破境凭证",
         usage=("纳戒", "纳戒 页码"),
         order=10,
     ),
@@ -22,7 +22,7 @@ async def nacre(
     message: str = "",
     overview=Depends(current_character_overview),
 ) -> None:
-    """分页查看恢复药和特殊物品。"""
+    """分页查看纳戒中的可堆叠物品。"""
 
     await service.nacre(message, overview)
 

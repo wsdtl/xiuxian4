@@ -3,6 +3,7 @@
 from game.core.gameplay import SkinEntry
 
 from ...catalog import (
+    BREAKTHROUGH_TOKEN_ITEM_ID,
     DRAW_TICKET_ITEM_ID,
     BACKPACK_CAPACITY_ITEM_ID,
     COMPANION_SANCTUARY_ITEM_ID,
@@ -27,6 +28,11 @@ from ...catalog import (
 
 
 MAGIC_ITEM_ENTRIES = {
+    BREAKTHROUGH_TOKEN_ITEM_ID: SkinEntry(
+        name="星界升格契印",
+        description="封存一次生命升格所需的星界许可；抵达阶位关隘后自动消耗。",
+        icon="✦",
+    ),
     DRAW_TICKET_ITEM_ID: SkinEntry(
         name="星辉秘券",
         description="凝结多次元战斗余辉的抽奖凭证。",

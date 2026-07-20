@@ -11,10 +11,12 @@ from game.core.gameplay import (
 NORMAL_ENEMY_LOOT_TABLE_ID = "loot.enemy.normal"
 ELITE_ENEMY_LOOT_TABLE_ID = "loot.enemy.elite"
 BOSS_ENEMY_LOOT_TABLE_ID = "loot.enemy.boss"
+PARTY_BOSS_LOOT_TABLE_ID = "loot.enemy.party_boss"
 
 AWARD_REGION_TROPHY_ID = "award.enemy.trophy.region"
 AWARD_ENEMY_TROPHY_ID = "award.enemy.trophy.identity"
 AWARD_BOSS_TROPHY_ID = "award.enemy.trophy.boss"
+AWARD_PARTY_BOSS_TROPHY_ID = "award.enemy.trophy.party_boss"
 AWARD_WORLD_CURIO_ID = "award.enemy.trophy.curio"
 AWARD_SMALL_HEALTH_MEDICINE_ID = "award.enemy.medicine.small_health"
 AWARD_SMALL_SPIRIT_MEDICINE_ID = "award.enemy.medicine.small_spirit"
@@ -159,11 +161,109 @@ ENEMY_LOOT_TABLES = (
             ),
         ),
     ),
+    LootTableDefinition(
+        PARTY_BOSS_LOOT_TABLE_ID,
+        1,
+        (
+            LootGroup(
+                "loot_group.enemy.party_boss.relic",
+                LootGroupMode.ALL,
+                (
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.relic",
+                        AWARD_PARTY_BOSS_TROPHY_ID,
+                        minimum_quantity=2,
+                        maximum_quantity=2,
+                    ),
+                ),
+            ),
+            LootGroup(
+                "loot_group.enemy.party_boss.gear_primary",
+                LootGroupMode.WEIGHTED_ONE,
+                (
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.equipment_primary",
+                        AWARD_RANDOM_EQUIPMENT_ID,
+                        weight=70,
+                    ),
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.weapon_primary",
+                        AWARD_RANDOM_WEAPON_ID,
+                        weight=30,
+                    ),
+                ),
+            ),
+            LootGroup(
+                "loot_group.enemy.party_boss.gear_secondary",
+                LootGroupMode.WEIGHTED_ONE,
+                (
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.equipment_secondary",
+                        AWARD_RANDOM_EQUIPMENT_ID,
+                        weight=70,
+                    ),
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.weapon_secondary",
+                        AWARD_RANDOM_WEAPON_ID,
+                        weight=30,
+                    ),
+                ),
+            ),
+            LootGroup(
+                "loot_group.enemy.party_boss.draw_ticket",
+                LootGroupMode.ALL,
+                (
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.draw_ticket",
+                        AWARD_DRAW_TICKET_ID,
+                    ),
+                ),
+            ),
+            LootGroup(
+                "loot_group.enemy.party_boss.draw_ticket_bonus",
+                LootGroupMode.INDEPENDENT,
+                (
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.draw_ticket_bonus",
+                        AWARD_DRAW_TICKET_ID,
+                        chance=200_000,
+                    ),
+                ),
+            ),
+            LootGroup(
+                "loot_group.enemy.party_boss.supply",
+                LootGroupMode.INDEPENDENT,
+                (
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.medium_health",
+                        AWARD_MEDIUM_HEALTH_MEDICINE_ID,
+                        chance=250_000,
+                    ),
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.medium_spirit",
+                        AWARD_MEDIUM_SPIRIT_MEDICINE_ID,
+                        chance=200_000,
+                    ),
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.large_health",
+                        AWARD_LARGE_HEALTH_MEDICINE_ID,
+                        chance=60_000,
+                    ),
+                    LootEntry(
+                        "loot_entry.enemy.party_boss.large_spirit",
+                        AWARD_LARGE_SPIRIT_MEDICINE_ID,
+                        chance=50_000,
+                    ),
+                ),
+            ),
+        ),
+    ),
 )
 
 
 __all__ = [
     "AWARD_BOSS_TROPHY_ID",
+    "AWARD_PARTY_BOSS_TROPHY_ID",
     "AWARD_DRAW_TICKET_ID",
     "AWARD_ENEMY_TROPHY_ID",
     "AWARD_LARGE_HEALTH_MEDICINE_ID",
@@ -180,4 +280,5 @@ __all__ = [
     "ELITE_ENEMY_LOOT_TABLE_ID",
     "ENEMY_LOOT_TABLES",
     "NORMAL_ENEMY_LOOT_TABLE_ID",
+    "PARTY_BOSS_LOOT_TABLE_ID",
 ]

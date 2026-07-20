@@ -10,7 +10,8 @@ from typing import Mapping
 from game.core.gameplay import StableId, stable_id
 
 from ..character import CHARACTER_MAXIMUM_LEVEL
-from ..enemy.definitions import BOSS_ENEMIES, REGULAR_ENEMIES
+from ..enemy.blueprints import PERSONAL_BOSS_BLUEPRINTS, REGULAR_ENEMY_BLUEPRINTS
+from ..enemy.definitions import PERSONAL_BOSS_ENEMIES, REGULAR_ENEMIES
 from ..enemy.loot import (
     BOSS_ENEMY_LOOT_TABLE_ID,
     ELITE_ENEMY_LOOT_TABLE_ID,
@@ -166,21 +167,47 @@ class ExplorationRegionCatalog:
                 )
 
 
-_REGULAR_IDS = tuple(value.id for value in REGULAR_ENEMIES)
-_BOSS_IDS = tuple(value.id for value in BOSS_ENEMIES)
+_REGULAR_IDS = MappingProxyType(
+    {
+        blueprint.key: enemy.id
+        for blueprint, enemy in zip(REGULAR_ENEMY_BLUEPRINTS, REGULAR_ENEMIES)
+    }
+)
+_PERSONAL_BOSS_IDS = MappingProxyType(
+    {
+        blueprint.key: enemy.id
+        for blueprint, enemy in zip(
+            PERSONAL_BOSS_BLUEPRINTS,
+            PERSONAL_BOSS_ENEMIES,
+        )
+    }
+)
 
 
-def _regular_region(index: int, location_id: str, low: int, high: int):
-    offset = index * 6
-    boss_offset = index * 3
+def _enemy_ids(values: tuple[str, ...]) -> frozenset[StableId]:
+    return frozenset(_REGULAR_IDS[value] for value in values)
+
+
+def _boss_ids(values: tuple[str, ...]) -> frozenset[StableId]:
+    return frozenset(_PERSONAL_BOSS_IDS[value] for value in values)
+
+
+def _regular_region(
+    index: int,
+    location_id: str,
+    low: int,
+    high: int,
+    regular_keys: tuple[str, ...],
+    boss_keys: tuple[str, ...],
+):
     return ExplorationRegionDefinition(
         f"exploration.region.r{index + 1}",
         location_id,
         ExplorationRegionKind.REGULAR,
         low,
         high,
-        frozenset(_REGULAR_IDS[offset : offset + 6]),
-        frozenset(_BOSS_IDS[boss_offset : boss_offset + 3]),
+        _enemy_ids(regular_keys),
+        _boss_ids(boss_keys),
         ExplorationEncounterWeights(68, 24, 3, 5),
         REGION_TROPHY_ITEM_IDS[location_id],
     )
@@ -190,16 +217,76 @@ REGULAR_EXPLORATION_REGIONS = tuple(
     _regular_region(index, *values)
     for index, values in enumerate(
         (
-            (GREEN_CLOUD_PLAIN_ID, 1, 12),
-            (SUNSET_RIDGE_ID, 8, 22),
-            (BLACK_WIND_RAVINE_ID, 18, 32),
-            (MIRROR_LAKE_MARSH_ID, 28, 42),
-            (SCARLET_FLAME_VALLEY_ID, 38, 52),
-            (VERDANT_WILDERNESS_ID, 48, 62),
-            (THUNDER_MARSH_STEPPE_ID, 58, 72),
-            (NORTHERN_ABYSS_SNOWFIELD_ID, 68, 82),
-            (BROKEN_PILLAR_RELIC_ID, 78, 92),
-            (KUNLUN_SKY_RUINS_ID, 88, 100),
+            (
+                GREEN_CLOUD_PLAIN_ID,
+                1,
+                12,
+                ("mountain_ape", "moon_wolf", "fox_trickster", "venom_spider", "cave_serpent", "corpse_guard"),
+                ("nine_headed_plague", "venom_world_serpent", "drought_incarnate"),
+            ),
+            (
+                SUNSET_RIDGE_ID,
+                8,
+                22,
+                ("drowned_spirit", "painted_wraith", "night_raider", "blood_drinker", "dream_eater", "stone_guardian"),
+                ("winged_omen", "stubborn_ruin", "endless_maw"),
+            ),
+            (
+                BLACK_WIND_RAVINE_ID,
+                18,
+                32,
+                ("wind_hunter", "frost_stalker", "treasure_boar", "cliff_screecher", "war_ape", "river_mimic"),
+                ("faceless_chaos", "twilight_dragon", "headless_warrior"),
+            ),
+            (
+                MIRROR_LAKE_MARSH_ID,
+                28,
+                42,
+                ("plague_beast", "flame_bird", "thunder_beast", "giant_serpent", "shadow_cat", "horned_brute"),
+                ("river_rebel", "scarlet_war_ape", "nine_headed_bird"),
+            ),
+            (
+                SCARLET_FLAME_VALLEY_ID,
+                38,
+                52,
+                ("grave_knight", "mist_witch", "bone_archer", "marsh_lurker", "ember_hound", "ice_elemental"),
+                ("man_eating_raptor", "cavern_serpent_king", "thunder_one_leg"),
+            ),
+            (
+                VERDANT_WILDERNESS_ID,
+                48,
+                62,
+                ("storm_elemental", "earth_elemental", "shadow_elemental", "forest_guardian", "blood_mage", "curse_caster"),
+                ("eclipse_hound", "solar_raven", "flood_stag"),
+            ),
+            (
+                THUNDER_MARSH_STEPPE_ID,
+                58,
+                72,
+                ("shield_bearer", "pack_leader", "soul_reaper", "iron_colossus", "sky_predator", "deep_crawler"),
+                ("weakwater_predator", "wilderness_colossus", "ghost_emperor"),
+            ),
+            (
+                NORTHERN_ABYSS_SNOWFIELD_ID,
+                68,
+                82,
+                ("mirror_spirit", "chain_warden", "ruin_sentinel", "star_gazer", "void_priest", "frost_witch"),
+                ("corpse_ancestor", "fox_matriarch", "dream_sovereign"),
+            ),
+            (
+                BROKEN_PILLAR_RELIC_ID,
+                78,
+                92,
+                ("plague_shaman", "flame_raider", "thunder_caller", "abyss_stalker", "moon_specter", "sun_guardian"),
+                ("mountain_lord", "sea_dragon", "storm_sovereign"),
+            ),
+            (
+                KUNLUN_SKY_RUINS_ID,
+                88,
+                100,
+                ("chaos_spawn", "time_watcher", "fate_weaver", "death_scribe", "realm_wanderer", "ancient_guardian"),
+                ("frost_queen", "flame_tyrant", "plague_lord"),
+            ),
         )
     )
 )
@@ -211,8 +298,8 @@ SPECIAL_EXPLORATION_REGIONS = (
         ExplorationRegionKind.WEAPON_FOCUS,
         30,
         100,
-        frozenset(_REGULAR_IDS[index] for index in (0, 1, 8, 12, 15, 16, 20, 21, 22, 23, 26, 37, 38, 40, 50, 51, 57)),
-        frozenset(_BOSS_IDS[:30]),
+        _enemy_ids(("mountain_ape", "moon_wolf", "night_raider", "wind_hunter", "cliff_screecher", "war_ape", "thunder_beast", "giant_serpent", "shadow_cat", "horned_brute", "bone_archer", "pack_leader", "soul_reaper", "sky_predator", "thunder_caller", "abyss_stalker", "death_scribe")),
+        frozenset(_PERSONAL_BOSS_IDS.values()),
         ExplorationEncounterWeights(45, 45, 5, 5),
         REGION_TROPHY_ITEM_IDS[MYRIAD_SWORD_TOMB_ID],
         loot_modifiers={
@@ -228,8 +315,8 @@ SPECIAL_EXPLORATION_REGIONS = (
         ExplorationRegionKind.EQUIPMENT_FOCUS,
         50,
         100,
-        frozenset(_REGULAR_IDS[index] for index in (5, 11, 17, 24, 31, 36, 39, 43, 44, 53, 59)),
-        frozenset(_BOSS_IDS[:30]),
+        _enemy_ids(("corpse_guard", "stone_guardian", "river_mimic", "grave_knight", "earth_elemental", "shield_bearer", "iron_colossus", "chain_warden", "ruin_sentinel", "sun_guardian", "ancient_guardian")),
+        frozenset(_PERSONAL_BOSS_IDS.values()),
         ExplorationEncounterWeights(45, 45, 5, 5),
         REGION_TROPHY_ITEM_IDS[HEAVENLY_CRAFT_RELIC_ID],
         loot_modifiers={
@@ -246,8 +333,8 @@ SPECIAL_EXPLORATION_REGIONS = (
         ExplorationRegionKind.BOSS_FOCUS,
         80,
         100,
-        frozenset(_REGULAR_IDS[-12:]),
-        frozenset(_BOSS_IDS[:30]),
+        _enemy_ids(("plague_shaman", "flame_raider", "thunder_caller", "abyss_stalker", "moon_specter", "sun_guardian", "chaos_spawn", "time_watcher", "fate_weaver", "death_scribe", "realm_wanderer", "ancient_guardian")),
+        frozenset(_PERSONAL_BOSS_IDS.values()),
         ExplorationEncounterWeights(10, 45, 40, 5),
         REGION_TROPHY_ITEM_IDS[RETURNING_RUIN_ABYSS_ID],
     ),

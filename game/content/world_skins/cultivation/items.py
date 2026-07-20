@@ -3,6 +3,7 @@
 from game.core.gameplay import SkinEntry
 
 from ...catalog import (
+    BREAKTHROUGH_TOKEN_ITEM_ID,
     DRAW_TICKET_ITEM_ID,
     BACKPACK_CAPACITY_ITEM_ID,
     COMPANION_SANCTUARY_ITEM_ID,
@@ -27,6 +28,11 @@ from ...catalog import (
 
 
 CULTIVATION_ITEM_ENTRIES = {
+    BREAKTHROUGH_TOKEN_ITEM_ID: SkinEntry(
+        name="问道玉契",
+        description="承载破境所需的一缕道机；达到境界关隘后由突破流程自动消耗。",
+        icon="📜",
+    ),
     DRAW_TICKET_ITEM_ID: SkinEntry(
         name="流光签",
         description="承接多次元战斗余辉的抽奖凭证。",

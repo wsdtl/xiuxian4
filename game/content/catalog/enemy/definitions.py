@@ -1,4 +1,4 @@
-"""正式敌人阶位、等级、奖励与一百二十个稳定敌人身份。"""
+"""普通、精英与个人首领的正式敌人内容。"""
 
 from game.core.gameplay import (
     COMBAT_ATTACK,
@@ -24,7 +24,7 @@ from game.core.gameplay import (
 from ..combat.definitions import BASIC_ATTACK_ABILITY_ID
 from ..combat.stats import COMBAT_CONTROL_RESISTANCE, COMBAT_TENACITY
 from .behaviors import ENEMY_BEHAVIOR_CONTENT
-from .blueprints import BOSS_ENEMY_BLUEPRINTS, REGULAR_ENEMY_BLUEPRINTS
+from .blueprints import PERSONAL_BOSS_BLUEPRINTS, REGULAR_ENEMY_BLUEPRINTS
 from .loot import (
     BOSS_ENEMY_LOOT_TABLE_ID,
     ELITE_ENEMY_LOOT_TABLE_ID,
@@ -120,7 +120,7 @@ ENEMY_RANKS = (
         minimum_behaviors=3,
         maximum_behaviors=5,
         threat_multiplier=4.0,
-        reward_profile_id=BOSS_ENEMY_REWARD_PROFILE_ID,
+        reward_profile_id=None,
     ),
 )
 
@@ -156,7 +156,7 @@ def _regular_enemy(blueprint) -> EnemyDefinition:
     )
 
 
-def _boss_enemy(blueprint, index: int) -> EnemyDefinition:
+def _personal_boss_enemy(blueprint, index: int) -> EnemyDefinition:
     defaults = frozenset(f"enemy.behavior.{value}" for value in blueprint.behavior_keys)
     phase_keys = tuple(value for value in _BEHAVIOR_KEYS if f"enemy.behavior.{value}" not in defaults)
     phases = (
@@ -189,8 +189,11 @@ def _boss_enemy(blueprint, index: int) -> EnemyDefinition:
 
 
 REGULAR_ENEMIES = tuple(_regular_enemy(value) for value in REGULAR_ENEMY_BLUEPRINTS)
-BOSS_ENEMIES = tuple(_boss_enemy(value, index) for index, value in enumerate(BOSS_ENEMY_BLUEPRINTS))
-ENEMY_DEFINITIONS = (*REGULAR_ENEMIES, *BOSS_ENEMIES)
+PERSONAL_BOSS_ENEMIES = tuple(
+    _personal_boss_enemy(value, index)
+    for index, value in enumerate(PERSONAL_BOSS_BLUEPRINTS)
+)
+ENEMY_DEFINITIONS = (*REGULAR_ENEMIES, *PERSONAL_BOSS_ENEMIES)
 
 
 ENEMY_DEFINITION_DISPLAY_IDS = frozenset(value.id for value in ENEMY_DEFINITIONS)
@@ -198,7 +201,6 @@ ENEMY_RANK_DISPLAY_IDS = frozenset(value.id for value in ENEMY_RANKS)
 
 
 __all__ = [
-    "BOSS_ENEMIES",
     "BOSS_ENEMY_REWARD_PROFILE_ID",
     "ELITE_ENEMY_REWARD_PROFILE_ID",
     "ENEMY_DEFINITIONS",
@@ -207,6 +209,7 @@ __all__ = [
     "ENEMY_RANK_DISPLAY_IDS",
     "ENEMY_REWARD_PROFILES",
     "NORMAL_ENEMY_REWARD_PROFILE_ID",
+    "PERSONAL_BOSS_ENEMIES",
     "REGULAR_ENEMIES",
     "STANDARD_ENEMY_LEVEL_PROFILE",
     "STANDARD_ENEMY_LEVEL_PROFILE_ID",

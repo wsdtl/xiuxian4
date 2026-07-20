@@ -7,6 +7,8 @@ from types import MappingProxyType
 from typing import Mapping
 
 from game.core.gameplay import (
+    DrawGuaranteeEntry,
+    DrawGuaranteeSlotDefinition,
     DrawPoolDefinition,
     LootEntry,
     LootGroup,
@@ -16,6 +18,7 @@ from game.core.gameplay import (
 )
 
 from ..item import (
+    BREAKTHROUGH_TOKEN_ITEM_ID,
     DRAW_TICKET_ITEM_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
     LARGE_SPIRIT_MEDICINE_ITEM_ID,
@@ -31,17 +34,22 @@ DRAW_POOL_ID = "draw_pool.special"
 DRAW_LOOT_TABLE_ID = "loot.draw.special"
 DRAW_REWARD_LOW_CURRENCY_ID = "draw_reward.currency.low"
 DRAW_REWARD_MID_CURRENCY_ID = "draw_reward.currency.mid"
+DRAW_BREAKTHROUGH_GUARANTEE_SLOT_ID = "draw_guarantee.breakthrough"
+DRAW_BREAKTHROUGH_GUARANTEE_ENTRY_ID = "draw_guarantee_entry.breakthrough_token"
 
 DRAW_TIER_LOW = "low"
 DRAW_TIER_MID = "mid"
 DRAW_TIER_HIGH = "high"
+DRAW_TIER_BREAKTHROUGH = "breakthrough"
 
 DRAW_LOW_CURRENCY_AMOUNT = 20
 DRAW_MID_CURRENCY_AMOUNT = 100
 DRAW_MID_PITY_THRESHOLD = 10
-DRAW_LOW_WEIGHT = 78_000
+DRAW_BREAKTHROUGH_PITY_THRESHOLD = 50
+DRAW_LOW_WEIGHT = 77_000
 DRAW_MID_WEIGHT = 20_000
 DRAW_HIGH_WEIGHT = 2_000
+DRAW_BREAKTHROUGH_WEIGHT = 1_000
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,7 @@ class DrawCatalogContent:
     pool: DrawPoolDefinition
     entry_tiers: Mapping[str, str]
     special_item_ids: frozenset[str]
+    breakthrough_item_ids: frozenset[str]
 
 
 def _entries(
@@ -108,14 +117,21 @@ def build_draw_catalog_content() -> DrawCatalogContent:
             )
             for index, item_id in enumerate(special_ids)
         )
-    entries = (*low_entries, *mid_entries, *high_entries)
+    breakthrough_entries = (
+        LootEntry(
+            "draw_entry.breakthrough.token",
+            BREAKTHROUGH_TOKEN_ITEM_ID,
+            weight=DRAW_BREAKTHROUGH_WEIGHT,
+        ),
+    )
+    entries = (*low_entries, *mid_entries, *high_entries, *breakthrough_entries)
     mid_or_high_ids = frozenset(
         value.id
-        for value in (*mid_entries, *high_entries)
+        for value in (*mid_entries, *high_entries, *breakthrough_entries)
     )
     table = LootTableDefinition(
         DRAW_LOOT_TABLE_ID,
-        1,
+        2,
         (
             LootGroup(
                 "loot_group.draw.special",
@@ -132,10 +148,22 @@ def build_draw_catalog_content() -> DrawCatalogContent:
     )
     pool = DrawPoolDefinition(
         DRAW_POOL_ID,
-        1,
+        2,
         DRAW_TICKET_ITEM_ID,
         table.id,
         frozenset(value.award_id for value in entries if value.award_id is not None),
+        (
+            DrawGuaranteeSlotDefinition(
+                DRAW_BREAKTHROUGH_GUARANTEE_SLOT_ID,
+                DRAW_BREAKTHROUGH_PITY_THRESHOLD,
+                (
+                    DrawGuaranteeEntry(
+                        DRAW_BREAKTHROUGH_GUARANTEE_ENTRY_ID,
+                        BREAKTHROUGH_TOKEN_ITEM_ID,
+                    ),
+                ),
+            ),
+        ),
     )
     tiers = {
         entry.id: tier
@@ -143,14 +171,17 @@ def build_draw_catalog_content() -> DrawCatalogContent:
             (DRAW_TIER_LOW, low_entries),
             (DRAW_TIER_MID, mid_entries),
             (DRAW_TIER_HIGH, high_entries),
+            (DRAW_TIER_BREAKTHROUGH, breakthrough_entries),
         )
         for entry in tier_entries
     }
+    tiers[DRAW_BREAKTHROUGH_GUARANTEE_ENTRY_ID] = DRAW_TIER_BREAKTHROUGH
     return DrawCatalogContent(
         table,
         pool,
         MappingProxyType(tiers),
         frozenset(special_ids),
+        frozenset({BREAKTHROUGH_TOKEN_ITEM_ID}),
     )
 
 

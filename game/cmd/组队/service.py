@@ -11,6 +11,7 @@ from game.core.account import ExternalIdentity
 from game.core.gameplay import Party, SocialRequest
 from launch import C, config, logger
 from launch.adapter import current_message_context
+from launch.paths import public_url
 from message import Action, DocumentMessage, M
 from message.schema import FieldSeparator
 
@@ -214,10 +215,121 @@ async def set_ready(current: CurrentCharacterResult, ready: bool) -> None:
             ready,
             logical_time=_now(),
         )
+        if result.status == "member.ready_changed" and result.party is not None:
+            await asyncio.to_thread(
+                current_game_services().party_battles.set_ready,
+                _operation_id("party-battle-ready"),
+                result.party.id,
+                character.id,
+                ready,
+                logical_time=_now(),
+            )
         text = "已标记为准备" if ready else "已取消准备"
         await send_game_reply(_success("组队", text) if result.status == "member.ready_changed" else _failure(result.failure_message or "准备状态没有更新"))
     except Exception as exc:
         await _failed("更新准备状态失败", character.id, exc)
+
+
+async def party_battle_view(current: CurrentCharacterResult) -> None:
+    character = _character(current)
+    if character is None:
+        await send_game_reply(_failure("当前没有可用角色"))
+        return
+    try:
+        party_view = await asyncio.to_thread(
+            current_game_services().party.view,
+            character.id,
+            logical_time=_now(),
+        )
+        if party_view.party is None:
+            await send_game_reply(_failure("请先加入队伍"))
+            return
+        challenge = await asyncio.to_thread(
+            current_game_services().party_battles.view,
+            party_view.party.id,
+        )
+        await send_game_reply(_party_battle_message(party_view.party, challenge.challenge, character.id))
+    except Exception as exc:
+        await _failed("组队挑战读取失败", character.id, exc)
+
+
+async def select_party_battle(message: str, current: CurrentCharacterResult) -> None:
+    character = _character(current)
+    if character is None:
+        await send_game_reply(_failure("当前没有可用角色"))
+        return
+    try:
+        level = int(str(message or "").strip())
+    except ValueError:
+        await send_game_reply(_failure("发送：选择组队挑战 等级"))
+        return
+    try:
+        party_view = await asyncio.to_thread(
+            current_game_services().party.view,
+            character.id,
+            logical_time=_now(),
+        )
+        if party_view.party is None:
+            await send_game_reply(_failure("请先加入队伍"))
+            return
+        result = await asyncio.to_thread(
+            current_game_services().party_battles.select,
+            _operation_id("party-battle-select"),
+            party_view.party.id,
+            character.id,
+            level,
+            logical_time=_now(),
+        )
+        await send_game_reply(
+            _success("组队挑战", "已锁定组队首领，所有成员发送“准备”后由队长发起挑战")
+            if result.status in {"selected", "replayed"}
+            else _failure(result.failure_message or "组队首领选择没有完成")
+        )
+    except Exception as exc:
+        await _failed("选择组队首领失败", character.id, exc)
+
+
+async def start_party_battle(current: CurrentCharacterResult) -> None:
+    character = _character(current)
+    if character is None:
+        await send_game_reply(_failure("当前没有可用角色"))
+        return
+    try:
+        party_view = await asyncio.to_thread(
+            current_game_services().party.view,
+            character.id,
+            logical_time=_now(),
+        )
+        if party_view.party is None:
+            await send_game_reply(_failure("请先加入队伍"))
+            return
+        result = await asyncio.to_thread(
+            current_game_services().party_battles.challenge,
+            _operation_id("party-battle-start"),
+            party_view.party.id,
+            character.id,
+            logical_time=_now(),
+        )
+        if result.status in {"victory", "draw", "defeated", "replayed"}:
+            builder = M.document().section("组队战报", icon="combat")
+            builder.row(
+                ("首领", result.enemy_name),
+                ("结果", "胜利" if result.victory else "平局" if result.draw else "战败"),
+            )
+            builder.field("战斗行动", result.turns)
+            for character_id, lines in result.reward_summaries.items():
+                builder.item(character_id, _character_name(character_id), "：", "；".join(lines))
+            if result.share_id:
+                builder.field(
+                    "战报",
+                    M.link("查看完整战报", public_url("battle", result.share_id)),
+                )
+            reply = builder.build()
+        else:
+            reply = _failure(result.failure_message or "组队挑战没有开始")
+        await send_game_reply(reply)
+    except Exception as exc:
+        await _failed("组队挑战执行失败", character.id, exc)
 
 
 async def _simple_party_action(current, prefix, method_name, success_text) -> None:
@@ -304,6 +416,40 @@ def _view_message(
     return builder.actions(actions).build()
 
 
+def _party_battle_message(party: Party, challenge, character_id: str) -> DocumentMessage:
+    builder = M.document().section("组队挑战", icon="combat")
+    if challenge is None:
+        builder.line("当前没有锁定的组队首领")
+        if party.leader_id == character_id:
+            builder.line("队长可发送：选择组队挑战 等级")
+        return builder.build()
+    view = current_game_services().world_views.require(challenge.source_skin_id)
+    enemy = view.enemy_projector.enemy(challenge.encounter.enemies[0])
+    builder.row(("首领", enemy.name), ("等级", str(challenge.level)))
+    builder.line("状态", FieldSeparator(), "待挑战" if challenge.status == "selected" else "已完成")
+    builder.line("挑战次数", FieldSeparator(), str(challenge.attempt_count))
+    for member in sorted(party.members.values(), key=lambda value: value.slot):
+        ready = "已准备" if member.subject_id in challenge.ready_fingerprints else "未准备"
+        name = _character_name(member.subject_id)
+        builder.line(f"{member.slot + 1}. {name}", FieldSeparator(), ready)
+    if challenge.status == "selected":
+        actions = [
+            Action("party-battle.ready", "准备", "准备", behavior="send"),
+            Action("party-battle.unready", "取消准备", "取消准备", behavior="send", style="secondary"),
+        ]
+        if party.leader_id == character_id:
+            actions.append(Action("party-battle.start", "发起挑战", "开始组队挑战", behavior="send"))
+        return builder.actions(actions).build()
+    if challenge.report_id:
+        report = current_game_services().battle_reports.reference(challenge.report_id)
+        if report is not None:
+            builder.field(
+                "战报",
+                M.link("查看完整战报", public_url("battle", report.share_id)),
+            )
+    return builder.build()
+
+
 def _resolve_target(external_id: str):
     context = current_message_context()
     if context is None:
@@ -363,7 +509,10 @@ __all__ = [
     "leave",
     "preview_disband",
     "reject",
+    "party_battle_view",
+    "select_party_battle",
     "set_ready",
+    "start_party_battle",
     "transfer",
     "view",
 ]

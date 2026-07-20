@@ -56,6 +56,7 @@ class ProgressionDefinition:
     id: StableId
     experience_requirements: tuple[int, ...]
     milestones: Mapping[int, ProgressionMilestone] = field(default_factory=dict)
+    level_caps: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "id", stable_id(self.id, field="progression id"))
@@ -68,8 +69,17 @@ class ProgressionDefinition:
                 raise ValueError("成长里程碑映射键与 level 不一致")
             if milestone.level > len(requirements) + 1:
                 raise ValueError(f"成长里程碑超过轨道最高等级：{milestone.level}")
+        caps = tuple(int(value) for value in self.level_caps)
+        if caps:
+            if caps[0] < 1 or caps[-1] != len(requirements) + 1:
+                raise ValueError("成长等级上限必须从有效等级开始并覆盖轨道最高等级")
+            if any(value < 1 for value in caps) or any(
+                current >= following for current, following in zip(caps, caps[1:])
+            ):
+                raise ValueError("成长等级上限必须严格递增")
         object.__setattr__(self, "experience_requirements", requirements)
         object.__setattr__(self, "milestones", MappingProxyType(milestones))
+        object.__setattr__(self, "level_caps", caps)
 
     @property
     def maximum_level(self) -> int:
@@ -81,6 +91,18 @@ class ProgressionDefinition:
         if level >= self.maximum_level:
             return None
         return self.experience_requirements[level - 1]
+
+    @property
+    def initial_level_cap(self) -> int:
+        return self.level_caps[0] if self.level_caps else self.maximum_level
+
+    def next_level_cap(self, current_cap: int) -> int | None:
+        if not self.level_caps:
+            return None
+        for value in self.level_caps:
+            if value > current_cap:
+                return value
+        return None
 
 
 @dataclass(frozen=True)
@@ -189,7 +211,10 @@ class CharacterCatalog:
                 SPIRIT_CURRENT: template.core_attributes[SPIRIT_MAXIMUM],
             },
             {
-                progression_id: ProgressionState(progression_id)
+                progression_id: ProgressionState(
+                    progression_id,
+                    level_cap=self.progressions.require(progression_id).initial_level_cap,
+                )
                 for progression_id in template.progression_ids
             },
             template.feature_ids,

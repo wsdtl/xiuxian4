@@ -1,7 +1,6 @@
 """魔法世界的敌人身份、行为术语与精英前缀。"""
 
 from game.core.gameplay import (
-    ENCOUNTER_SCOPE_GLOBAL_ID,
     ENCOUNTER_SCOPE_PARTY_ID,
     ENCOUNTER_SCOPE_PERSONAL_ID,
     ENEMY_RANK_BOSS_ID,
@@ -12,11 +11,13 @@ from game.core.gameplay import (
 
 from ...catalog.enemy.blueprints import (
     BEHAVIOR_BLUEPRINTS,
-    BOSS_ENEMY_BLUEPRINTS,
+    BOSS_BEHAVIOR_KEYS_BY_TEMPLATE,
+    CULTIVATION_PARTY_BOSS_BLUEPRINTS,
+    MAGIC_PARTY_BOSS_BLUEPRINTS,
+    PERSONAL_BOSS_BLUEPRINTS,
     REGULAR_ENEMY_BLUEPRINTS,
 )
 from ...catalog.enemy.encounters import (
-    GLOBAL_BOSS_ENCOUNTER_ID,
     PARTY_BOSS_ENCOUNTER_ID,
     PERSONAL_BOSS_ENCOUNTER_ID,
     PERSONAL_ELITE_ENCOUNTER_ID,
@@ -36,7 +37,7 @@ _REGULAR_NAMES = (
 
 _BOSS_NAMES = (
     ("九头蛇·沼泽暴君", "九头蛇"),
-    ("耶梦加得·尘世巨蛇", "耶梦加得"),
+    ("拉冬·百首园卫", "拉冬"),
     ("炎魔·赤地灾厄", "赤地炎魔"),
     ("奇美拉·三首凶兽", "奇美拉"),
     ("曼提柯尔·荒原暴君", "曼提柯尔"),
@@ -50,7 +51,7 @@ _BOSS_NAMES = (
     ("鹰身女王·塞壬", "塞壬"),
     ("蛇怪之王·巴西利斯克", "巴西利斯克"),
     ("雷霆巨人·索尔姆", "索尔姆"),
-    ("芬里尔·噬日魔狼", "芬里尔"),
+    ("斯库尔·逐日魔狼", "斯库尔"),
     ("凤凰·焚世余烬", "焚世凤凰"),
     ("凯尔派·洪水之兆", "凯尔派"),
     ("深渊猎兽·斯库拉", "斯库拉"),
@@ -84,7 +85,7 @@ _BOSS_NAMES = (
     ("镜界领主·纳西索斯", "纳西索斯"),
     ("钢铁泰坦·塔罗斯", "塔罗斯"),
     ("噬月魔兽·哈提", "哈提"),
-    ("光明巨人·苏尔特", "苏尔特"),
+    ("法厄同·坠日御者", "法厄同"),
     ("星辰吞噬者·阿波菲斯", "阿波菲斯"),
     ("位面破坏者·提丰", "提丰"),
     ("冥河船夫·卡戎", "卡戎"),
@@ -136,13 +137,21 @@ _BEHAVIOR_DISPLAY = {
 
 def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], dict[str, str]]:
     regular_keys = tuple(value.key for value in REGULAR_ENEMY_BLUEPRINTS)
-    boss_keys = tuple(value.key for value in BOSS_ENEMY_BLUEPRINTS)
+    boss_names = dict(zip(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE, _BOSS_NAMES))
+    boss_blueprints = (
+        *PERSONAL_BOSS_BLUEPRINTS,
+        *CULTIVATION_PARTY_BOSS_BLUEPRINTS,
+        *MAGIC_PARTY_BOSS_BLUEPRINTS,
+    )
     behavior_keys = {value.key for value in BEHAVIOR_BLUEPRINTS}
-    if len(_REGULAR_NAMES) != len(regular_keys) or len(_BOSS_NAMES) != len(boss_keys):
+    if len(_REGULAR_NAMES) != len(regular_keys) or len(_BOSS_NAMES) != len(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE):
         raise ValueError("魔法世界敌人名称必须完整覆盖正式敌人身份")
     if set(_BEHAVIOR_DISPLAY) != behavior_keys:
         raise ValueError("魔法世界行为名称必须完整覆盖正式行为模板")
-    all_names = [*_REGULAR_NAMES, *(value[0] for value in _BOSS_NAMES)]
+    all_names = [
+        *_REGULAR_NAMES,
+        *(boss_names[value.key][0] for value in boss_blueprints),
+    ]
     if len(all_names) != len(set(all_names)):
         raise ValueError("魔法世界敌人完整名称不能重复")
     entries = {
@@ -151,17 +160,23 @@ def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], 
         ENEMY_RANK_BOSS_ID: SkinEntry(name="首领敌人"),
         ENCOUNTER_SCOPE_PERSONAL_ID: SkinEntry(name="个人遭遇"),
         ENCOUNTER_SCOPE_PARTY_ID: SkinEntry(name="队伍挑战"),
-        ENCOUNTER_SCOPE_GLOBAL_ID: SkinEntry(name="世界事件"),
         PERSONAL_NORMAL_ENCOUNTER_ID: SkinEntry(name="普通遭遇"),
         PERSONAL_ELITE_ENCOUNTER_ID: SkinEntry(name="精英遭遇"),
         PERSONAL_BOSS_ENCOUNTER_ID: SkinEntry(name="首领挑战"),
         PARTY_BOSS_ENCOUNTER_ID: SkinEntry(name="队伍首领"),
-        GLOBAL_BOSS_ENCOUNTER_ID: SkinEntry(name="世界首领降临"),
     }
     for key, name in zip(regular_keys, _REGULAR_NAMES):
         entries[f"enemy.{key}"] = SkinEntry(name=name, compact_name=name, icon="♟")
-    for key, (name, compact_name) in zip(boss_keys, _BOSS_NAMES):
-        entries[f"enemy.boss.{key}"] = SkinEntry(name=name, compact_name=compact_name, icon="♛")
+    for blueprint in PERSONAL_BOSS_BLUEPRINTS:
+        name, compact_name = boss_names[blueprint.key]
+        entries[f"enemy.boss.{blueprint.key}"] = SkinEntry(name=name, compact_name=compact_name, icon="♛")
+    for source, blueprints in (
+        ("cultivation", CULTIVATION_PARTY_BOSS_BLUEPRINTS),
+        ("magic", MAGIC_PARTY_BOSS_BLUEPRINTS),
+    ):
+        for blueprint in blueprints:
+            name, compact_name = boss_names[blueprint.key]
+            entries[f"enemy.boss.party.{source}.{blueprint.key}"] = SkinEntry(name=name, compact_name=compact_name, icon="♛")
     prefixes = {}
     behavior_names = {}
     for key, (name, description, values) in _BEHAVIOR_DISPLAY.items():

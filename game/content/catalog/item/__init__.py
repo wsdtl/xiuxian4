@@ -1,6 +1,12 @@
 """物品名录的稳定入口。"""
 
 from .draw import DRAW_TICKET_ITEM, DRAW_TICKET_ITEM_ID, DRAW_TICKET_ITEM_TAG
+from .breakthrough import (
+    BREAKTHROUGH_TOKEN_ITEM,
+    BREAKTHROUGH_TOKEN_ITEM_ID,
+    BREAKTHROUGH_TOKEN_STACK_LIMIT,
+)
+from .classification import BREAKTHROUGH_TOKEN_ITEM_TAG
 
 from .definitions import (
     LARGE_HEALTH_MEDICINE_ITEM_ID,
@@ -51,9 +57,10 @@ from .special import (
     validate_nacre_item_categories,
 )
 from .trophies import (
-    ACTIVE_BOSS_ENEMIES,
     BOSS_TROPHY_ITEM_IDS,
     BOSS_TROPHY_ITEMS,
+    PARTY_BOSS_TROPHY_ITEM_IDS,
+    PARTY_BOSS_TROPHY_ITEMS,
     REGION_TROPHY_ITEM_IDS,
     REGION_TROPHY_ITEMS,
     REGION_TROPHY_WEIGHTS,

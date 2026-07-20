@@ -21,6 +21,7 @@ class DimensionalDisasterDefinition:
     id: StableId
     source_skin_id: StableId
     enemy_definition_id: StableId
+    combat_behavior_keys: tuple[str, ...]
     origin_kind: str
     source_note: str
     name: str
@@ -43,6 +44,14 @@ class DimensionalDisasterDefinition:
             "enemy_definition_id",
             stable_id(self.enemy_definition_id, field="enemy id"),
         )
+        behavior_keys = tuple(
+            str(value or "").strip() for value in self.combat_behavior_keys
+        )
+        if not behavior_keys or any(not value for value in behavior_keys):
+            raise ValueError(f"次元灾厄缺少战斗行为模板：{self.id}")
+        if len(behavior_keys) != len(set(behavior_keys)):
+            raise ValueError(f"次元灾厄战斗行为模板重复：{self.id}")
+        object.__setattr__(self, "combat_behavior_keys", behavior_keys)
         origin_kind = str(self.origin_kind or "").strip().lower()
         if origin_kind not in DISASTER_ORIGIN_KINDS:
             raise ValueError(f"未知灾厄来源类型: {self.origin_kind}")

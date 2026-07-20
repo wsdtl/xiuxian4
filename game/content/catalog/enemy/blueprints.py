@@ -132,7 +132,7 @@ REGULAR_ENEMY_BLUEPRINTS = (
 )
 
 
-BOSS_KEYS = (
+PERSONAL_BOSS_KEYS = (
     "nine_headed_plague", "venom_world_serpent", "drought_incarnate", "winged_omen",
     "stubborn_ruin", "endless_maw", "faceless_chaos", "twilight_dragon",
     "headless_warrior", "river_rebel", "scarlet_war_ape", "nine_headed_bird",
@@ -140,13 +140,27 @@ BOSS_KEYS = (
     "solar_raven", "flood_stag", "weakwater_predator", "wilderness_colossus",
     "ghost_emperor", "corpse_ancestor", "fox_matriarch", "dream_sovereign",
     "mountain_lord", "sea_dragon", "storm_sovereign", "frost_queen",
-    "flame_tyrant", "plague_lord", "blood_count", "bone_dragon",
+    "flame_tyrant", "plague_lord",
+)
+
+
+CULTIVATION_PARTY_BOSS_KEYS = (
+    "blood_count", "bone_dragon",
     "fallen_seraph", "labyrinth_lord", "forge_cyclops", "stone_gaze_queen",
     "abyss_kraken", "world_leviathan", "earth_behemoth", "doom_fenrir",
+)
+
+
+MAGIC_PARTY_BOSS_KEYS = (
     "ancient_tree_king", "phantom_knight", "death_judge", "void_archon",
     "time_dragon", "fate_matriarch", "mirror_lord", "iron_titan",
-    "moon_devourer", "sun_destroyer", "star_eater", "realm_breaker",
-    "soul_ferryman", "underworld_king", "celestial_rebel", "chaos_witch",
+    "moon_devourer", "sun_destroyer",
+)
+
+
+DISASTER_TEMPLATE_KEYS = (
+    "star_eater", "realm_breaker", "soul_ferryman", "underworld_king",
+    "celestial_rebel", "chaos_witch",
     "storm_dragon", "winter_king", "ash_phoenix", "final_guardian",
 )
 
@@ -163,23 +177,75 @@ _BOSS_BEHAVIOR_SETS = (
 )
 
 
-BOSS_ENEMY_BLUEPRINTS = tuple(
-    EnemyIdentityBlueprint(key, _BOSS_BEHAVIOR_SETS[index % len(_BOSS_BEHAVIOR_SETS)], True)
-    for index, key in enumerate(BOSS_KEYS)
+def _boss_blueprints(keys: tuple[str, ...], *, offset: int) -> tuple[EnemyIdentityBlueprint, ...]:
+    return tuple(
+        EnemyIdentityBlueprint(
+            key,
+            _BOSS_BEHAVIOR_SETS[(offset + index) % len(_BOSS_BEHAVIOR_SETS)],
+            True,
+        )
+        for index, key in enumerate(keys)
+    )
+
+
+PERSONAL_BOSS_BLUEPRINTS = _boss_blueprints(PERSONAL_BOSS_KEYS, offset=0)
+CULTIVATION_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(
+    CULTIVATION_PARTY_BOSS_KEYS,
+    offset=len(PERSONAL_BOSS_KEYS),
+)
+MAGIC_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(
+    MAGIC_PARTY_BOSS_KEYS,
+    offset=len(PERSONAL_BOSS_KEYS) + len(CULTIVATION_PARTY_BOSS_KEYS),
+)
+PARTY_BOSS_BLUEPRINTS = (
+    *CULTIVATION_PARTY_BOSS_BLUEPRINTS,
+    *MAGIC_PARTY_BOSS_BLUEPRINTS,
+)
+
+
+_ALL_BOSS_TEMPLATE_KEYS = (
+    *PERSONAL_BOSS_KEYS,
+    *CULTIVATION_PARTY_BOSS_KEYS,
+    *MAGIC_PARTY_BOSS_KEYS,
+    *DISASTER_TEMPLATE_KEYS,
+)
+BOSS_BEHAVIOR_KEYS_BY_TEMPLATE = MappingProxyType(
+    {
+        blueprint.key: blueprint.behavior_keys
+        for blueprint in _boss_blueprints(_ALL_BOSS_TEMPLATE_KEYS, offset=0)
+    }
 )
 
 
 def _validate() -> None:
     if len(BEHAVIOR_BLUEPRINTS) != 32:
         raise ValueError("首批敌人行为模板必须正好包含 32 项")
-    if len(REGULAR_ENEMY_BLUEPRINTS) != 60 or len(BOSS_ENEMY_BLUEPRINTS) != 60:
-        raise ValueError("首批敌人身份必须包含 60 个普通身份和 60 个首领身份")
+    if len(REGULAR_ENEMY_BLUEPRINTS) != 60:
+        raise ValueError("首批敌人身份必须包含 60 个普通身份")
+    if len(PERSONAL_BOSS_BLUEPRINTS) != 30 or len(PARTY_BOSS_BLUEPRINTS) != 20:
+        raise ValueError("首批个人首领必须为 30 个，组队首领必须为 20 个")
     behavior_keys = {value.key for value in BEHAVIOR_BLUEPRINTS}
-    identity_keys = [value.key for value in (*REGULAR_ENEMY_BLUEPRINTS, *BOSS_ENEMY_BLUEPRINTS)]
+    identity_keys = [
+        value.key
+        for value in (
+            *REGULAR_ENEMY_BLUEPRINTS,
+            *PERSONAL_BOSS_BLUEPRINTS,
+            *PARTY_BOSS_BLUEPRINTS,
+        )
+    ]
     if len(identity_keys) != len(set(identity_keys)):
         raise ValueError("敌人身份稳定键不能重复")
-    if any(not set(value.behavior_keys).issubset(behavior_keys) for value in (*REGULAR_ENEMY_BLUEPRINTS, *BOSS_ENEMY_BLUEPRINTS)):
+    if any(
+        not set(value.behavior_keys).issubset(behavior_keys)
+        for value in (
+            *REGULAR_ENEMY_BLUEPRINTS,
+            *PERSONAL_BOSS_BLUEPRINTS,
+            *PARTY_BOSS_BLUEPRINTS,
+        )
+    ):
         raise ValueError("敌人身份引用了未知行为蓝图")
+    if set(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE) != set(_ALL_BOSS_TEMPLATE_KEYS):
+        raise ValueError("首领战斗模板键不能重复或缺失")
 
 
 _validate()
@@ -187,8 +253,16 @@ _validate()
 
 __all__ = [
     "BEHAVIOR_BLUEPRINTS",
-    "BOSS_ENEMY_BLUEPRINTS",
+    "BOSS_BEHAVIOR_KEYS_BY_TEMPLATE",
+    "CULTIVATION_PARTY_BOSS_BLUEPRINTS",
+    "CULTIVATION_PARTY_BOSS_KEYS",
+    "DISASTER_TEMPLATE_KEYS",
     "EnemyBehaviorBlueprint",
     "EnemyIdentityBlueprint",
+    "MAGIC_PARTY_BOSS_BLUEPRINTS",
+    "MAGIC_PARTY_BOSS_KEYS",
+    "PARTY_BOSS_BLUEPRINTS",
+    "PERSONAL_BOSS_BLUEPRINTS",
+    "PERSONAL_BOSS_KEYS",
     "REGULAR_ENEMY_BLUEPRINTS",
 ]

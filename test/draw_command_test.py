@@ -85,9 +85,12 @@ async def _main() -> None:
                 event_id="draw-pool",
             )
             assert "持有: _11 张_" in pool.replies[0].message.content
-            assert "常规 78%" in pool.replies[0].message.content
+            assert "常规 77%" in pool.replies[0].message.content
             assert "珍稀 20%" in pool.replies[0].message.content
             assert "特殊 2%" in pool.replies[0].message.content
+            assert "破境 1%" in pool.replies[0].message.content
+            assert "问道玉契" in pool.replies[0].message.content
+            assert "破境: _0/50_" in pool.replies[0].message.content
 
             result = await dispatch(
                 client_id="draw-player",

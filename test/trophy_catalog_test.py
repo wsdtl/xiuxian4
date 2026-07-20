@@ -1,4 +1,4 @@
-"""一百八十种战利品、价格曲线与双世界展示审计。"""
+"""两百种战利品、价格曲线与双世界展示审计。"""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from game.content.catalog import PRIMARY_CURRENCY_ID  # noqa: E402
 from game.content.catalog.exploration import REGULAR_EXPLORATION_REGIONS  # noqa: E402
 from game.content.catalog.item import (  # noqa: E402
     BOSS_TROPHY_ITEMS,
+    PARTY_BOSS_TROPHY_ITEMS,
     ITEM_RECYCLE_COMPONENT_ID,
     REGION_TROPHY_ITEMS,
     REGION_TROPHY_WEIGHTS,
@@ -30,10 +31,11 @@ def main() -> None:
     catalog = assemble_official_catalog()
     cultivation = select_world_skin(catalog)
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
-    assert len(TROPHY_ITEMS) == 180
+    assert len(TROPHY_ITEMS) == 200
     assert sum(len(items) for items in REGION_TROPHY_ITEMS.values()) == 78
     assert len(REGULAR_ENEMY_TROPHY_ITEMS) == 60
     assert len(BOSS_TROPHY_ITEMS) == 30
+    assert len(PARTY_BOSS_TROPHY_ITEMS) == 20
     assert len(WORLD_CURIO_ITEMS) == 12
     assert sum(REGION_TROPHY_WEIGHTS) == 100
 
@@ -50,8 +52,8 @@ def main() -> None:
         assert sale.unit_amount > 0
         cultivation_names.append(cultivation.projector.name(item.id))
         magic_names.append(magic.projector.name(item.id))
-    assert len(cultivation_names) == len(set(cultivation_names)) == 180
-    assert len(magic_names) == len(set(magic_names)) == 180
+    assert len(cultivation_names) == len(set(cultivation_names)) == 200
+    assert len(magic_names) == len(set(magic_names)) == 200
     assert cultivation_names != magic_names
 
     expected_values = []

@@ -16,9 +16,11 @@ from game.content.catalog import (  # noqa: E402
 )
 from game.content.catalog.enemy import (  # noqa: E402
     BEHAVIOR_BLUEPRINTS,
-    BOSS_ENEMIES,
+    PARTY_BOSS_ENEMIES,
+    PERSONAL_BOSS_ENEMIES,
     REGULAR_ENEMIES,
 )
+from game.content.catalog.disaster.combat import DISASTER_ENEMY_DEFINITIONS  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
     BATTLE_AI_FOUNDATION_VERSION,
     COMBAT_SPEED,
@@ -48,10 +50,18 @@ def main() -> None:
 
     assert len(BEHAVIOR_BLUEPRINTS) == 32
     assert len(REGULAR_ENEMIES) == 60
-    assert len(BOSS_ENEMIES) == 60
-    assert len(catalog.enemies.definitions.ids()) == 120
+    assert len(PERSONAL_BOSS_ENEMIES) == 30
+    assert len(PARTY_BOSS_ENEMIES) == 20
+    assert len(DISASTER_ENEMY_DEFINITIONS) == 20
+    assert len(catalog.enemies.definitions.ids()) == 130
     assert len(catalog.enemies.behaviors.ids()) == 32
-    assert len(catalog.enemies.encounters.ids()) == 5
+    assert len(catalog.enemies.encounters.ids()) == 4
+    personal_ids = {value.id for value in PERSONAL_BOSS_ENEMIES}
+    party_ids = {value.id for value in PARTY_BOSS_ENEMIES}
+    disaster_ids = {value.id for value in DISASTER_ENEMY_DEFINITIONS}
+    assert not personal_ids & party_ids
+    assert not personal_ids & disaster_ids
+    assert not party_ids & disaster_ids
 
     shared_enemy = catalog.abilities.require("ability.enemy.heavy_strike")
     shared_weapon = catalog.abilities.require("ability.weapon.mountain_cleaver")
@@ -91,11 +101,11 @@ def main() -> None:
         "enemy.boss.nine_headed_plague",
         50,
         "enemy.rank.boss",
-        tuple(sorted(BOSS_ENEMIES[0].default_behavior_ids)),
+        tuple(sorted(PERSONAL_BOSS_ENEMIES[0].default_behavior_ids)),
         "boss-demo",
         catalog.report.content_fingerprint,
     )
-    assert cultivation.enemy_projector.enemy(boss).name == "九婴·九泉灾主"
+    assert cultivation.enemy_projector.enemy(boss).name == "化蛇·洪涛妖君"
     assert magic.enemy_projector.enemy(boss).name == "九头蛇·沼泽暴君"
 
     reward = EnemyDefeatRewardPlanner(catalog.enemy_threat).quote(first.enemies)

@@ -1,10 +1,16 @@
-"""魔法世界的一百八十种探险战利品展示。"""
+"""魔法世界的探险与组队首领战利品展示。"""
 
 from game.core.gameplay import SkinEntry
 
-from ...catalog.enemy.blueprints import BOSS_ENEMY_BLUEPRINTS, REGULAR_ENEMY_BLUEPRINTS
+from ...catalog.enemy.blueprints import (
+    CULTIVATION_PARTY_BOSS_BLUEPRINTS,
+    MAGIC_PARTY_BOSS_BLUEPRINTS,
+    PERSONAL_BOSS_BLUEPRINTS,
+    REGULAR_ENEMY_BLUEPRINTS,
+)
 from ...catalog.item.trophies import (
     BOSS_TROPHY_ITEM_IDS,
+    PARTY_BOSS_TROPHY_ITEM_IDS,
     REGION_TROPHY_ITEM_IDS,
     REGULAR_ENEMY_TROPHY_ITEM_IDS,
     WORLD_CURIO_ITEM_IDS,
@@ -63,6 +69,13 @@ _BOSS_TROPHY_NAMES = (
     "金翼狮鹫羽", "特里同龙鳞", "奥雷恩风暴核", "伊瑟琳冰冠碎片", "阿格尼焚焰珠", "诺萨瘟疫令",
 )
 
+_PARTY_BOSS_TROPHY_NAMES = (
+    "德古拉血晶", "亡骸骨翼", "阿撒兹勒残羽", "迷宫王角", "阿尔格斯炉眼",
+    "梅杜莎石瞳", "克拉肯巨触", "利维坦逆鳞", "泰坦地核", "加姆冥牙",
+    "尤克特年轮心", "莫德雷德断剑", "米诺斯裁决印", "厄瑞玻斯虚空核", "克洛诺斯时鳞",
+    "莫伊莱命线", "纳西索斯镜片", "塔罗斯铁心", "哈提月蚀牙", "苏尔特焰核",
+)
+
 _CURIO_NAMES = (
     "贤者石残片", "命运金线", "创世余烬", "世界树种", "永恒圣露", "诸神秘银",
     "星界罗盘碎片", "冥河誓石", "太阳神辉", "月神银华", "混沌原石", "创世以太",
@@ -87,12 +100,27 @@ def _build_entries() -> dict[str, SkinEntry]:
             icon="◇",
         )
     boss_enemy_ids = tuple(
-        f"enemy.boss.{value.key}" for value in BOSS_ENEMY_BLUEPRINTS[:30]
+        f"enemy.boss.{value.key}" for value in PERSONAL_BOSS_BLUEPRINTS
     )
     for enemy_id, name in zip(boss_enemy_ids, _BOSS_TROPHY_NAMES):
         entries[BOSS_TROPHY_ITEM_IDS[enemy_id]] = SkinEntry(
             name=name,
             description=f"仅有对应首领会留下的{name}。",
+            icon="✦",
+        )
+    party_blueprints = (
+        ("cultivation", CULTIVATION_PARTY_BOSS_BLUEPRINTS),
+        ("magic", MAGIC_PARTY_BOSS_BLUEPRINTS),
+    )
+    party_enemy_ids = tuple(
+        f"enemy.boss.party.{source}.{value.key}"
+        for source, values in party_blueprints
+        for value in values
+    )
+    for enemy_id, name in zip(party_enemy_ids, _PARTY_BOSS_TROPHY_NAMES):
+        entries[PARTY_BOSS_TROPHY_ITEM_IDS[enemy_id]] = SkinEntry(
+            name=name,
+            description=f"组队击破对应强敌后取得的{name}。",
             icon="✦",
         )
     for item_id, name in zip(WORLD_CURIO_ITEM_IDS, _CURIO_NAMES):
@@ -101,8 +129,8 @@ def _build_entries() -> dict[str, SkinEntry]:
             description=f"魔法世界极难得见的奇珍: {name}。",
             icon="✧",
         )
-    if len(entries) != 180:
-        raise ValueError("魔法世界战利品展示必须完整覆盖 180 项正式名录")
+    if len(entries) != 200:
+        raise ValueError("魔法世界战利品展示必须完整覆盖 200 项正式名录")
     if len({entry.name for entry in entries.values()}) != len(entries):
         raise ValueError("魔法世界战利品名称不能重复")
     return entries

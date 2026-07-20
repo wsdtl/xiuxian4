@@ -16,6 +16,8 @@ from game.core.gameplay import (  # noqa: E402
     DRAW_FOUNDATION_VERSION,
     DrawCommand,
     DrawEngine,
+    DrawGuaranteeEntry,
+    DrawGuaranteeSlotDefinition,
     DrawInventoryCommand,
     DrawInventoryEngine,
     DrawPoolCatalog,
@@ -53,14 +55,17 @@ POOL_ID = "draw_pool.special"
 TICKET_ID = "item.special.draw_ticket"
 COMMON_ITEM_ID = "item.special.common"
 RARE_ITEM_ID = "item.special.rare"
+BREAKTHROUGH_ITEM_ID = "item.breakthrough.token"
+GUARANTEE_SLOT_ID = "draw_guarantee.breakthrough"
 
 
 def main() -> None:
-    assert DRAW_FOUNDATION_VERSION == "draw.foundation.v1"
+    assert DRAW_FOUNDATION_VERSION == "draw.foundation.v2"
     pools, loot = _catalogs()
     engine = DrawEngine(pools, LootEngine(loot))
     _assert_batch_and_receipt(engine)
     _assert_pity_uses_shared_loot_state(engine)
+    _assert_independent_guarantee_slot()
     _assert_failure_rolls_back_random(engine)
     _assert_catalog_rejects_untrusted_tables()
     _assert_inventory_execution(engine)
@@ -150,6 +155,110 @@ def _assert_pity_uses_shared_loot_state(engine: DrawEngine) -> None:
     assert outcome.receipt.loot_receipt.pity_before == 4
     assert outcome.receipt.loot_receipt.pity_after == 0
     assert outcome.receipt.loot_receipt.decisions[0].forced
+
+
+def _assert_independent_guarantee_slot() -> None:
+    table_id = "loot_table.draw.guarantee"
+    pool_id = "draw_pool.guarantee"
+    loot = LootCatalog()
+    loot.register(
+        LootTableDefinition(
+            table_id,
+            1,
+            (
+                LootGroup(
+                    "loot_group.draw.guarantee",
+                    LootGroupMode.WEIGHTED_ONE,
+                    (LootEntry("loot_entry.draw.always_common", COMMON_ITEM_ID, weight=1),),
+                ),
+            ),
+        )
+    )
+    loot.finalize()
+    pools = DrawPoolCatalog()
+    pools.register(
+        DrawPoolDefinition(
+            pool_id,
+            1,
+            TICKET_ID,
+            table_id,
+            frozenset({COMMON_ITEM_ID, BREAKTHROUGH_ITEM_ID}),
+            (
+                DrawGuaranteeSlotDefinition(
+                    GUARANTEE_SLOT_ID,
+                    3,
+                    (
+                        DrawGuaranteeEntry(
+                            "draw_guarantee_entry.breakthrough",
+                            BREAKTHROUGH_ITEM_ID,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    pools.finalize(loot_tables=loot)
+    engine = DrawEngine(pools, LootEngine(loot))
+    execution = engine.draw(
+        DrawCommand("draw:guarantee", "character-a", pool_id, 0, 2),
+        state=LootState("character-a", {GUARANTEE_SLOT_ID: 1}),
+        context=_context("guarantee"),
+    ).unwrap()
+    assert [value.award_id for value in execution.receipt.awards] == [
+        COMMON_ITEM_ID,
+        COMMON_ITEM_ID,
+        BREAKTHROUGH_ITEM_ID,
+    ]
+    assert execution.loot_state.pity_counters[GUARANTEE_SLOT_ID] == 0
+    assert execution.receipt.guarantee_decisions[0].counter_after == 2
+    assert execution.receipt.guarantee_decisions[1].forced
+    assert execution.receipt.guarantee_decisions[1].counter_before == 2
+    assert execution.events[-1].kind == "draw.guarantee_triggered"
+
+    natural_table_id = "loot_table.draw.guarantee_natural"
+    natural_pool_id = "draw_pool.guarantee_natural"
+    natural_loot = LootCatalog()
+    natural_loot.register(
+        LootTableDefinition(
+            natural_table_id,
+            1,
+            (
+                LootGroup(
+                    "loot_group.draw.guarantee_natural",
+                    LootGroupMode.WEIGHTED_ONE,
+                    (
+                        LootEntry(
+                            "loot_entry.draw.always_breakthrough",
+                            BREAKTHROUGH_ITEM_ID,
+                            weight=1,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    natural_loot.finalize()
+    natural_pools = DrawPoolCatalog()
+    natural_pools.register(
+        DrawPoolDefinition(
+            natural_pool_id,
+            1,
+            TICKET_ID,
+            natural_table_id,
+            frozenset({BREAKTHROUGH_ITEM_ID}),
+            pools.require(pool_id).guarantee_slots,
+        )
+    )
+    natural_pools.finalize(loot_tables=natural_loot)
+    natural = DrawEngine(natural_pools, LootEngine(natural_loot)).draw(
+        DrawCommand("draw:guarantee-natural", "character-a", natural_pool_id, 0),
+        state=LootState("character-a", {GUARANTEE_SLOT_ID: 2}),
+        context=_context("guarantee-natural"),
+    ).unwrap()
+    assert len(natural.receipt.awards) == 1
+    assert natural.receipt.guarantee_decisions[0].naturally_satisfied
+    assert not natural.receipt.guarantee_decisions[0].forced
+    assert natural.loot_state.pity_counters[GUARANTEE_SLOT_ID] == 0
 
 
 def _assert_failure_rolls_back_random(engine: DrawEngine) -> None:

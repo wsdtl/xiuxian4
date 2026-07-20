@@ -1,6 +1,6 @@
 """角色身份、成长和规则实体投影底座。"""
 
-CHARACTER_FOUNDATION_VERSION = "character.foundation.v4"
+CHARACTER_FOUNDATION_VERSION = "character.foundation.v5"
 
 from .contributions import (
     AttributeGrant,
@@ -47,6 +47,7 @@ from .transactions import (
     RetireCharacter,
     UnlockFeature,
     UnlockProgression,
+    UnlockProgressionCap,
 )
 
 __all__ = [
@@ -85,6 +86,7 @@ __all__ = [
     "SPIRIT_MAXIMUM",
     "UnlockFeature",
     "UnlockProgression",
+    "UnlockProgressionCap",
     "core_attribute_definitions",
     "character_name_display_width",
     "persistent_resource_definitions",

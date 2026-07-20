@@ -156,6 +156,8 @@ class LootCatalog:
 
 @dataclass(frozen=True)
 class LootState:
+    """保存掉落表与抽取保底槽共用的稳定计数。"""
+
     owner_id: str
     pity_counters: Mapping[StableId, int] = field(default_factory=dict)
     revision: int = 0

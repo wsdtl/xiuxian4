@@ -50,6 +50,7 @@ from game.core.gameplay.character import (  # noqa: E402
     RetireCharacter,
     UnlockFeature,
     UnlockProgression,
+    UnlockProgressionCap,
     core_attribute_definitions,
     persistent_resource_definitions,
 )
@@ -62,6 +63,7 @@ CRITICAL_CHANCE = "combat.critical.chance"
 def main() -> None:
     _assert_template_and_catalog_boundaries()
     _assert_multilevel_progression()
+    _assert_progression_level_caps()
     _assert_atomic_failure_and_revision_guard()
     _assert_core_and_resource_boundaries()
     _assert_open_contribution_projection()
@@ -175,7 +177,7 @@ def _transaction(state, transaction_id: str, *operations):
 
 
 def _assert_template_and_catalog_boundaries() -> None:
-    assert CHARACTER_FOUNDATION_VERSION == "character.foundation.v4"
+    assert CHARACTER_FOUNDATION_VERSION == "character.foundation.v5"
     assert len(CORE_ATTRIBUTE_IDS) == 5
     try:
         CharacterTemplateDefinition(
@@ -250,6 +252,94 @@ def _assert_multilevel_progression() -> None:
     ).unwrap()
     assert unlocked.state.progressions["progression.weapon_mastery"].level == 1
     assert unlocked.events[0].kind == "character.progression.unlocked"
+
+
+def _assert_progression_level_caps() -> None:
+    catalog = CharacterCatalog()
+    catalog.progressions.register(
+        ProgressionDefinition(
+            "progression.gated",
+            (100, 200),
+            {
+                2: ProgressionMilestone(2, {COMBAT_ATTACK: 1}),
+                3: ProgressionMilestone(3, {HEALTH_MAXIMUM: 10}),
+            },
+            (2, 3),
+        )
+    )
+    catalog.templates.register(
+        CharacterTemplateDefinition(
+            "character_template.gated",
+            {
+                HEALTH_MAXIMUM: 100,
+                SPIRIT_MAXIMUM: 50,
+                COMBAT_ATTACK: 10,
+                COMBAT_DEFENSE: 0,
+                COMBAT_SPEED: 100,
+            },
+            progression_ids=frozenset({"progression.gated"}),
+        )
+    )
+    catalog.finalize()
+    state = catalog.create_character(
+        character_id="gated-character",
+        account_id="account-a",
+        name="关隘测试",
+        template_id="character_template.gated",
+        created_at=TIME,
+    )
+    assert state.progressions["progression.gated"].level_cap == 2
+    engine = CharacterEngine(catalog)
+    capped = engine.execute(
+        _transaction(
+            state,
+            "gain-gated-exp",
+            GrantExperience(
+                "progression.gated",
+                350,
+                "source.test",
+                "gated-exp",
+            ),
+        ),
+        state=state,
+        context=_context(),
+    ).unwrap().state
+    progression = capped.progressions["progression.gated"]
+    assert (progression.level, progression.experience, progression.level_cap) == (2, 250, 2)
+    unlocked = engine.execute(
+        _transaction(
+            capped,
+            "unlock-gated-cap",
+            UnlockProgressionCap(
+                "progression.gated",
+                "source.breakthrough",
+                "token-1",
+            ),
+        ),
+        state=capped,
+        context=_context(),
+    ).unwrap()
+    progression = unlocked.state.progressions["progression.gated"]
+    assert (progression.level, progression.experience, progression.level_cap) == (3, 50, 3)
+    assert unlocked.state.core_attributes[HEALTH_MAXIMUM] == 110
+    assert [value.kind for value in unlocked.events].count(
+        "character.progression.cap_unlocked"
+    ) == 1
+
+    maximum = engine.execute(
+        _transaction(
+            unlocked.state,
+            "unlock-gated-maximum",
+            UnlockProgressionCap(
+                "progression.gated",
+                "source.breakthrough",
+                "token-2",
+            ),
+        ),
+        state=unlocked.state,
+        context=_context(),
+    )
+    assert maximum.failure and maximum.failure.code == "character.progression_at_maximum_cap"
 
 
 def _assert_atomic_failure_and_revision_guard() -> None:

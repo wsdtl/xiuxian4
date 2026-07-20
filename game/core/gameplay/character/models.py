@@ -43,12 +43,13 @@ class CharacterStatus(str, Enum):
 
 @dataclass(frozen=True)
 class ProgressionState:
-    """一条成长轨道的当前阶段和经验。"""
+    """一条成长轨道的当前阶段、经验和已解锁等级上限。"""
 
     definition_id: StableId
     level: int = 1
     experience: int = 0
     total_experience: int = 0
+    level_cap: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -62,6 +63,8 @@ class ProgressionState:
             raise ValueError("成长经验不能小于 0")
         if self.experience > self.total_experience:
             raise ValueError("当前成长经验不能大于累计经验")
+        if self.level_cap is not None and self.level_cap < self.level:
+            raise ValueError("成长等级上限不能低于当前等级")
 
 
 @dataclass(frozen=True)

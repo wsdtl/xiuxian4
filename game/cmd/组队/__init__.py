@@ -164,4 +164,44 @@ async def unready(current=Depends(current_character)) -> None:
     await service.set_ready(current, False)
 
 
+@GameCommand.handler(
+    cmd="组队挑战",
+    help=HelpSpec(
+        category="战斗与社交",
+        summary="查看当前队伍锁定的组队首领和准备状态",
+        usage=("组队挑战",),
+        order=150,
+    ),
+)
+async def party_battle_view(current=Depends(current_character)) -> None:
+    await service.party_battle_view(current)
+
+
+@GameCommand.handler(
+    cmd="选择组队挑战",
+    help=HelpSpec(
+        category="战斗与社交",
+        summary="由队长锁定一个等级的世界专属组队首领",
+        usage=("选择组队挑战 等级",),
+        order=160,
+    ),
+)
+async def select_party_battle(message: str = "", current=Depends(current_character)) -> None:
+    await service.select_party_battle(message, current)
+
+
+@GameCommand.handler(
+    cmd="开始组队挑战",
+    help=HelpSpec(
+        category="战斗与社交",
+        summary="由队长发起已完成准备的组队首领战",
+        usage=("开始组队挑战",),
+        side_effect="胜负、资源变化和个人奖励在同一事务中结算",
+        order=170,
+    ),
+)
+async def start_party_battle(current=Depends(current_character)) -> None:
+    await service.start_party_battle(current)
+
+
 __all__ = []

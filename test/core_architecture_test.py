@@ -139,10 +139,12 @@ def _assert_physical_layout() -> None:
         "disaster": {
             "__init__.py",
             "catalog.py",
+            "combat.py",
             "cultivation.py",
             "magic.py",
             "models.py",
             "policy.py",
+            "templates.py",
         },
         "draw": {"__init__.py", "definitions.py"},
         "enemy": {
@@ -152,10 +154,13 @@ def _assert_physical_layout() -> None:
             "definitions.py",
             "encounters.py",
             "loot.py",
+            "party.py",
         },
         "exploration": {"__init__.py", "definitions.py"},
         "item": {
             "__init__.py",
+            "breakthrough.py",
+            "classification.py",
             "definitions.py",
             "draw.py",
             "special.py",

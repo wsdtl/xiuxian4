@@ -37,6 +37,9 @@ async def _main() -> None:
         "解散队伍",
         "准备",
         "取消准备",
+        "组队挑战",
+        "选择组队挑战",
+        "开始组队挑战",
     )
     for command in commands:
         assert len(LocalEventHandler.exact_rules[command]) == 1
@@ -87,6 +90,13 @@ async def _main() -> None:
             full = await _dispatch("party-a", "邀请组队 party-d", "party-full")
             assert "队伍人数已经达到上限" in full.replies[0].message.content
 
+            selected = await _dispatch(
+                "party-a",
+                "选择组队挑战 1",
+                "party-battle-select",
+            )
+            assert "已锁定组队首领" in selected.replies[0].message.content
+
             for client in ("party-a", "party-b", "party-c"):
                 ready = await _dispatch(client, "准备", f"party-ready-{client}")
                 assert "已标记为准备" in ready.replies[0].message.content
@@ -94,6 +104,17 @@ async def _main() -> None:
             content = roster.replies[0].message.content
             assert "人数: _3/3_" in content
             assert content.count("已准备") == 3
+            challenge = await _dispatch("party-a", "组队挑战", "party-battle-view")
+            assert challenge.replies[0].message.content.count("已准备") == 3
+            started = await _dispatch(
+                "party-a",
+                "开始组队挑战",
+                "party-battle-start",
+            )
+            assert "组队战报" in started.replies[0].message.content
+            assert "查看完整战报" in started.replies[0].message.content
+            after_battle = await _dispatch("party-a", "组队", "party-after-battle")
+            assert after_battle.replies[0].message.content.count("未准备") == 3
 
             transferred = await _dispatch("party-a", "转让队长 party-b", "party-transfer")
             assert "已经转让队长" in transferred.replies[0].message.content

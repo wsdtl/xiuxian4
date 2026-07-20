@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from types import MappingProxyType
+from typing import Mapping
 
 from game.core.gameplay import DrawReceipt
 
@@ -55,6 +57,13 @@ class DrawOperationResult:
     ticket_count: int = 0
     pity_count: int = 0
     failure_message: str = ""
+    guarantee_counts: Mapping[str, int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        counts = {str(key): int(value) for key, value in self.guarantee_counts.items()}
+        if any(value < 0 for value in counts.values()):
+            raise ValueError("抽奖保底计数不能小于 0")
+        object.__setattr__(self, "guarantee_counts", MappingProxyType(counts))
 
 
 @dataclass(frozen=True)
@@ -62,6 +71,14 @@ class DrawPoolView:
     ticket_count: int
     pity_count: int
     records: tuple[DrawHistoryRecord, ...] = ()
+    guarantee_counts: Mapping[str, int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        counts = {str(key): int(value) for key, value in self.guarantee_counts.items()}
+        if any(value < 0 for value in counts.values()):
+            raise ValueError("抽奖保底计数不能小于 0")
+        object.__setattr__(self, "records", tuple(self.records))
+        object.__setattr__(self, "guarantee_counts", MappingProxyType(counts))
 
 
 @dataclass(frozen=True)

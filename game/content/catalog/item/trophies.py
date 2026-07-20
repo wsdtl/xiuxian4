@@ -13,7 +13,8 @@ from game.core.gameplay import (
     TagSet,
 )
 
-from ..enemy.definitions import BOSS_ENEMIES, REGULAR_ENEMIES
+from ..enemy.definitions import PERSONAL_BOSS_ENEMIES, REGULAR_ENEMIES
+from ..enemy.party import PARTY_BOSS_ENEMIES
 from ..foundation import PRIMARY_CURRENCY_ID
 from ..world import (
     BLACK_WIND_RAVINE_ID,
@@ -153,19 +154,33 @@ REGULAR_ENEMY_TROPHY_ITEM_IDS = MappingProxyType(
     }
 )
 
-ACTIVE_BOSS_ENEMIES = BOSS_ENEMIES[:30]
 BOSS_TROPHY_ITEMS = tuple(
     _item(
         f"item.trophy.boss.{enemy.id.removeprefix('enemy.boss.')}",
         _BOSS_PRICE_BANDS[index // 3],
         "trophy.boss",
     )
-    for index, enemy in enumerate(ACTIVE_BOSS_ENEMIES)
+    for index, enemy in enumerate(PERSONAL_BOSS_ENEMIES)
 )
 BOSS_TROPHY_ITEM_IDS = MappingProxyType(
     {
         enemy.id: item.id
-        for enemy, item in zip(ACTIVE_BOSS_ENEMIES, BOSS_TROPHY_ITEMS)
+        for enemy, item in zip(PERSONAL_BOSS_ENEMIES, BOSS_TROPHY_ITEMS)
+    }
+)
+
+PARTY_BOSS_TROPHY_ITEMS = tuple(
+    _item(
+        f"item.trophy.party_boss.{enemy.id.removeprefix('enemy.boss.party.')}",
+        _BOSS_PRICE_BANDS[index // 2],
+        "trophy.party_boss",
+    )
+    for index, enemy in enumerate(PARTY_BOSS_ENEMIES)
+)
+PARTY_BOSS_TROPHY_ITEM_IDS = MappingProxyType(
+    {
+        enemy.id: item.id
+        for enemy, item in zip(PARTY_BOSS_ENEMIES, PARTY_BOSS_TROPHY_ITEMS)
     }
 )
 
@@ -184,14 +199,15 @@ TROPHY_ITEMS = (
     *(item for items in REGION_TROPHY_ITEMS.values() for item in items),
     *REGULAR_ENEMY_TROPHY_ITEMS,
     *BOSS_TROPHY_ITEMS,
+    *PARTY_BOSS_TROPHY_ITEMS,
     *WORLD_CURIO_ITEMS,
 )
 TROPHY_DISPLAY_CONTENT_IDS = frozenset(item.id for item in TROPHY_ITEMS)
 
 
 def _validate() -> None:
-    if len(TROPHY_ITEMS) != 180:
-        raise ValueError("首批战利品名录必须正好包含 180 项")
+    if len(TROPHY_ITEMS) != 200:
+        raise ValueError("首批战利品名录必须正好包含 200 项")
     ids = tuple(item.id for item in TROPHY_ITEMS)
     if len(ids) != len(set(ids)):
         raise ValueError("战利品稳定 ID 不能重复")
@@ -203,9 +219,10 @@ _validate()
 
 
 __all__ = [
-    "ACTIVE_BOSS_ENEMIES",
     "BOSS_TROPHY_ITEM_IDS",
     "BOSS_TROPHY_ITEMS",
+    "PARTY_BOSS_TROPHY_ITEM_IDS",
+    "PARTY_BOSS_TROPHY_ITEMS",
     "REGION_TROPHY_ITEM_IDS",
     "REGION_TROPHY_ITEMS",
     "REGION_TROPHY_WEIGHTS",

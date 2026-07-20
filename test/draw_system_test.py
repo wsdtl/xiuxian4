@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
 
 from game.app import build_game_services  # noqa: E402
 from game.content import (  # noqa: E402
+    BREAKTHROUGH_TOKEN_ITEM_ID,
     DRAW_CATALOG_CONTENT,
     DRAW_REWARD_LOW_CURRENCY_ID,
     DRAW_REWARD_MID_CURRENCY_ID,
@@ -24,6 +25,9 @@ from game.content import (  # noqa: E402
     WEAPON_MAXIMUM_LEVEL_ITEM_ID,
     BACKPACK_CAPACITY_ITEM_ID,
     EQUIPMENT_SET_GUARANTEE_ITEM_ID,
+    DRAW_BREAKTHROUGH_GUARANTEE_SLOT_ID,
+    DRAW_BREAKTHROUGH_PITY_THRESHOLD,
+    DRAW_BREAKTHROUGH_WEIGHT,
 )
 from game.core.account import ExternalIdentity, IdentityEvidence  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
@@ -52,7 +56,19 @@ def main() -> None:
     assert sum(value.weight for value in entries) == 100_000
     assert sum(
         value.weight for value in entries if value.award_id in CURRENCY_AWARD_IDS
-    ) == 39_200
+    ) == 38_800
+    breakthrough_entries = tuple(
+        value for value in entries if value.award_id == BREAKTHROUGH_TOKEN_ITEM_ID
+    )
+    assert len(breakthrough_entries) == 1
+    assert breakthrough_entries[0].weight == DRAW_BREAKTHROUGH_WEIGHT
+    assert BREAKTHROUGH_TOKEN_ITEM_ID not in DRAW_CATALOG_CONTENT.special_item_ids
+    assert DRAW_CATALOG_CONTENT.breakthrough_item_ids == frozenset(
+        {BREAKTHROUGH_TOKEN_ITEM_ID}
+    )
+    slot = DRAW_CATALOG_CONTENT.pool.guarantee_slots[0]
+    assert slot.id == DRAW_BREAKTHROUGH_GUARANTEE_SLOT_ID
+    assert slot.threshold == DRAW_BREAKTHROUGH_PITY_THRESHOLD == 50
     assert DRAW_CATALOG_CONTENT.special_item_ids == frozenset(
         {
             WEAPON_MAXIMUM_LEVEL_ITEM_ID,
@@ -120,6 +136,7 @@ def main() -> None:
         assert len(status.records) == 2
         assert status.records[0].operation_id == "draw-operation-2"
         assert 0 <= status.pity_count < 10
+        assert 0 <= status.guarantee_counts[DRAW_BREAKTHROUGH_GUARANTEE_SLOT_ID] < 50
 
     print("draw system tests passed")
 
