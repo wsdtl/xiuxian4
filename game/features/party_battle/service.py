@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 from zoneinfo import ZoneInfo
 
+from game.content.catalog import CHARACTER_MAXIMUM_LEVEL
 from game.content.catalog.enemy import PARTY_BOSS_ENCOUNTER_ID, PARTY_BOSS_LOOT_TABLE_ID
 from game.content.catalog.social import (
     PARTY_BATTLE_DAY_RESET_HOUR,
@@ -137,8 +138,11 @@ class PartyBattleFeature:
         operation_id = _identity(operation_id, "操作")
         party_id = _identity(party_id, "队伍")
         actor_id = _identity(actor_id, "角色")
-        if not 1 <= int(level) <= 100:
-            return PartyBattleSelectionResult("invalid_level", failure_message="挑战等级必须位于 1 到 100")
+        if not 1 <= int(level) <= CHARACTER_MAXIMUM_LEVEL:
+            return PartyBattleSelectionResult(
+                "invalid_level",
+                failure_message=f"挑战等级必须位于 1 到 {CHARACTER_MAXIMUM_LEVEL}",
+            )
         fingerprint = _operation_fingerprint("select", party_id, actor_id, str(level))
         context = _context(operation_id, logical_time)
         with self.database.unit_of_work() as uow:
@@ -216,8 +220,14 @@ class PartyBattleFeature:
                 return PartyBattleSelectionResult("not_member", failure_message="当前角色不在这支队伍中")
             challenge = self._load_challenge(uow, party_id)
             if challenge is None or challenge.status != "selected":
-                return PartyBattleSelectionResult("no_challenge", challenge)
-            if set(challenge.member_slots) != set(party.members):
+                return PartyBattleSelectionResult(
+                    "no_challenge",
+                    challenge,
+                    "当前没有已锁定的组队挑战",
+                )
+            if dict(challenge.member_slots) != {
+                key: value.slot for key, value in party.members.items()
+            }:
                 return PartyBattleSelectionResult("party_changed", challenge, "队伍成员已经变化，请由队长重新选择挑战")
             values = dict(challenge.ready_fingerprints)
             if ready:
@@ -229,6 +239,7 @@ class PartyBattleFeature:
                 ready_fingerprints=values,
                 revision=challenge.revision + 1,
             )
+            self._set_party_ready(uow, party, actor_id, ready, logical_time)
             self.snapshots.update(
                 uow,
                 PARTY_BATTLE_CHALLENGE_AGGREGATE,
@@ -273,7 +284,9 @@ class PartyBattleFeature:
             challenge = self._load_challenge(uow, party_id)
             if challenge is None or challenge.status != "selected":
                 return PartyBattleResult("no_challenge", challenge, failure_message="当前没有可挑战的组队首领")
-            if set(challenge.member_slots) != set(party.members):
+            if dict(challenge.member_slots) != {
+                key: value.slot for key, value in party.members.items()
+            }:
                 return PartyBattleResult("party_changed", challenge, failure_message="队伍成员已经变化，请重新选择挑战")
             if set(challenge.ready_fingerprints) != set(party.members):
                 return PartyBattleResult("not_ready", challenge, failure_message="仍有队员没有准备")
@@ -627,6 +640,43 @@ class PartyBattleFeature:
             key: replace(value, ready=False) if value.ready else value
             for key, value in current.members.items()
         }
+        parties = dict(state.parties)
+        parties[current.id] = replace(current, members=members)
+        self.snapshots.update(
+            uow,
+            self.storage.party,
+            self.party_scope_id,
+            state,
+            PartyState(state.scope_id, parties, state.revision + 1),
+            logical_time,
+        )
+
+    def _set_party_ready(
+        self,
+        uow,
+        party,
+        actor_id: str,
+        ready: bool,
+        logical_time: datetime,
+    ) -> None:
+        """把队伍准备状态与挑战指纹放在同一个工作单元提交。"""
+
+        state = self.snapshots.require(
+            uow,
+            self.storage.party,
+            self.party_scope_id,
+            PartyState,
+        )
+        current = state.parties.get(party.id)
+        if current is None or current.status is not PartyStatus.ACTIVE:
+            raise RuntimeError("准备提交时队伍已经失效")
+        member = current.members.get(actor_id)
+        if member is None:
+            raise RuntimeError("准备提交时角色已经离队")
+        if member.ready is bool(ready):
+            return
+        members = dict(current.members)
+        members[actor_id] = replace(member, ready=bool(ready))
         parties = dict(state.parties)
         parties[current.id] = replace(current, members=members)
         self.snapshots.update(

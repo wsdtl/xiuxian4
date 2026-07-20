@@ -31,6 +31,7 @@ async def _main() -> None:
     assert help_registry.categories() == HELP_CATEGORY_ORDER
     assert help_registry.find("帮助") is not None
     assert help_registry.find("探险") is not None
+    assert help_registry.find("突破") is not None
     assert help_registry.find("world_events") is None
     assert help_registry.find("economy_recycle_confirm") is None
 

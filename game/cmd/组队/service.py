@@ -208,24 +208,29 @@ async def set_ready(current: CurrentCharacterResult, ready: bool) -> None:
         await send_game_reply(_failure("当前没有可用角色"))
         return
     try:
+        services = current_game_services()
+        party_view = await asyncio.to_thread(
+            services.party.view,
+            character.id,
+            logical_time=_now(),
+        )
+        if party_view.party is None:
+            await send_game_reply(_failure("当前没有队伍"))
+            return
         result = await asyncio.to_thread(
-            current_game_services().party.set_ready,
-            _operation_id("party-ready"),
+            services.party_battles.set_ready,
+            _operation_id("party-battle-ready"),
+            party_view.party.id,
             character.id,
             ready,
             logical_time=_now(),
         )
-        if result.status == "member.ready_changed" and result.party is not None:
-            await asyncio.to_thread(
-                current_game_services().party_battles.set_ready,
-                _operation_id("party-battle-ready"),
-                result.party.id,
-                character.id,
-                ready,
-                logical_time=_now(),
-            )
         text = "已标记为准备" if ready else "已取消准备"
-        await send_game_reply(_success("组队", text) if result.status == "member.ready_changed" else _failure(result.failure_message or "准备状态没有更新"))
+        await send_game_reply(
+            _success("组队", text)
+            if result.status in {"ready", "unready", "replayed"}
+            else _failure(result.failure_message or "准备状态没有更新")
+        )
     except Exception as exc:
         await _failed("更新准备状态失败", character.id, exc)
 

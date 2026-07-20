@@ -55,14 +55,31 @@ def main() -> None:
             logical_time=now,
         )
         assert selected.status == "selected" and selected.challenge is not None
+        moved = services.party.set_slot(
+            "party-battle-move-slot",
+            characters[0].id,
+            characters[1].id,
+            2,
+            logical_time=now,
+        )
+        assert moved.party is not None
+        stale = services.party_battles.set_ready(
+            "party-battle-stale-ready",
+            party.id,
+            characters[0].id,
+            True,
+            logical_time=now,
+        )
+        assert stale.status == "party_changed"
+        restored = services.party.set_slot(
+            "party-battle-restore-slot",
+            characters[0].id,
+            characters[1].id,
+            1,
+            logical_time=now,
+        )
+        assert restored.party is not None
         for index, character in enumerate(characters):
-            ready = services.party.set_ready(
-                f"party-battle-party-ready-{index}",
-                character.id,
-                True,
-                logical_time=now,
-            )
-            assert ready.party is not None
             prepared = services.party_battles.set_ready(
                 f"party-battle-ready-{index}",
                 party.id,
@@ -71,6 +88,17 @@ def main() -> None:
                 logical_time=now,
             )
             assert prepared.status == "ready"
+        with services.database.unit_of_work(write=False) as uow:
+            prepared_party_state = services.party_battles.snapshots.require(
+                uow,
+                PARTY_AGGREGATE,
+                PARTY_SCOPE_ID,
+                PartyState,
+            )
+        assert all(
+            value.ready
+            for value in prepared_party_state.parties[party.id].members.values()
+        )
         result = services.party_battles.challenge(
             "party-battle-start",
             party.id,

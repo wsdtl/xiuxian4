@@ -214,7 +214,22 @@ def _assert_physical_layout() -> None:
     assert (world_skins / "__init__.py").is_file()
     assert (world_skins / "validation.py").is_file()
     assert not (content / "skins").exists(), "具体世界皮肤必须归入 world_skins"
-    for skin_name in ("cultivation", "magic"):
+    from game.content.world_skins import WORLD_SKIN_PACKAGE
+
+    registered_skin_names = {
+        str(pack.id).rsplit(".", 1)[-1]
+        for pack in WORLD_SKIN_PACKAGE.skin_packs
+    }
+    actual_skin_names = {
+        path.name
+        for path in world_skins.iterdir()
+        if path.is_dir() and path.name != "__pycache__"
+    }
+    assert actual_skin_names == registered_skin_names, (
+        "世界皮肤目录必须与官方世界包登记同步："
+        f"目录={sorted(actual_skin_names)} 登记={sorted(registered_skin_names)}"
+    )
+    for skin_name in sorted(registered_skin_names):
         skin = world_skins / skin_name
         for module_name in (
             "base.py",

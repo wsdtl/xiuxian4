@@ -7,6 +7,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Mapping
 
+from game.content.catalog import CHARACTER_MAXIMUM_LEVEL
 from game.content.catalog.social import PARTY_BATTLE_DAILY_REWARD_WINS
 from game.core.gameplay import EnemyEncounterInstance, StableId, stable_id
 
@@ -38,8 +39,10 @@ class PartyBattleChallengeState:
         if not self.party_id.strip() or not self.session_id.strip() or not self.selected_by.strip():
             raise ValueError("组队挑战缺少队伍、会话或发起人")
         object.__setattr__(self, "source_skin_id", stable_id(self.source_skin_id))
-        if not 1 <= self.level <= 100:
-            raise ValueError("组队挑战等级必须位于 1 到 100")
+        if not 1 <= self.level <= CHARACTER_MAXIMUM_LEVEL:
+            raise ValueError(
+                f"组队挑战等级必须位于 1 到 {CHARACTER_MAXIMUM_LEVEL}"
+            )
         if self.status not in {"selected", "completed"}:
             raise ValueError("未知组队挑战状态")
         if self.attempt_count < 0:
@@ -51,7 +54,7 @@ class PartyBattleChallengeState:
         members = {str(key): int(value) for key, value in self.member_slots.items()}
         if not members or len(set(members.values())) != len(members):
             raise ValueError("组队挑战必须保存不重复的成员站位")
-        if any(not key.strip() or value < 0 or value > 2 for key, value in members.items()):
+        if any(not key.strip() or value < 0 for key, value in members.items()):
             raise ValueError("组队挑战成员站位无效")
         fingerprints = {str(key): str(value) for key, value in self.ready_fingerprints.items()}
         if not set(fingerprints).issubset(members):
