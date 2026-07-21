@@ -172,7 +172,7 @@ BOSS_TROPHY_ITEM_IDS = MappingProxyType(
 PARTY_BOSS_TROPHY_ITEMS = tuple(
     _item(
         f"item.trophy.party_boss.{enemy.id.removeprefix('enemy.boss.party.')}",
-        _BOSS_PRICE_BANDS[index // 2],
+        _BOSS_PRICE_BANDS[index % len(_BOSS_PRICE_BANDS)],
         "trophy.party_boss",
     )
     for index, enemy in enumerate(PARTY_BOSS_ENEMIES)
@@ -206,8 +206,8 @@ TROPHY_DISPLAY_CONTENT_IDS = frozenset(item.id for item in TROPHY_ITEMS)
 
 
 def _validate() -> None:
-    if len(TROPHY_ITEMS) != 200:
-        raise ValueError("首批战利品名录必须正好包含 200 项")
+    if len(TROPHY_ITEMS) != 210:
+        raise ValueError("正式战利品名录必须正好包含 210 项")
     ids = tuple(item.id for item in TROPHY_ITEMS)
     if len(ids) != len(set(ids)):
         raise ValueError("战利品稳定 ID 不能重复")

@@ -5,6 +5,7 @@ from game.core.gameplay import SkinEntry
 from ...catalog.enemy.blueprints import (
     CULTIVATION_PARTY_BOSS_BLUEPRINTS,
     MAGIC_PARTY_BOSS_BLUEPRINTS,
+    STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
     PERSONAL_BOSS_BLUEPRINTS,
     REGULAR_ENEMY_BLUEPRINTS,
 )
@@ -74,6 +75,8 @@ _PARTY_BOSS_TROPHY_NAMES = (
     "梅杜莎石瞳", "克拉肯巨触", "利维坦逆鳞", "泰坦地核", "加姆冥牙",
     "尤克特年轮心", "莫德雷德断剑", "米诺斯裁决印", "厄瑞玻斯虚空核", "克洛诺斯时鳞",
     "莫伊莱命线", "纳西索斯镜片", "塔罗斯铁心", "哈提月蚀牙", "苏尔特焰核",
+    "欧罗巴星甲", "缪斯档案晶", "百臂巨构芯", "赫利俄斯镜片", "零号静默令",
+    "阿拉克涅母丝", "安提凯希拉齿轮", "卡律布狄斯视界核", "忒弥斯裁决印", "第十三母机片",
 )
 
 _CURIO_NAMES = (
@@ -111,6 +114,7 @@ def _build_entries() -> dict[str, SkinEntry]:
     party_blueprints = (
         ("cultivation", CULTIVATION_PARTY_BOSS_BLUEPRINTS),
         ("magic", MAGIC_PARTY_BOSS_BLUEPRINTS),
+        ("stellar_ring", STELLAR_RING_PARTY_BOSS_BLUEPRINTS),
     )
     party_enemy_ids = tuple(
         f"enemy.boss.party.{source}.{value.key}"
@@ -129,8 +133,8 @@ def _build_entries() -> dict[str, SkinEntry]:
             description=f"魔法世界极难得见的奇珍: {name}。",
             icon="✧",
         )
-    if len(entries) != 200:
-        raise ValueError("魔法世界战利品展示必须完整覆盖 200 项正式名录")
+    if len(entries) != 210:
+        raise ValueError("魔法世界战利品展示必须完整覆盖 210 项正式名录")
     if len({entry.name for entry in entries.values()}) != len(entries):
         raise ValueError("魔法世界战利品名称不能重复")
     return entries

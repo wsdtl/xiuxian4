@@ -157,6 +157,12 @@ MAGIC_PARTY_BOSS_KEYS = (
     "moon_devourer", "sun_destroyer",
 )
 
+STELLAR_RING_PARTY_BOSS_KEYS = (
+    "orbital_behemoth", "archive_warden", "ringbreaker_colossus",
+    "solar_mirror", "null_conductor", "swarm_mother", "chrono_engine",
+    "horizon_devourer", "protocol_judge", "thirteenth_core",
+)
+
 
 DISASTER_TEMPLATE_KEYS = (
     "star_eater", "realm_breaker", "soul_ferryman", "underworld_king",
@@ -197,9 +203,18 @@ MAGIC_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(
     MAGIC_PARTY_BOSS_KEYS,
     offset=len(PERSONAL_BOSS_KEYS) + len(CULTIVATION_PARTY_BOSS_KEYS),
 )
+STELLAR_RING_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(
+    STELLAR_RING_PARTY_BOSS_KEYS,
+    offset=(
+        len(PERSONAL_BOSS_KEYS)
+        + len(CULTIVATION_PARTY_BOSS_KEYS)
+        + len(MAGIC_PARTY_BOSS_KEYS)
+    ),
+)
 PARTY_BOSS_BLUEPRINTS = (
     *CULTIVATION_PARTY_BOSS_BLUEPRINTS,
     *MAGIC_PARTY_BOSS_BLUEPRINTS,
+    *STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
 )
 
 
@@ -207,6 +222,7 @@ _ALL_BOSS_TEMPLATE_KEYS = (
     *PERSONAL_BOSS_KEYS,
     *CULTIVATION_PARTY_BOSS_KEYS,
     *MAGIC_PARTY_BOSS_KEYS,
+    *STELLAR_RING_PARTY_BOSS_KEYS,
     *DISASTER_TEMPLATE_KEYS,
 )
 BOSS_BEHAVIOR_KEYS_BY_TEMPLATE = MappingProxyType(
@@ -222,8 +238,8 @@ def _validate() -> None:
         raise ValueError("首批敌人行为模板必须正好包含 32 项")
     if len(REGULAR_ENEMY_BLUEPRINTS) != 60:
         raise ValueError("首批敌人身份必须包含 60 个普通身份")
-    if len(PERSONAL_BOSS_BLUEPRINTS) != 30 or len(PARTY_BOSS_BLUEPRINTS) != 20:
-        raise ValueError("首批个人首领必须为 30 个，组队首领必须为 20 个")
+    if len(PERSONAL_BOSS_BLUEPRINTS) != 30 or len(PARTY_BOSS_BLUEPRINTS) != 30:
+        raise ValueError("正式个人首领必须为 30 个，组队首领必须为 30 个")
     behavior_keys = {value.key for value in BEHAVIOR_BLUEPRINTS}
     identity_keys = [
         value.key
@@ -265,4 +281,6 @@ __all__ = [
     "PERSONAL_BOSS_BLUEPRINTS",
     "PERSONAL_BOSS_KEYS",
     "REGULAR_ENEMY_BLUEPRINTS",
+    "STELLAR_RING_PARTY_BOSS_BLUEPRINTS",
+    "STELLAR_RING_PARTY_BOSS_KEYS",
 ]

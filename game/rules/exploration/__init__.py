@@ -2,6 +2,7 @@
 
 from .generation import ExplorationBatchPlanner
 from .battle import ExplorationBattleOutcome, ExplorationBattleSimulator
+from .facts import EXPLORATION_VICTORY_FACT_KIND, ExplorationVictoryFact
 from .models import *
 from .state import record_batch, start_exploration, stop_exploration
 

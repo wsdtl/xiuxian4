@@ -221,7 +221,7 @@ async def _main() -> None:
             assert character is not None
             overview_result = services.load_character_overview(character)
             assert overview_result.overview is not None
-            dimension = overview_result.overview.dimension
+            dimension = overview_result.overview.character_world
             world_view = services.world_view(dimension)
             notification_time = datetime.now(ZoneInfo("Asia/Shanghai"))
             services.notifications.issue(

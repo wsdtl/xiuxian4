@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 from game.content import (  # noqa: E402
     COMPANION_CATALOG,
     CULTIVATION_SKIN_ID,
+    TAIXUAN_WORLD_ID,
     LOADOUT_PRESET_IDS,
     build_official_content,
 )
@@ -23,6 +24,7 @@ from game.rules.companion import (  # noqa: E402
     COMPANION_APTITUDE_IDS,
     CompanionCombatProjector,
     CompanionEngine,
+    CompanionKind,
     CompanionRosterState,
     CompanionRuleError,
     CompanionSanctuaryStatus,
@@ -36,12 +38,22 @@ NOW = datetime(2026, 7, 20, 12, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 def main() -> None:
     content = build_official_content(CULTIVATION_SKIN_ID)
     engine = CompanionEngine(COMPANION_CATALOG)
+    exploration_location_ids = {
+        value.location_id for value in content.exploration_regions.definitions()
+    }
+    for person in COMPANION_CATALOG.people:
+        binding = content.worlds.require_binding_for_display(
+            person.origin_world_id,
+            person.location_id,
+        )
+        assert binding.function_id == "location.function.companion_person"
+        assert person.location_id not in exploration_location_ids
     roster = CompanionRosterState("character-a")
     first = engine.open_sanctuary(
         roster,
         None,
         session_id="sanctuary-a",
-        world_skin_id=CULTIVATION_SKIN_ID,
+        world_id=TAIXUAN_WORLD_ID,
         character_level=37,
         logical_time=NOW,
         random=SeededRandomSource("sanctuary-a"),
@@ -50,7 +62,7 @@ def main() -> None:
         roster,
         None,
         session_id="sanctuary-a",
-        world_skin_id=CULTIVATION_SKIN_ID,
+        world_id=TAIXUAN_WORLD_ID,
         character_level=37,
         logical_time=NOW,
         random=SeededRandomSource("sanctuary-a"),
@@ -112,10 +124,49 @@ def main() -> None:
     )
     assert transferred.companion_for_preset(LOADOUT_PRESET_IDS[0]) is None
     assert transferred.companion_for_preset(LOADOUT_PRESET_IDS[1]) == companion
-    released = engine.release(transferred, companion.id)
+    released = engine.farewell(transferred, companion.id)
     assert not released.instances
     assert not released.bindings
     assert companion.definition_id in released.captured_definition_ids
+
+    person = COMPANION_CATALOG.people_for_world(TAIXUAN_WORLD_ID)[0]
+    bonded, before, after = engine.give_gift(
+        released,
+        person.id,
+        person.bond_required,
+        logical_time=NOW,
+    )
+    assert before == 0 and after == person.bond_required
+    joined, person_instance, restored = engine.join_person(
+        bonded,
+        person.id,
+        37,
+        logical_time=NOW,
+    )
+    assert not restored
+    assert person_instance.kind is CompanionKind.PERSON
+    assert person_instance.aptitudes == person.aptitudes
+    person_projection = CompanionCombatProjector(
+        content.catalog,
+        content.companions,
+    ).project(person_instance)
+    assert person_projection.entity.tags.has("entity.companion.person")
+    assert len(person_projection.ai_rules) >= 3
+    _fails(
+        "companion.person_joined",
+        lambda: engine.join_person(joined, person.id, 37, logical_time=NOW),
+    )
+    departed = engine.farewell(joined, person_instance.id)
+    assert person.id in departed.departed_people
+    rejoined, restored_instance, restored = engine.join_person(
+        departed,
+        person.id,
+        99,
+        logical_time=NOW,
+    )
+    assert restored
+    assert restored_instance == person_instance
+    assert not rejoined.departed_people
 
     full_instances = {
         (clone := replace(
@@ -136,7 +187,7 @@ def main() -> None:
             full,
             captured,
             session_id="sanctuary-full",
-            world_skin_id=CULTIVATION_SKIN_ID,
+            world_id=TAIXUAN_WORLD_ID,
             character_level=37,
             logical_time=NOW,
             random=SeededRandomSource("sanctuary-full"),

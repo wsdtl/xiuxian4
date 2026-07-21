@@ -179,7 +179,7 @@ async def _state(current: CurrentCharacterResult):
             result.overview.loadout,
             result.overview.inventory,
             result.overview.inscription_preference,
-            current_game_services().world_view(result.overview.dimension),
+            current_game_services().world_view(result.overview.character_world),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -245,9 +245,7 @@ def _preset_message(loadout: LoadoutState) -> DocumentMessage:
             FieldSeparator(),
             f"{len(preset.slots)}/7",
         )
-    return builder.note(
-        "切换后，装备和卸下会自动修改当前配装。海量物品查询后续单独提供。"
-    ).build()
+    return builder.build()
 
 
 def _candidates(loadout: LoadoutState, inventory: InventoryState) -> list[ItemInstance]:

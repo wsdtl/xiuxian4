@@ -6,9 +6,10 @@ from .models import (
     DimensionalDisasterDefinition,
 )
 from .templates import DISASTER_BEHAVIOR_KEYS_BY_TEMPLATE
+from ..world import TAIXUAN_WORLD_ID
 
 
-CULTIVATION_DISASTER_SOURCE_ID = "skin.cultivation"
+CULTIVATION_DISASTER_SOURCE_ID = TAIXUAN_WORLD_ID
 
 
 def _disaster(

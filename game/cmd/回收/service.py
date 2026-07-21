@@ -183,7 +183,7 @@ async def recycle_trophies(current: CurrentCharacterResult) -> None:
             character.id,
             logical_time=_now(),
         )
-        view = current_game_services().world_view(current.dimension)
+        view = current_game_services().world_view(current.character_world)
         builder = M.document().section("回收战利品", icon="trade")
         if result.status == "empty":
             await send_game_reply(builder.line("背包中没有可回收的战利品").build())
@@ -372,7 +372,7 @@ def _reference(instance, overview) -> str:
 
 
 def _view(overview: CharacterOverview):
-    return current_game_services().world_view(overview.dimension)
+    return current_game_services().world_view(overview.character_world)
 
 
 def _overview(result: CharacterOverviewResult) -> CharacterOverview | None:

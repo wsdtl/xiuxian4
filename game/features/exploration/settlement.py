@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import datetime
+from hashlib import sha256
 
 from game.content.catalog import CHARACTER_LEVEL_PROGRESSION_ID
 from game.core.gameplay import (
@@ -25,6 +26,7 @@ from game.core.gameplay import (
 from game.rules.character import (
     CHARACTER_SETTINGS_AGGREGATE,
     CharacterSettingsState,
+    CharacterWorldState,
     PRIMARY_LEDGER_ID,
 )
 from game.rules.companion import CompanionRosterState
@@ -37,6 +39,7 @@ from game.rules.equipment import (
 from game.rules.exploration import (
     EXPLORATION_AGGREGATE,
     EXPLORATION_RULESET_VERSION,
+    EXPLORATION_VICTORY_FACT_KIND,
     ExplorationBatchPlanner,
     ExplorationBatchResult,
     ExplorationBattleSimulator,
@@ -61,6 +64,7 @@ from .models import (
     MAX_CATCH_UP_BATCHES,
     MAX_DISCOVERABLE_EXPLORATIONS,
     ExplorationOperationResult,
+    ExplorationVictoryFact,
     ExplorationStorageKinds,
     exploration_battle_report_id,
 )
@@ -74,6 +78,7 @@ class ExplorationSettlementService:
         self,
         database,
         content,
+        world_views,
         snapshots,
         rewards,
         inventory_engine,
@@ -81,14 +86,17 @@ class ExplorationSettlementService:
         battle_reports,
         storage: ExplorationStorageKinds,
         reward_keys_factory,
+        settlement_observer=None,
     ) -> None:
         self.database = database
         self.content = content
+        self.world_views = world_views
         self.snapshots = snapshots
         self.rewards = rewards
         self.battle_reports = battle_reports
         self.storage = storage
         self.reward_keys_factory = reward_keys_factory
+        self.settlement_observer = settlement_observer
         catalog = content.catalog
         encounters = EnemyEncounterGenerator(
             catalog.enemies,
@@ -182,6 +190,13 @@ class ExplorationSettlementService:
             character = self.snapshots.require(
                 uow, self.storage.character, character_id, CharacterState
             )
+            character_world = self.snapshots.require(
+                uow,
+                self.storage.character_world,
+                character_id,
+                CharacterWorldState,
+            )
+            view = self.world_views.require(character_world.world_id)
             inventory = self.snapshots.require(
                 uow, self.storage.inventory, character_id, InventoryState
             )
@@ -435,6 +450,22 @@ class ExplorationSettlementService:
                 rewards=tuple(reward_references),
                 medicines_used=tuple(medicines_used),
             )
+            if (
+                victory
+                and plan.encounter is not None
+            ):
+                fact = ExplorationVictoryFact(
+                    event_id=f"{state.session_id}:batch:{batch_index}",
+                    character_id=character_id,
+                    character_name=character.name,
+                    world_id=character_world.world_id,
+                    region_id=state.region_id,
+                    encounter_kind=plan.encounter_kind.value,
+                    resolved_at=resolved_at,
+                )
+                self._append_victory_fact(uow, fact)
+                if self.settlement_observer is not None:
+                    self.settlement_observer.observe_victory_in_uow(uow, fact)
             reason = None
             if plan.encounter is not None and not victory:
                 reason = ExplorationStopReason.DEFEATED
@@ -457,6 +488,7 @@ class ExplorationSettlementService:
                         roster,
                         battle,
                         context.trace_id,
+                        view,
                     ),
                 )
             uow.commit()
@@ -470,6 +502,7 @@ class ExplorationSettlementService:
         roster: CompanionRosterState,
         battle,
         segment_id: str,
+        view,
     ) -> BattleReportDraft:
         plan = next_state.last_result.plan
         assert plan.encounter is not None
@@ -485,7 +518,7 @@ class ExplorationSettlementService:
         labels = {character.id: (character.name, "player")}
         if battle.player_companion_id is not None:
             companion = roster.instances[battle.player_companion_id]
-            companion_name = self.content.companions.species.require(
+            companion_name = self.content.companions.require_definition(
                 companion.definition_id
             ).name
             participants.append(
@@ -499,7 +532,7 @@ class ExplorationSettlementService:
             labels[companion.id] = (companion_name, "companion")
         enemy_names = []
         for enemy in enemies:
-            display = self.content.enemy_projector.enemy(enemy)
+            display = view.enemy_projector.enemy(enemy)
             participants.append(
                 capture_battle_participant(
                     battle.trace.initial_frame.state.entities[enemy.id],
@@ -520,7 +553,7 @@ class ExplorationSettlementService:
         ]
         if battle.player_companion_id is not None:
             companion = roster.instances[battle.player_companion_id]
-            companion_name = self.content.companions.species.require(
+            companion_name = self.content.companions.require_definition(
                 companion.definition_id
             ).name
             final_participants.append(
@@ -534,7 +567,7 @@ class ExplorationSettlementService:
         final_participants.extend(
             capture_battle_participant(
                 battle.trace.final_frame.state.entities[enemy.id],
-                self.content.enemy_projector.enemy(enemy).name,
+                view.enemy_projector.enemy(enemy).name,
                 "enemy",
                 self.content.catalog.enemy_projector.attributes,
             )
@@ -543,11 +576,11 @@ class ExplorationSettlementService:
         return BattleReportDraft(
             report_id=exploration_battle_report_id(state.session_id),
             mode_id="battle.mode.exploration",
-            presentation_skin_id=str(self.content.skin.id),
-            presentation_skin_version=self.content.skin.version,
+            presentation_skin_id=str(view.skin.id),
+            presentation_skin_version=view.skin.version,
             content_fingerprint=self.content.catalog.report.content_fingerprint,
             summary=BattleReportSummary(
-                f"探险战报·{self.content.projector.name(state.location_id)}",
+                f"探险战报·{view.projector.name(state.location_id)}",
                 f"{next_state.victories}胜 {next_state.defeats}负",
                 (
                     f"完成批次: {next_state.completed_batches}",
@@ -570,7 +603,7 @@ class ExplorationSettlementService:
                         **labels,
                         **{
                             enemy.id: (
-                                self.content.enemy_projector.enemy(enemy).name,
+                                view.enemy_projector.enemy(enemy).name,
                                 "enemy",
                             )
                             for enemy in enemies
@@ -584,7 +617,7 @@ class ExplorationSettlementService:
                         **labels,
                         **{
                             enemy.id: (
-                                self.content.enemy_projector.enemy(enemy).name,
+                                view.enemy_projector.enemy(enemy).name,
                                 "enemy",
                             )
                             for enemy in enemies
@@ -598,7 +631,7 @@ class ExplorationSettlementService:
                         **labels,
                         **{
                             enemy.id: (
-                                self.content.enemy_projector.enemy(enemy).name,
+                                view.enemy_projector.enemy(enemy).name,
                                 "enemy",
                             )
                             for enemy in enemies
@@ -627,6 +660,25 @@ class ExplorationSettlementService:
             character_id,
             RewardClaimState,
         ).revision
+
+    def _append_victory_fact(self, uow, fact: ExplorationVictoryFact) -> None:
+        transaction_id = f"exploration-victory:{fact.event_id}"
+        payload = self.snapshots.codec.dumps(fact)
+        timestamp = fact.resolved_at.isoformat()
+        uow.insert_transaction(
+            transaction_id,
+            sha256(payload.encode("utf-8")).hexdigest(),
+            fact.character_id,
+            payload,
+            timestamp,
+        )
+        uow.append_outbox(
+            transaction_id,
+            0,
+            EXPLORATION_VICTORY_FACT_KIND,
+            payload,
+            timestamp,
+        )
 
 
 def _context(trace_id: str, logical_time: datetime) -> RuleContext:

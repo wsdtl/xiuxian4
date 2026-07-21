@@ -14,6 +14,7 @@ from ...catalog.enemy.blueprints import (
     BOSS_BEHAVIOR_KEYS_BY_TEMPLATE,
     CULTIVATION_PARTY_BOSS_BLUEPRINTS,
     MAGIC_PARTY_BOSS_BLUEPRINTS,
+    STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
     PERSONAL_BOSS_BLUEPRINTS,
     REGULAR_ENEMY_BLUEPRINTS,
 )
@@ -86,6 +87,16 @@ _BOSS_NAMES = (
     ("钢铁泰坦·塔罗斯", "塔罗斯"),
     ("噬月魔兽·哈提", "哈提"),
     ("法厄同·坠日御者", "法厄同"),
+    ("欧罗巴·轨道巨兽", "欧罗巴"),
+    ("缪斯·万卷档案官", "缪斯"),
+    ("布里阿瑞俄斯·断环巨构", "布里阿瑞俄斯"),
+    ("赫利俄斯·日冕镜阵", "赫利俄斯"),
+    ("寂静指挥官·零号", "零号指挥官"),
+    ("阿拉克涅·蜂群母体", "阿拉克涅"),
+    ("安提凯希拉·时序机", "安提凯希拉"),
+    ("卡律布狄斯·视界吞噬者", "卡律布狄斯"),
+    ("忒弥斯·协议裁决者", "忒弥斯"),
+    ("第十三核心·未署名母机", "第十三核心"),
     ("星辰吞噬者·阿波菲斯", "阿波菲斯"),
     ("位面破坏者·提丰", "提丰"),
     ("冥河船夫·卡戎", "卡戎"),
@@ -142,6 +153,7 @@ def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], 
         *PERSONAL_BOSS_BLUEPRINTS,
         *CULTIVATION_PARTY_BOSS_BLUEPRINTS,
         *MAGIC_PARTY_BOSS_BLUEPRINTS,
+        *STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
     )
     behavior_keys = {value.key for value in BEHAVIOR_BLUEPRINTS}
     if len(_REGULAR_NAMES) != len(regular_keys) or len(_BOSS_NAMES) != len(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE):
@@ -173,6 +185,7 @@ def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], 
     for source, blueprints in (
         ("cultivation", CULTIVATION_PARTY_BOSS_BLUEPRINTS),
         ("magic", MAGIC_PARTY_BOSS_BLUEPRINTS),
+        ("stellar_ring", STELLAR_RING_PARTY_BOSS_BLUEPRINTS),
     ):
         for blueprint in blueprints:
             name, compact_name = boss_names[blueprint.key]

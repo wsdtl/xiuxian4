@@ -42,7 +42,7 @@ TIME = datetime(2026, 7, 14, 0, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 
 def main() -> None:
-    assert WORLD_FOUNDATION_VERSION == "world.foundation.v1"
+    assert WORLD_FOUNDATION_VERSION == "world.foundation.v4"
     engine = _engine()
     _assert_grid_and_multiple_presences(engine)
     _assert_graph_path(engine)

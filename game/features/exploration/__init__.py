@@ -4,9 +4,10 @@ from .codec import exploration_codec_registrations
 from .models import (
     MAX_CATCH_UP_BATCHES,
     MAX_DISCOVERABLE_EXPLORATIONS,
-    ExplorationMovementResult,
     ExplorationOperationResult,
+    ExplorationSettlementObserver,
     ExplorationStorageKinds,
+    ExplorationVictoryFact,
     exploration_battle_report_id,
 )
 from .service import ExplorationFeature
@@ -14,9 +15,10 @@ from .service import ExplorationFeature
 
 __all__ = [
     "ExplorationFeature",
-    "ExplorationMovementResult",
     "ExplorationOperationResult",
+    "ExplorationSettlementObserver",
     "ExplorationStorageKinds",
+    "ExplorationVictoryFact",
     "MAX_CATCH_UP_BATCHES",
     "MAX_DISCOVERABLE_EXPLORATIONS",
     "exploration_codec_registrations",

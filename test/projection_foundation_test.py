@@ -76,6 +76,30 @@ def _assert_fact_survives_outbox_publish(database: SqliteDatabase) -> None:
 
 def _assert_projection_checkpoint(database: SqliteDatabase) -> None:
     store = ProjectionStore(database)
+    with database.unit_of_work() as uow:
+        store.initialize_in_uow(
+            uow,
+            "projector.atomic_probe",
+            "world",
+            logical_time=TIME,
+        )
+        store.commit_in_uow(
+            uow,
+            "projector.atomic_probe",
+            "world",
+            expected_revision=0,
+            through_fact_offset=1,
+            updates={"account-a": {"value": 1}},
+            logical_time=TIME,
+        )
+        assert store.record_in_uow(
+            uow,
+            "projector.atomic_probe",
+            "world",
+            "account-a",
+        ) is not None
+    assert store.checkpoint("projector.atomic_probe", "world") is None
+
     store.initialize("projector.player_stats", "world", logical_time=TIME)
     written = store.commit(
         "projector.player_stats",

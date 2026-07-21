@@ -54,7 +54,7 @@ from game.core.gameplay import (
     INSCRIPTION_MEDIUM_DATA_KEY,
 )
 from game.rules.activity import GLOBAL_ACTIVITY_SCOPE_ID
-from game.rules.character import PRIMARY_LEDGER_ID
+from game.rules.character import CharacterWorldState, PRIMARY_LEDGER_ID
 from game.rules.companion import CompanionRosterState
 from game.rules.disaster import (
     DIMENSIONAL_DISASTER_AGGREGATE,
@@ -102,8 +102,9 @@ class DimensionalDisasterFeature:
         self,
         database,
         content,
+        world_views,
         disasters,
-        playable_skin_ids,
+        playable_world_ids,
         snapshots,
         rewards,
         player_lineup,
@@ -116,8 +117,9 @@ class DimensionalDisasterFeature:
     ) -> None:
         self.database = database
         self.content = content
+        self.world_views = world_views
         self.disasters = disasters
-        self.playable_skin_ids = tuple(playable_skin_ids)
+        self.playable_world_ids = tuple(playable_world_ids)
         self.snapshots = snapshots
         self.rewards = rewards
         self.battle_reports = battle_reports
@@ -235,6 +237,12 @@ class DimensionalDisasterFeature:
                 self.storage.character,
                 normalized_character_id,
                 CharacterState,
+            )
+            character_world = self.snapshots.require(
+                uow,
+                self.storage.character_world,
+                normalized_character_id,
+                CharacterWorldState,
             )
             if character.resources[HEALTH_CURRENT] <= 0:
                 return DimensionalDisasterChallengeResult("health_depleted", event, activity)
@@ -401,6 +409,7 @@ class DimensionalDisasterFeature:
                     receipt,
                     normalized_operation_id,
                     logical_time,
+                    self.world_views.require(character_world.world_id),
                 ),
             )
             uow.commit()
@@ -421,6 +430,7 @@ class DimensionalDisasterFeature:
         receipt,
         operation_id: str,
         logical_time: datetime,
+        presentation,
     ) -> BattleReportDraft:
         outcome = "讨伐胜利" if battle.player_victory else "战斗结束"
         enemy_id = f"enemy:{event.event_id}"
@@ -428,7 +438,7 @@ class DimensionalDisasterFeature:
         if battle.player_companion_id is not None:
             companion = roster.instances[battle.player_companion_id]
             labels[companion.id] = (
-                self.content.companions.species.require(companion.definition_id).name,
+                self.content.companions.require_definition(companion.definition_id).name,
                 "companion",
             )
         labels[enemy_id] = (event.narrative.name, "enemy")
@@ -444,8 +454,8 @@ class DimensionalDisasterFeature:
         return BattleReportDraft(
             report_id=self._battle_report_id(operation_id),
             mode_id="battle.mode.dimensional_disaster",
-            presentation_skin_id=str(self.content.skin.id),
-            presentation_skin_version=self.content.skin.version,
+            presentation_skin_id=str(presentation.skin.id),
+            presentation_skin_version=presentation.skin.version,
             content_fingerprint=self.content.catalog.report.content_fingerprint,
             summary=BattleReportSummary(
                 f"讨伐灾厄·{event.narrative.name}",
@@ -528,7 +538,7 @@ class DimensionalDisasterFeature:
             )
             definition = self.disasters.select(
                 window.instance_id,
-                source_skin_ids=self.playable_skin_ids,
+                source_world_ids=self.playable_world_ids,
                 recent_definition_ids=recent,
             )
             characters = self.snapshots.list(
@@ -563,7 +573,7 @@ class DimensionalDisasterFeature:
                 event_id,
                 window.instance_id,
                 definition.id,
-                definition.source_skin_id,
+                definition.source_world_id,
                 DisasterNarrativeSnapshot(
                     definition.name,
                     definition.title,

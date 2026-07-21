@@ -8,15 +8,27 @@ from .cultivation.presentation import (
     CULTIVATION_GEAR_PRESENTATION,
 )
 from .magic.presentation import MAGIC_ENEMY_PRESENTATION, MAGIC_GEAR_PRESENTATION
+from .stellar_ring.presentation import (
+    STELLAR_RING_ENEMY_PRESENTATION,
+    STELLAR_RING_GEAR_PRESENTATION,
+)
 
 
 _GEAR_PRESENTATIONS = {
     (value.skin_id, value.skin_version): value
-    for value in (CULTIVATION_GEAR_PRESENTATION, MAGIC_GEAR_PRESENTATION)
+    for value in (
+        CULTIVATION_GEAR_PRESENTATION,
+        MAGIC_GEAR_PRESENTATION,
+        STELLAR_RING_GEAR_PRESENTATION,
+    )
 }
 _ENEMY_PRESENTATIONS = {
     (value.skin_id, value.skin_version): value
-    for value in (CULTIVATION_ENEMY_PRESENTATION, MAGIC_ENEMY_PRESENTATION)
+    for value in (
+        CULTIVATION_ENEMY_PRESENTATION,
+        MAGIC_ENEMY_PRESENTATION,
+        STELLAR_RING_ENEMY_PRESENTATION,
+    )
 }
 
 

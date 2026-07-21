@@ -51,7 +51,7 @@ def main() -> None:
         opened = services.companions.open_sanctuary(
             "companion-battle-open",
             challenger,
-            overview.dimension,
+            overview.character_world,
             "stack:companion-battle-key",
             logical_time=NOW,
         )
@@ -84,6 +84,34 @@ def main() -> None:
             companion_id,
         )
         _assert_disaster(services, challenger, overview, bound.roster, companion_id)
+        person = services.content.companions.people_for_world(
+            overview.character_world.world_id
+        )[0]
+        without_pet = services.companions.engine.farewell(bound.roster, companion_id)
+        bonded, _, _ = services.companions.engine.give_gift(
+            without_pet,
+            person.id,
+            person.bond_required,
+            logical_time=NOW,
+        )
+        person_roster, person_instance, _ = services.companions.engine.join_person(
+            bonded,
+            person.id,
+            1,
+            logical_time=NOW,
+        )
+        person_roster = services.companions.engine.bind(
+            person_roster,
+            person_instance.id,
+            overview.loadout.active_preset_id,
+        )
+        _assert_exploration(
+            services,
+            challenger,
+            overview,
+            person_roster,
+            person_instance.id,
+        )
     print("companion battle modes tests passed")
 
 

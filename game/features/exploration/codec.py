@@ -10,6 +10,7 @@ from game.rules.exploration import (
     ExplorationState,
     ExplorationStatus,
     ExplorationStopReason,
+    ExplorationVictoryFact,
 )
 
 
@@ -27,6 +28,7 @@ def exploration_codec_registrations() -> tuple[tuple[str, type[object]], ...]:
         ("product.exploration_batch_plan", ExplorationBatchPlan),
         ("product.exploration_batch_result", ExplorationBatchResult),
         ("product.exploration_state", ExplorationState),
+        ("game.exploration.victory_fact.v1", ExplorationVictoryFact),
     )
 
 

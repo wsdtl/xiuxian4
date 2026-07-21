@@ -428,7 +428,7 @@ def _party_battle_message(party: Party, challenge, character_id: str) -> Documen
         if party.leader_id == character_id:
             builder.line("队长可发送：选择组队挑战 等级")
         return builder.build()
-    view = current_game_services().world_views.require(challenge.source_skin_id)
+    view = current_game_services().world_views.require(challenge.source_world_id)
     enemy = view.enemy_projector.enemy(challenge.encounter.enemies[0])
     builder.row(("首领", enemy.name), ("等级", str(challenge.level)))
     builder.line("状态", FieldSeparator(), "待挑战" if challenge.status == "selected" else "已完成")

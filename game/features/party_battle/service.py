@@ -317,7 +317,7 @@ class PartyBattleFeature:
 
             battle = self.battles.simulate(members, bundles, challenge, context=context)
             enemy = challenge.encounter.enemies[0]
-            enemy_name = self.world_views.require(challenge.source_skin_id).enemy_projector.enemy(enemy).name
+            enemy_name = self.world_views.require(challenge.source_world_id).enemy_projector.enemy(enemy).name
             reward_summaries: dict[str, tuple[str, ...]] = {}
             if battle.victory:
                 quote = self.content.catalog.enemy_threat.reward_quote(enemy)
@@ -501,7 +501,7 @@ class PartyBattleFeature:
                 label = instance.companion_id
                 if instance.companion_id in roster.instances:
                     companion = roster.instances[instance.companion_id]
-                    label = self.content.companions.species.require(companion.definition_id).name
+                    label = self.content.companions.require_definition(companion.definition_id).name
                 labels[instance.companion_id] = (label, "team.party")
         enemy_id = challenge.encounter.enemies[0].id
         labels[enemy_id] = (enemy_name, "team.enemy")
@@ -526,7 +526,7 @@ class PartyBattleFeature:
             for entity_id, (label, team_id) in labels.items()
         )
         outcome = "组队胜利" if battle.victory else "战斗平局" if battle.draw else "组队战败"
-        view = self.world_views.require(challenge.source_skin_id)
+        view = self.world_views.require(challenge.source_world_id)
         return BattleReportDraft(
             report_id=report_id,
             mode_id="battle.mode.party_battle",

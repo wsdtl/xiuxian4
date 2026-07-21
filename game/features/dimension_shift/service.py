@@ -1,4 +1,4 @@
-"""跃迁条件、凭证扣除和界相更新的唯一联合事务。"""
+"""跃迁条件、凭证扣除、真实世界更新和空间迁移的唯一联合事务。"""
 
 from game.content.catalog.item import (
     DIMENSION_SHIFT_ITEM_COMPONENT_ID,
@@ -6,20 +6,26 @@ from game.content.catalog.item import (
     DimensionShiftItemComponent,
 )
 from game.core.gameplay import (
+    AddPresence,
     ActionSlotKind,
     ActionState,
     ConsumeStack,
     InventoryEngine,
     InventoryState,
     InventoryTransaction,
+    RemovePresence,
     RuleContext,
     Ruleset,
     SeededRandomSource,
+    WorldPresence,
+    WorldState,
+    WorldTransaction,
 )
 from game.rules.character import (
-    CharacterDimensionState,
-    DimensionShiftResult,
-    shift_dimension,
+    MULTIVERSE_WORLD_STATE_ID,
+    CharacterWorldState,
+    WorldShiftResult,
+    shift_world,
 )
 from game.rules.exploration import ExplorationState, ExplorationStatus
 
@@ -27,7 +33,7 @@ from .models import DimensionShiftStorageKinds
 
 
 class DimensionShiftFeature:
-    """不改变世界规则，只原子切换角色采用的世界投影。"""
+    """原子扣除凭证、切换真实世界并迁移角色空间位置。"""
 
     def __init__(
         self,
@@ -48,21 +54,21 @@ class DimensionShiftFeature:
     def shift(
         self,
         character_id: str,
-        target_skin_id: str,
+        target_world_id: str,
         *,
         logical_time,
-    ) -> DimensionShiftResult:
-        target = self.world_views.require(target_skin_id).skin.id
+    ) -> WorldShiftResult:
+        target = self.world_views.require(target_world_id).world.id
         normalized_id = str(character_id or "").strip()
         with self.database.unit_of_work() as uow:
             current = self.snapshots.require(
                 uow,
-                self.storage.dimension,
+                self.storage.character_world,
                 normalized_id,
-                CharacterDimensionState,
+                CharacterWorldState,
             )
-            if current.skin_id == target:
-                return shift_dimension(current, target, logical_time=logical_time)
+            if current.world_id == target:
+                return shift_world(current, target, logical_time=logical_time)
             action = self.snapshots.load(
                 uow, self.storage.action, normalized_id, ActionState
             )
@@ -76,7 +82,7 @@ class DimensionShiftFeature:
                 exploration is not None
                 and exploration.status is ExplorationStatus.RUNNING
             ):
-                return DimensionShiftResult("main_action_occupied", current)
+                return WorldShiftResult("main_action_occupied", current)
             inventory = self.snapshots.require(
                 uow,
                 self.storage.inventory,
@@ -100,11 +106,83 @@ class DimensionShiftFeature:
                 None,
             )
             if item_asset is None:
-                return DimensionShiftResult("item_missing", current)
-            result = shift_dimension(current, target, logical_time=logical_time)
+                return WorldShiftResult("item_missing", current)
+            result = shift_world(current, target, logical_time=logical_time)
             if result.status != "shifted" or result.current is None:
                 return result
             trace_id = f"dimension-shift:{normalized_id}:{current.revision}:{target}"
+            world = self.snapshots.require(
+                uow,
+                self.storage.world,
+                MULTIVERSE_WORLD_STATE_ID,
+                WorldState,
+            )
+            presence = next(
+                (
+                    value
+                    for value in world.presences.values()
+                    if value.owner_id == normalized_id
+                ),
+                None,
+            )
+            if presence is None:
+                raise RuntimeError("跃迁时找不到角色世界存在体")
+            current_anchor = self.world_views.worlds.anchor_at(
+                current.world_id,
+                presence.position,
+            )
+            current_location = (
+                self.world_views.worlds.resolve(current.world_id, current_anchor)
+                if current_anchor is not None
+                else None
+            )
+            equivalent = (
+                self.world_views.worlds.binding_for_display(
+                    target,
+                    current_location.display_id,
+                )
+                if current_location is not None
+                else None
+            )
+            target_anchor = (
+                equivalent.anchor_id
+                if equivalent is not None
+                else self.world_views.worlds.require_world(target).spawn_anchor_id
+            )
+            destination = self.world_views.worlds.position(target, target_anchor)
+            world_outcome = self.content.catalog.world_engine.execute(
+                WorldTransaction(
+                    f"{trace_id}:world",
+                    normalized_id,
+                    world.revision,
+                    (
+                        RemovePresence(presence.id),
+                        AddPresence(
+                            WorldPresence(
+                                presence.id,
+                                presence.owner_id,
+                                presence.kind_id,
+                                destination,
+                                presence.revision + 1,
+                            )
+                        ),
+                    ),
+                ),
+                state=world,
+                context=RuleContext(
+                    f"{trace_id}:world",
+                    "feature.dimension_shift.v2",
+                    Ruleset("ruleset.dimension_shift"),
+                    logical_time,
+                    SeededRandomSource(f"{trace_id}:world"),
+                ),
+            )
+            if world_outcome.failure or world_outcome.value is None:
+                raise RuntimeError(
+                    world_outcome.failure.message
+                    if world_outcome.failure
+                    else "跃迁空间迁移失败"
+                )
             inventory_outcome = self.inventory_engine.execute(
                 InventoryTransaction(
                     f"{trace_id}:inventory",
@@ -115,7 +193,7 @@ class DimensionShiftFeature:
                 state=inventory,
                 context=RuleContext(
                     trace_id,
-                    "feature.dimension_shift.v1",
+                    "feature.dimension_shift.v2",
                     Ruleset("ruleset.dimension_shift"),
                     logical_time,
                     SeededRandomSource(trace_id),
@@ -137,10 +215,18 @@ class DimensionShiftFeature:
             )
             self.snapshots.update(
                 uow,
-                self.storage.dimension,
+                self.storage.character_world,
                 normalized_id,
                 current,
                 result.current,
+                logical_time,
+            )
+            self.snapshots.update(
+                uow,
+                self.storage.world,
+                MULTIVERSE_WORLD_STATE_ID,
+                world,
+                world_outcome.value.state,
                 logical_time,
             )
             uow.commit()

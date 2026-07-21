@@ -16,9 +16,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.rules.character import (  # noqa: E402
-    CHARACTER_DIMENSION_AGGREGATE,
+    CHARACTER_WORLD_AGGREGATE,
     CHARACTER_SETTINGS_AGGREGATE,
-    CharacterDimensionState,
+    CharacterWorldState,
     CharacterCreationWorkflow,
     CharacterCreationRequest,
 )
@@ -32,8 +32,7 @@ from game.content import (  # noqa: E402
     INITIAL_CURRENCY_AMOUNT,
     INITIAL_MEDICINE_QUANTITY,
     LOADOUT_PRESET_IDS,
-    CULTIVATION_SKIN_ID,
-    MAGIC_SKIN_ID,
+    PLAYABLE_WORLD_IDS,
     PRIMARY_CURRENCY_ID,
     SMALL_HEALTH_MEDICINE_ITEM_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
@@ -76,7 +75,7 @@ from game.rules.character import (  # noqa: E402
 )
 from game.rules.character.creation import (  # noqa: E402
     PRIMARY_LEDGER_ID,
-    PRIMARY_WORLD_ID,
+    MULTIVERSE_WORLD_STATE_ID,
 )
 
 
@@ -244,16 +243,20 @@ def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> 
     )
     assert wallet.balance == INITIAL_CURRENCY_AMOUNT
     assert receipt.settings == CharacterSettingsState(character.id)
-    assert receipt.dimension.character_id == character.id
-    assert receipt.dimension.skin_id in {CULTIVATION_SKIN_ID, MAGIC_SKIN_ID}
+    assert receipt.character_world.character_id == character.id
+    assert receipt.character_world.world_id in set(PLAYABLE_WORLD_IDS)
     presence = next(
         value for value in receipt.world.presences.values() if value.owner_id == character.id
     )
-    assert presence.position.location_id == STARTING_CITY_ID
+    runtime = service.workflow.planner.content.world_runtime
+    assert runtime.anchor_at(
+        receipt.character_world.world_id,
+        presence.position,
+    ) == runtime.require_world(receipt.character_world.world_id).spawn_anchor_id
 
     replay = service.create(request, context=_context(2))
     assert replay.replayed and replay.character == character
-    assert replay.dimension == receipt.dimension
+    assert replay.character_world == receipt.character_world
     try:
         service.create(
             CharacterCreationRequest("character-create-a-again", account_id, "第二角色"),
@@ -281,15 +284,15 @@ def _assert_complete_creation(database, ids: SequentialIds, account_id: str) -> 
         ) == receipt.settings
         assert service.snapshots.require(
             uow,
-            CHARACTER_DIMENSION_AGGREGATE,
+            CHARACTER_WORLD_AGGREGATE,
             character.id,
-            CharacterDimensionState,
-        ) == receipt.dimension
+            CharacterWorldState,
+        ) == receipt.character_world
         assert service.snapshots.require(
             uow, LEDGER_AGGREGATE, PRIMARY_LEDGER_ID, LedgerState
         ) == receipt.ledger
         assert service.snapshots.require(
-            uow, WORLD_AGGREGATE, PRIMARY_WORLD_ID, WorldState
+            uow, WORLD_AGGREGATE, MULTIVERSE_WORLD_STATE_ID, WorldState
         ) == receipt.world
 
 

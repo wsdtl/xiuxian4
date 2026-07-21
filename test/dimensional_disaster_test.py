@@ -21,11 +21,13 @@ from game.app import (  # noqa: E402
     restore_game_services,
 )
 from game.content import (  # noqa: E402
-    CULTIVATION_SKIN_ID,
     DIMENSION_SHIFT_ITEM_ID,
     DRAW_TICKET_ITEM_ID,
     INSCRIPTION_FEATHER_ITEM_ID,
-    MAGIC_SKIN_ID,
+    MAGIC_WORLD_ID,
+    PLAYABLE_WORLD_IDS,
+    STELLAR_RING_WORLD_ID,
+    TAIXUAN_WORLD_ID,
     build_dimensional_disaster_catalog,
 )
 from game.core.gameplay import (  # noqa: E402
@@ -91,11 +93,17 @@ async def _main() -> None:
         available_capacity=1,
     ) == 1
     catalog = build_dimensional_disaster_catalog()
-    assert len(catalog.definitions()) == 20
-    assert len(catalog.for_source(CULTIVATION_SKIN_ID)) == 10
-    assert len(catalog.for_source(MAGIC_SKIN_ID)) == 10
+    assert len(catalog.definitions()) == 30
+    assert len(catalog.for_source(TAIXUAN_WORLD_ID)) == 10
+    assert len(catalog.for_source(MAGIC_WORLD_ID)) == 10
+    assert len(catalog.for_source(STELLAR_RING_WORLD_ID)) == 10
     audit = catalog.audit()
     assert not audit.warnings
+    assert {value.source_world_id for value in audit.sources} == {
+        TAIXUAN_WORLD_ID,
+        MAGIC_WORLD_ID,
+        STELLAR_RING_WORLD_ID,
+    }
     assert all(value.documented == 7 and value.original == 3 for value in audit.sources)
 
     for command in ("多次元灾厄", "讨伐灾厄", "灾厄排行"):
@@ -124,6 +132,7 @@ async def _main() -> None:
             status = await _dispatch("player-a", "多次元灾厄", "status-a")
             content = status.replies[0].message.content
             event = _event(services)
+            assert event.source_world_id in set(PLAYABLE_WORLD_IDS)
             assert event.narrative.name in content
             assert "多次元灾厄" in content and "今日讨伐: _0/2_" in content
             assert services.global_activities.active(
@@ -131,13 +140,12 @@ async def _main() -> None:
                 logical_time=TIME,
             )
 
-            initial_dimension = services.load_character_overview(first_character).overview.dimension
-            target_skin = (
-                MAGIC_SKIN_ID
-                if initial_dimension.skin_id == CULTIVATION_SKIN_ID
-                else CULTIVATION_SKIN_ID
+            initial_dimension = services.load_character_overview(first_character).overview.character_world
+            target_world = next(
+                value for value in PLAYABLE_WORLD_IDS
+                if value != initial_dimension.world_id
             )
-            await _dispatch("player-a", f"跃迁 {target_skin}", "shift-a")
+            await _dispatch("player-a", f"跃迁 {target_world}", "shift-a")
             shifted = await _dispatch("player-a", "多次元灾厄", "status-shifted")
             assert event.narrative.name in shifted.replies[0].message.content
 
@@ -154,6 +162,9 @@ async def _main() -> None:
                 logical_time=TIME,
             )
             assert battle_report is not None and battle_report.segments
+            assert battle_report.presentation_skin_id == str(
+                services.world_views.require(target_world).skin.id
+            )
             first_segment = battle_report.segments[0]
             assert first_segment.round_states
             assert first_segment.final_participants

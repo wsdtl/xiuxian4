@@ -14,6 +14,7 @@ from ...catalog.enemy.blueprints import (
     BOSS_BEHAVIOR_KEYS_BY_TEMPLATE,
     CULTIVATION_PARTY_BOSS_BLUEPRINTS,
     MAGIC_PARTY_BOSS_BLUEPRINTS,
+    STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
     PERSONAL_BOSS_BLUEPRINTS,
     REGULAR_ENEMY_BLUEPRINTS,
 )
@@ -86,6 +87,16 @@ _BOSS_NAMES = (
     ("铜头铁主·蚩尤", "蚩尤"),
     ("吞月蟾祖·望舒", "望舒"),
     ("射日遗魂·大羿", "大羿"),
+    ("巡天巨兽·星甲", "星甲"),
+    ("万卷天官·司册", "司册"),
+    ("断环巨神·百臂", "百臂"),
+    ("大日玄镜·曜灵", "曜灵"),
+    ("无声天将·寂灭", "寂灭"),
+    ("天蛛妖母·罗网", "罗网"),
+    ("岁轮机君·刻辰", "刻辰"),
+    ("吞界巨口·归墟", "归墟巨口"),
+    ("天条判官·执衡", "执衡"),
+    ("第十三天枢·无名", "无名天枢"),
     ("噬星天魔·罗睺", "罗睺"),
     ("破界魔猿·通臂", "通臂"),
     ("渡魂使·无常", "渡魂使"),
@@ -142,6 +153,7 @@ def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], 
         *PERSONAL_BOSS_BLUEPRINTS,
         *CULTIVATION_PARTY_BOSS_BLUEPRINTS,
         *MAGIC_PARTY_BOSS_BLUEPRINTS,
+        *STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
     )
     behavior_keys = {value.key for value in BEHAVIOR_BLUEPRINTS}
     if len(_REGULAR_NAMES) != len(regular_keys) or len(_BOSS_NAMES) != len(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE):
@@ -173,6 +185,7 @@ def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], 
     for source, blueprints in (
         ("cultivation", CULTIVATION_PARTY_BOSS_BLUEPRINTS),
         ("magic", MAGIC_PARTY_BOSS_BLUEPRINTS),
+        ("stellar_ring", STELLAR_RING_PARTY_BOSS_BLUEPRINTS),
     ):
         for blueprint in blueprints:
             name, compact_name = boss_names[blueprint.key]

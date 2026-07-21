@@ -46,7 +46,7 @@ async def inscription(message: str, current: CurrentCharacterResult) -> None:
         await send_game_reply(_unavailable("铭刻"))
         return
     requested = str(message or "").strip()
-    view = current_game_services().world_view(overview.dimension)
+    view = current_game_services().world_view(overview.character_world)
     if not requested:
         await send_game_reply(
             _inscription_home(overview.inventory, overview.inscription_preference, view)
@@ -86,7 +86,7 @@ async def inscription_ability(message: str, current: CurrentCharacterResult) -> 
         await send_game_reply(_unavailable("铭刻能力"))
         return
     requested = str(message or "").strip()
-    view = current_game_services().world_view(overview.dimension)
+    view = current_game_services().world_view(overview.character_world)
     if not requested:
         await send_game_reply(
             _ability_home(overview.inventory, overview.inscription_preference, view)

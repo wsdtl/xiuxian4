@@ -50,7 +50,7 @@ CULTIVATION_ITEM_ENTRIES = {
     ),
     COMPANION_SANCTUARY_ITEM_ID: SkinEntry(
         name="万灵引",
-        description="在当前世界引动一次伙伴秘境；秘境名额不足时不会消耗。",
+        description="在当前世界引动一次宠物秘境；名册空间不足时不会消耗。",
         icon="🧿",
     ),
     DIMENSION_SHIFT_ITEM_ID: SkinEntry(

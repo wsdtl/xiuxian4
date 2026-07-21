@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class DimensionShiftStorageKinds:
-    dimension: str
+    character_world: str
+    world: str
     action: str
     exploration: str
     inventory: str

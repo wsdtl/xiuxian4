@@ -51,9 +51,9 @@ def main() -> None:
     assert len(BEHAVIOR_BLUEPRINTS) == 32
     assert len(REGULAR_ENEMIES) == 60
     assert len(PERSONAL_BOSS_ENEMIES) == 30
-    assert len(PARTY_BOSS_ENEMIES) == 20
-    assert len(DISASTER_ENEMY_DEFINITIONS) == 20
-    assert len(catalog.enemies.definitions.ids()) == 130
+    assert len(PARTY_BOSS_ENEMIES) == 30
+    assert len(DISASTER_ENEMY_DEFINITIONS) == 30
+    assert len(catalog.enemies.definitions.ids()) == 150
     assert len(catalog.enemies.behaviors.ids()) == 32
     assert len(catalog.enemies.encounters.ids()) == 4
     personal_ids = {value.id for value in PERSONAL_BOSS_ENEMIES}

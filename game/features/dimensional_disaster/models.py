@@ -14,6 +14,7 @@ class DimensionalDisasterStorageKinds:
     action: str
     activity: str
     character: str
+    character_world: str
     exploration: str
     inventory: str
     loadout: str

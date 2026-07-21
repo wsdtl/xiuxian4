@@ -31,8 +31,8 @@ async def view_world_events(
 
     result = await _load_activities(current)
     view = (
-        current_game_services().world_view(current.dimension)
-        if current.dimension is not None
+        current_game_services().world_view(current.character_world)
+        if current.character_world is not None
         else None
     )
     await send_game_reply(_activity_message(result, instance_id.strip(), view))

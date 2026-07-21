@@ -19,7 +19,11 @@ from game.content import (  # noqa: E402
 )
 from game.content.catalog.equipment.definitions import equipment_definition_id  # noqa: E402
 from game.content.catalog.weapon.mechanics import WEAPON_MAXIMUM_LEVEL_TABLE  # noqa: E402
-from game.content.world_skins import CULTIVATION_SKIN_ID, MAGIC_SKIN_ID  # noqa: E402
+from game.content.world_skins import (  # noqa: E402
+    CULTIVATION_SKIN_ID,
+    MAGIC_SKIN_ID,
+    STELLAR_RING_SKIN_ID,
+)
 from game.core.gameplay import (  # noqa: E402
     INSCRIPTION_DATA_KEY,
     InscriptionData,
@@ -45,6 +49,7 @@ def main() -> None:
     catalog = assemble_official_catalog()
     cultivation = select_world_skin(catalog, CULTIVATION_SKIN_ID)
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
+    stellar = select_world_skin(catalog, STELLAR_RING_SKIN_ID)
 
     starter = catalog.weapons.create_state(
         asset_id="starter-display",
@@ -75,6 +80,7 @@ def main() -> None:
     ).state
     cultivation_weapon = cultivation.gear_projector.weapon(weapon)
     magic_weapon = magic.gear_projector.weapon(weapon)
+    stellar_weapon = stellar.gear_projector.weapon(weapon)
     assert cultivation_weapon.name == (
         f"{cultivation.projector.name(weapon.quality_id)}品·"
         f"{cultivation.projector.name(weapon.definition_id)}"
@@ -83,6 +89,11 @@ def main() -> None:
         f"{magic.projector.name(weapon.quality_id)}·"
         f"{magic.projector.name(weapon.definition_id)}"
     )
+    assert stellar_weapon.name == (
+        f"{stellar.projector.name(weapon.quality_id)}·"
+        f"{stellar.projector.name(weapon.definition_id)}"
+    )
+    assert stellar_weapon.score_text.startswith("结构评分:")
     assert cultivation_weapon.score_label == "器蕴评分"
     assert magic_weapon.score_label == "魔能评分"
     assert cultivation_weapon.score == weapon.roll.intrinsic_value.total

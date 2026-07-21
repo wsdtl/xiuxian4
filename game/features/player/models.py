@@ -16,7 +16,7 @@ from game.core.gameplay import (
 from game.rules.activity import GlobalActivityView
 from game.rules.character import (
     CharacterCreationReceipt,
-    CharacterDimensionState,
+    CharacterWorldState,
     CharacterSettingsState,
 )
 
@@ -32,7 +32,7 @@ class PlayerStorageKinds:
     loadout: str
     ledger: str
     world: str
-    dimension: str
+    character_world: str
     action: str
     settings: str
     inscription_preference: str
@@ -52,7 +52,7 @@ class CharacterOverview:
     loadout: LoadoutState
     ledger: LedgerState
     world: WorldState
-    dimension: CharacterDimensionState
+    character_world: CharacterWorldState
     inscription_preference: InscriptionPreference | None = None
     action: ActionState | None = None
 
@@ -67,14 +67,14 @@ class CharacterOverviewResult:
 class CurrentCharacterResult:
     status: str
     character: CharacterState | None = None
-    dimension: CharacterDimensionState | None = None
+    character_world: CharacterWorldState | None = None
 
 
 @dataclass(frozen=True)
 class PlayerReplyState:
     character: CharacterState
     settings: CharacterSettingsState
-    dimension: CharacterDimensionState
+    character_world: CharacterWorldState
     activity_spotlights: tuple[GlobalActivityView, ...] = ()
     additional_activity_count: int = 0
     unread_notification_count: int = 0

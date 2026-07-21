@@ -16,12 +16,13 @@ from game.rules.companion import (
 class CompanionStorageKinds:
     action: str
     character: str
-    dimension: str
+    character_world: str
     exploration: str
     inventory: str
     loadout: str
     roster: str
     sanctuary: str
+    world: str
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,10 @@ class CompanionOperationReceipt:
     sanctuary_session_id: str = ""
     companion_id: str = ""
     battle_report_id: str = ""
+    definition_id: str = ""
+    value_before: int = 0
+    value_after: int = 0
+    quantity: int = 0
 
     def __post_init__(self) -> None:
         if not self.transaction_id.strip() or not self.actor_id.strip():
@@ -55,6 +60,10 @@ class CompanionOperationResult:
     battle_report: BattleReportReference | None = None
     battle: object | None = None
     previous_preset_id: str | None = None
+    definition_id: str = ""
+    value_before: int = 0
+    value_after: int = 0
+    quantity: int = 0
     failure_message: str = ""
     replayed: bool = False
 

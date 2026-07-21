@@ -26,6 +26,7 @@ from game.content.official import assemble_official_catalog  # noqa: E402
 from game.content.world_skins import (  # noqa: E402
     CULTIVATION_SKIN_ID,
     MAGIC_SKIN_ID,
+    STELLAR_RING_SKIN_ID,
 )
 from game.core.gameplay import (  # noqa: E402
     AbilityUse,
@@ -137,7 +138,11 @@ def _assert_instance_generation(catalog) -> None:
         assert result.state.quality_id == result.roll.quality_id
         assert result.state.roll == result.roll
         assert len(rolled_ids & profile.core_property_ids) == 1
-        for skin_id in (CULTIVATION_SKIN_ID, MAGIC_SKIN_ID):
+        for skin_id in (
+            CULTIVATION_SKIN_ID,
+            MAGIC_SKIN_ID,
+            STELLAR_RING_SKIN_ID,
+        ):
             projector = catalog.skins.projector(skin_id)
             for property_id in rolled_ids:
                 assert projector.name(property_id)

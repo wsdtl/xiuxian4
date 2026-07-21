@@ -16,11 +16,11 @@ from game.rules.activity import GLOBAL_ACTIVITY_SCOPE_ID
 from game.rules.character import (
     CharacterCreationReceipt,
     CharacterCreationRequest,
-    CharacterDimensionState,
+    CharacterWorldState,
     CharacterIdentityViolation,
     CharacterSettingsState,
     PRIMARY_LEDGER_ID,
-    PRIMARY_WORLD_ID,
+    MULTIVERSE_WORLD_STATE_ID,
     character_creation_context,
 )
 
@@ -114,9 +114,9 @@ class PlayerFeature:
         with self.database.unit_of_work(write=False) as uow:
             dimension = self.snapshots.require(
                 uow,
-                self.storage.dimension,
+                self.storage.character_world,
                 character.id,
-                CharacterDimensionState,
+                CharacterWorldState,
             )
         return CurrentCharacterResult("ok", character, dimension)
 
@@ -145,13 +145,13 @@ class PlayerFeature:
                     uow, self.storage.ledger, PRIMARY_LEDGER_ID, LedgerState
                 ),
                 world=self.snapshots.require(
-                    uow, self.storage.world, PRIMARY_WORLD_ID, WorldState
+                    uow, self.storage.world, MULTIVERSE_WORLD_STATE_ID, WorldState
                 ),
-                dimension=self.snapshots.require(
+                character_world=self.snapshots.require(
                     uow,
-                    self.storage.dimension,
+                    self.storage.character_world,
                     character.id,
-                    CharacterDimensionState,
+                    CharacterWorldState,
                 ),
                 inscription_preference=self.snapshots.load(
                     uow,
@@ -188,9 +188,9 @@ class PlayerFeature:
             )
             dimension = self.snapshots.require(
                 uow,
-                self.storage.dimension,
+                self.storage.character_world,
                 character.id,
-                CharacterDimensionState,
+                CharacterWorldState,
             )
             action = self.snapshots.load(
                 uow, self.storage.action, character.id, ActionState

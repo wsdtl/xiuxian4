@@ -24,7 +24,7 @@ class PartyBattleChallengeState:
     party_id: str
     session_id: str
     selected_by: str
-    source_skin_id: StableId
+    source_world_id: StableId
     level: int
     encounter: EnemyEncounterInstance
     member_slots: Mapping[str, int]
@@ -38,7 +38,7 @@ class PartyBattleChallengeState:
     def __post_init__(self) -> None:
         if not self.party_id.strip() or not self.session_id.strip() or not self.selected_by.strip():
             raise ValueError("组队挑战缺少队伍、会话或发起人")
-        object.__setattr__(self, "source_skin_id", stable_id(self.source_skin_id))
+        object.__setattr__(self, "source_world_id", stable_id(self.source_world_id))
         if not 1 <= self.level <= CHARACTER_MAXIMUM_LEVEL:
             raise ValueError(
                 f"组队挑战等级必须位于 1 到 {CHARACTER_MAXIMUM_LEVEL}"

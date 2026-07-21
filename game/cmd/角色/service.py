@@ -296,7 +296,7 @@ def _result_message(result: CharacterCreationCommandResult) -> DocumentMessage:
 
 def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
     services = current_game_services()
-    view = services.world_view(receipt.dimension)
+    view = services.world_view(receipt.character_world)
     projector = view.projector
     character = receipt.character
     quantities = {
@@ -479,7 +479,7 @@ def _parse_switch(value: object) -> bool | None:
 
 def _character_overview_message(overview: CharacterOverview) -> DocumentMessage:
     services = current_game_services()
-    view = services.world_view(overview.dimension)
+    view = services.world_view(overview.character_world)
     projector = view.projector
     character = overview.character
     progression = character.progressions[CHARACTER_LEVEL_PROGRESSION_ID]
@@ -522,9 +522,19 @@ def _character_overview_message(overview: CharacterOverview) -> DocumentMessage:
     location = "未知"
     if presence is not None:
         position = presence.position
+        anchor_id = current_game_services().content.worlds.anchor_at(
+            overview.character_world.world_id,
+            position,
+        )
         location = (
-            _projected_name(position.location_id, view)
-            if position.location_id is not None
+            _projected_name(
+                current_game_services().content.worlds.resolve(
+                    overview.character_world.world_id,
+                    anchor_id,
+                ).display_id,
+                view,
+            )
+            if anchor_id
             else f"({position.x}, {position.y})"
         )
     builder = (
@@ -575,7 +585,7 @@ def _character_overview_message(overview: CharacterOverview) -> DocumentMessage:
 
 def _combat_panel_message(overview: CharacterOverview) -> DocumentMessage:
     services = current_game_services()
-    view = services.world_view(overview.dimension)
+    view = services.world_view(overview.character_world)
     entity = services.player_combat.project(
         overview.character,
         overview.inventory,

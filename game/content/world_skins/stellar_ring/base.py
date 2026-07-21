@@ -1,0 +1,91 @@
+"""星环界的公共展示名称。"""
+
+from game.core.gameplay import (
+    COMBAT_ATTACK,
+    COMBAT_DEFENSE,
+    COMBAT_SPEED,
+    HEALTH_CURRENT,
+    HEALTH_MAXIMUM,
+    ACCESSORY_SLOT_ID,
+    BODY_SLOT_ID,
+    FEET_SLOT_ID,
+    HANDS_SLOT_ID,
+    HEAD_SLOT_ID,
+    SPIRIT_CURRENT,
+    SPIRIT_MAXIMUM,
+    WAIST_SLOT_ID,
+    WEAPON_SLOT_ID,
+    SkinEntry,
+)
+
+from ...catalog import (
+    COMMON_QUALITY_ID,
+    EPIC_QUALITY_ID,
+    FINE_QUALITY_ID,
+    LEGENDARY_QUALITY_ID,
+    PRIMARY_CURRENCY_ID,
+    RARE_QUALITY_ID,
+)
+from ...catalog.character import REST_ACTION_ID
+from ...catalog.combat.stats import (
+    COMBAT_ACCURACY,
+    COMBAT_BLOCK_CHANCE,
+    COMBAT_BLOCK_REDUCTION,
+    COMBAT_CONTROL_CHANCE,
+    COMBAT_CONTROL_RESISTANCE,
+    COMBAT_CRITICAL_CHANCE,
+    COMBAT_CRITICAL_DAMAGE,
+    COMBAT_EVASION,
+    COMBAT_FLAT_PENETRATION,
+    COMBAT_HEALING_RATE,
+    COMBAT_HEALING_RECEIVED,
+    COMBAT_INCOMING_RATE,
+    COMBAT_OUTGOING_RATE,
+    COMBAT_RATE_PENETRATION,
+    COMBAT_TENACITY,
+    SHIELD_CURRENT,
+)
+
+
+STELLAR_RING_BASE_ENTRIES = {
+    PRIMARY_CURRENCY_ID: SkinEntry(name="星铢", icon="◆"),
+    COMMON_QUALITY_ID: SkinEntry(name="普通"),
+    FINE_QUALITY_ID: SkinEntry(name="精良"),
+    RARE_QUALITY_ID: SkinEntry(name="稀有"),
+    EPIC_QUALITY_ID: SkinEntry(name="史诗"),
+    LEGENDARY_QUALITY_ID: SkinEntry(name="传说"),
+    HEALTH_MAXIMUM: SkinEntry(name="生命上限"),
+    SPIRIT_MAXIMUM: SkinEntry(name="同步上限"),
+    COMBAT_ATTACK: SkinEntry(name="攻击力"),
+    COMBAT_DEFENSE: SkinEntry(name="基础护甲"),
+    COMBAT_SPEED: SkinEntry(name="行动速度"),
+    COMBAT_ACCURACY: SkinEntry(name="精准率"),
+    COMBAT_EVASION: SkinEntry(name="闪避率"),
+    COMBAT_CRITICAL_CHANCE: SkinEntry(name="暴击率"),
+    COMBAT_CRITICAL_DAMAGE: SkinEntry(name="暴击伤害"),
+    COMBAT_BLOCK_CHANCE: SkinEntry(name="格挡率"),
+    COMBAT_BLOCK_REDUCTION: SkinEntry(name="格挡减伤"),
+    COMBAT_OUTGOING_RATE: SkinEntry(name="造成伤害"),
+    COMBAT_INCOMING_RATE: SkinEntry(name="承受伤害"),
+    COMBAT_FLAT_PENETRATION: SkinEntry(name="固定穿透"),
+    COMBAT_RATE_PENETRATION: SkinEntry(name="比例穿透"),
+    COMBAT_HEALING_RATE: SkinEntry(name="治疗效果"),
+    COMBAT_HEALING_RECEIVED: SkinEntry(name="受疗效果"),
+    COMBAT_CONTROL_CHANCE: SkinEntry(name="控制命中"),
+    COMBAT_CONTROL_RESISTANCE: SkinEntry(name="控制抵抗"),
+    COMBAT_TENACITY: SkinEntry(name="控制韧性"),
+    HEALTH_CURRENT: SkinEntry(name="当前生命"),
+    SPIRIT_CURRENT: SkinEntry(name="当前同步"),
+    SHIELD_CURRENT: SkinEntry(name="当前护盾"),
+    WEAPON_SLOT_ID: SkinEntry(name="武器"),
+    HEAD_SLOT_ID: SkinEntry(name="头部"),
+    BODY_SLOT_ID: SkinEntry(name="身体"),
+    HANDS_SLOT_ID: SkinEntry(name="手部"),
+    WAIST_SLOT_ID: SkinEntry(name="腰部"),
+    FEET_SLOT_ID: SkinEntry(name="足部"),
+    ACCESSORY_SLOT_ID: SkinEntry(name="饰品"),
+    REST_ACTION_ID: SkinEntry(name="维护"),
+}
+
+
+__all__ = ["STELLAR_RING_BASE_ENTRIES"]

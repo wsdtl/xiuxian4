@@ -1,4 +1,4 @@
-"""伙伴秘境持久化、幂等、战斗捕获、绑定与放生测试。"""
+"""宠物捕获、人物结交、通用名册与告别事务测试。"""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def main() -> None:
         opened = services.companions.open_sanctuary(
             "companion-open-1",
             character,
-            overview.dimension,
+            overview.character_world,
             "stack:companion-key",
             logical_time=NOW,
         )
@@ -58,7 +58,7 @@ def main() -> None:
         replayed = services.companions.open_sanctuary(
             "companion-open-1",
             character,
-            overview.dimension,
+            overview.character_world,
             "stack:companion-key",
             logical_time=NOW,
         )
@@ -109,18 +109,65 @@ def main() -> None:
         assert bound.roster is not None
         assert bound.roster.bindings
 
-        released = reloaded.companions.release(
-            "companion-release-1",
+        released = reloaded.companions.farewell(
+            "companion-farewell-1",
             character.id,
             captured_reference,
             bound.roster.revision,
             logical_time=NOW,
         )
-        assert released.status == "released"
+        assert released.status == "pet_departed"
         assert released.roster is not None
         assert not released.roster.instances
         assert not released.roster.bindings
         assert hunted.companion.definition_id in released.roster.captured_definition_ids
+
+        person = reloaded.content.companions.people_for_world(overview.character_world.world_id)[0]
+        gift_item_id = next(iter(person.gift_values))
+        gift_asset_id = _grant_gift(reloaded, character.id, gift_item_id, 10)
+        moved = reloaded.world_travel.move(
+            character.id,
+            reloaded.content.worlds.require_binding_for_display(
+                overview.character_world.world_id,
+                person.location_id,
+            ).anchor_id,
+            logical_time=NOW,
+        )
+        assert moved.status == "moved"
+        gifted = reloaded.companions.gift_person(
+            "companion-person-gift-1",
+            character.id,
+            gift_asset_id,
+            10,
+            logical_time=NOW,
+        )
+        assert gifted.status == "gifted", gifted.failure_message
+        assert gifted.value_after == person.bond_required
+        assert gifted.quantity < 10
+        joined = reloaded.companions.join_person(
+            "companion-person-join-1",
+            character.id,
+            logical_time=NOW,
+        )
+        assert joined.status == "joined" and joined.companion is not None
+        assert joined.companion.definition_id == person.id
+        departed = reloaded.companions.farewell(
+            "companion-person-farewell-1",
+            character.id,
+            joined.companion.reference,
+            joined.roster.revision,
+            logical_time=NOW,
+        )
+        assert departed.status == "person_departed"
+        assert departed.roster is not None
+        assert person.id in departed.roster.departed_people
+        rejoined = reloaded.companions.join_person(
+            "companion-person-rejoin-1",
+            character.id,
+            logical_time=NOW,
+        )
+        assert rejoined.status == "rejoined"
+        assert rejoined.companion == joined.companion
     print("companion feature tests passed")
 
 
@@ -206,6 +253,63 @@ def _key_quantity(services, character_id: str) -> int:
             InventoryState,
         )
     return inventory.stacks["stack:companion-key"].quantity
+
+
+def _grant_gift(services, character_id: str, definition_id: str, quantity: int) -> str:
+    asset_id = "stack:companion-gift"
+    snapshots = services.companions.snapshots
+    with services.database.unit_of_work() as uow:
+        inventory = snapshots.require(
+            uow,
+            INVENTORY_AGGREGATE,
+            character_id,
+            InventoryState,
+        )
+        container = next(
+            value for value in inventory.containers.values()
+            if value.kind == "container.backpack"
+        )
+        context = RuleContext(
+            "grant-companion-gift",
+            "test.companion.v2",
+            Ruleset("ruleset.test.companion.gift"),
+            NOW,
+            SeededRandomSource("grant-companion-gift"),
+        )
+        outcome = services.inventory_engine.execute(
+            InventoryTransaction(
+                "grant-companion-gift",
+                character_id,
+                "test.grant",
+                (
+                    GrantStack(
+                        asset_id,
+                        definition_id,
+                        container.id,
+                        quantity,
+                        SourceReceipt(
+                            "grant-companion-gift",
+                            "source.test",
+                            "companion-gift",
+                            NOW,
+                        ),
+                    ),
+                ),
+            ),
+            state=inventory,
+            context=context,
+        )
+        assert outcome.ok and outcome.value is not None, outcome.failure
+        snapshots.update(
+            uow,
+            INVENTORY_AGGREGATE,
+            character_id,
+            inventory,
+            outcome.value.state,
+            NOW,
+        )
+        uow.commit()
+    return asset_id
 
 
 if __name__ == "__main__":

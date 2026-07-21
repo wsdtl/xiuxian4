@@ -382,7 +382,7 @@ def _looks_like_listing(value: str) -> bool:
 
 
 def _view(overview: CharacterOverview):
-    return current_game_services().world_view(overview.dimension)
+    return current_game_services().world_view(overview.character_world)
 
 
 def _overview(result: CharacterOverviewResult) -> CharacterOverview | None:

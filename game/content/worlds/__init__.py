@@ -1,0 +1,18 @@
+"""官方真实世界内容包公开入口。"""
+
+from .package import (
+    PLAYABLE_WORLD_DEFINITIONS,
+    WORLD_LOCATION_BINDINGS,
+    WORLD_MAP_ANCHORS,
+    WORLD_PACKAGE,
+    WORLD_PACKAGE_ID,
+)
+
+
+__all__ = [
+    "PLAYABLE_WORLD_DEFINITIONS",
+    "WORLD_LOCATION_BINDINGS",
+    "WORLD_MAP_ANCHORS",
+    "WORLD_PACKAGE",
+    "WORLD_PACKAGE_ID",
+]

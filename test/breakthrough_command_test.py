@@ -40,7 +40,7 @@ from game.core.gameplay import (  # noqa: E402
     SourceReceipt,
 )
 from game.core.persistence import CHARACTER_AGGREGATE, INVENTORY_AGGREGATE  # noqa: E402
-from game.rules.character import CHARACTER_DIMENSION_AGGREGATE, CharacterDimensionState  # noqa: E402
+from game.rules.character import CHARACTER_WORLD_AGGREGATE, CharacterWorldState  # noqa: E402
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
 
@@ -116,13 +116,13 @@ def _character(services) -> CharacterState:
     return values[0]
 
 
-def _dimension(services, character_id: str) -> CharacterDimensionState:
+def _dimension(services, character_id: str) -> CharacterWorldState:
     with services.database.unit_of_work(write=False) as uow:
         return services.breakthrough.snapshots.require(
             uow,
-            CHARACTER_DIMENSION_AGGREGATE,
+            CHARACTER_WORLD_AGGREGATE,
             character_id,
-            CharacterDimensionState,
+            CharacterWorldState,
         )
 
 

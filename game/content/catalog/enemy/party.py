@@ -29,6 +29,7 @@ from .behaviors import ENEMY_BEHAVIOR_CONTENT
 from .blueprints import (
     CULTIVATION_PARTY_BOSS_BLUEPRINTS,
     MAGIC_PARTY_BOSS_BLUEPRINTS,
+    STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
 )
 from .loot import PARTY_BOSS_LOOT_TABLE_ID
 
@@ -144,23 +145,28 @@ MAGIC_PARTY_BOSS_ENEMIES = tuple(
     _party_boss(value, index, "magic")
     for index, value in enumerate(MAGIC_PARTY_BOSS_BLUEPRINTS)
 )
+STELLAR_RING_PARTY_BOSS_ENEMIES = tuple(
+    _party_boss(value, index, "stellar_ring")
+    for index, value in enumerate(STELLAR_RING_PARTY_BOSS_BLUEPRINTS)
+)
 PARTY_BOSS_ENEMIES = (
     *CULTIVATION_PARTY_BOSS_ENEMIES,
     *MAGIC_PARTY_BOSS_ENEMIES,
+    *STELLAR_RING_PARTY_BOSS_ENEMIES,
 )
 PARTY_BOSS_DISPLAY_IDS = frozenset(value.id for value in PARTY_BOSS_ENEMIES)
 
 
 @dataclass(frozen=True)
 class PartyBossSourceDefinition:
-    source_skin_id: StableId
+    source_world_id: StableId
     enemy_ids: frozenset[StableId]
 
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
-            "source_skin_id",
-            stable_id(self.source_skin_id, field="party boss source skin id"),
+            "source_world_id",
+            stable_id(self.source_world_id, field="party boss source world id"),
         )
         enemy_ids = frozenset(
             stable_id(value, field="party boss enemy id")
@@ -178,19 +184,19 @@ class PartyBossSourceCatalog:
         values: dict[StableId, PartyBossSourceDefinition] = {}
         enemy_owners: dict[StableId, StableId] = {}
         for definition in definitions:
-            if definition.source_skin_id in values:
+            if definition.source_world_id in values:
                 raise ValueError(
-                    f"组队首领来源重复：{definition.source_skin_id}"
+                    f"组队首领来源重复：{definition.source_world_id}"
                 )
-            values[definition.source_skin_id] = definition
+            values[definition.source_world_id] = definition
             for enemy_id in definition.enemy_ids:
                 owner = enemy_owners.get(enemy_id)
                 if owner is not None:
                     raise ValueError(
                         f"组队首领 {enemy_id} 同时属于 {owner} "
-                        f"和 {definition.source_skin_id}"
+                        f"和 {definition.source_world_id}"
                     )
-                enemy_owners[enemy_id] = definition.source_skin_id
+                enemy_owners[enemy_id] = definition.source_world_id
         if not values:
             raise ValueError("组队首领来源目录不能为空")
         self._definitions = MappingProxyType(values)
@@ -199,8 +205,8 @@ class PartyBossSourceCatalog:
     def source_ids(self) -> tuple[StableId, ...]:
         return tuple(sorted(self._definitions))
 
-    def require(self, source_skin_id: StableId) -> PartyBossSourceDefinition:
-        key = stable_id(source_skin_id, field="party boss source skin id")
+    def require(self, source_world_id: StableId) -> PartyBossSourceDefinition:
+        key = stable_id(source_world_id, field="party boss source world id")
         try:
             return self._definitions[key]
         except KeyError as exc:
@@ -213,10 +219,10 @@ class PartyBossSourceCatalog:
         except KeyError as exc:
             raise KeyError(f"敌人不是组队首领：{key}") from exc
 
-    def validate(self, content, playable_skin_ids: tuple[StableId, ...]) -> None:
+    def validate(self, content, playable_world_ids: tuple[StableId, ...]) -> None:
         playable = frozenset(
-            stable_id(value, field="playable skin id")
-            for value in playable_skin_ids
+            stable_id(value, field="playable world id")
+            for value in playable_world_ids
         )
         if set(self.source_ids()) != set(playable):
             raise ValueError("每个可进入世界必须且只能登记一组组队首领")
@@ -235,12 +241,16 @@ class PartyBossSourceCatalog:
 PARTY_BOSS_SOURCE_CATALOG = PartyBossSourceCatalog(
     (
         PartyBossSourceDefinition(
-            "skin.cultivation",
+            "world.taixuan",
             frozenset(value.id for value in CULTIVATION_PARTY_BOSS_ENEMIES),
         ),
         PartyBossSourceDefinition(
-            "skin.magic",
+            "world.magic",
             frozenset(value.id for value in MAGIC_PARTY_BOSS_ENEMIES),
+        ),
+        PartyBossSourceDefinition(
+            "world.stellar_ring",
+            frozenset(value.id for value in STELLAR_RING_PARTY_BOSS_ENEMIES),
         ),
     )
 )

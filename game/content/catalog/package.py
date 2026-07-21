@@ -85,9 +85,9 @@ from .weapon.definitions import (
 )
 from .weapon.mechanics import WEAPON_MECHANIC_CONTENT
 from .world.definitions import (
-    ALL_WORLD_LOCATIONS,
-    PRIMARY_WORLD_SPACE,
+    LOCATION_DISPLAY_DEFINITIONS,
     WORLD_DISPLAY_CONTENT_IDS,
+    WORLD_SPACES,
 )
 from .social import PARTY_INVITATION_REQUEST, PARTY_TYPE_TRIO, SPARRING_REQUEST
 from .combat.valuation import BASE_ATTRIBUTE_VALUATIONS, BASE_REFERENCE_VALUATIONS
@@ -129,7 +129,7 @@ validate_nacre_item_categories(OFFICIAL_ITEMS)
 CATALOG_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=CATALOG_PACKAGE_ID,
-        version=ContentVersion(3, 18, 0),
+        version=ContentVersion(3, 23, 0),
     ),
     item_component_types=(
         ITEM_RECYCLE_COMPONENT_TYPE,
@@ -144,6 +144,7 @@ CATALOG_PACKAGE = ContentPackage(
         *CHARACTER_REALM_CONTENT_DEFINITIONS,
         *LOADOUT_SLOT_CONTENT_DEFINITIONS,
         *COMPANION_DISPLAY_DEFINITIONS,
+        *LOCATION_DISPLAY_DEFINITIONS,
     ),
     currencies=BASE_CURRENCIES,
     qualities=BASE_QUALITIES,
@@ -220,8 +221,7 @@ CATALOG_PACKAGE = ContentPackage(
     target_constraints=WEAPON_MECHANIC_CONTENT.constraints,
     loot_tables=(*ENEMY_LOOT_TABLES, DRAW_CATALOG_CONTENT.loot_table),
     draw_pools=(DRAW_CATALOG_CONTENT.pool,),
-    world_spaces=(PRIMARY_WORLD_SPACE,),
-    world_locations=ALL_WORLD_LOCATIONS,
+    world_spaces=WORLD_SPACES,
     social_request_types=(SPARRING_REQUEST, PARTY_INVITATION_REQUEST),
     party_types=(PARTY_TYPE_TRIO,),
     display_content_ids=(

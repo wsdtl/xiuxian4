@@ -35,14 +35,20 @@ ACTIVE_BUSINESS_FEATURES = (
     BusinessFeaturePlan(
         "companion",
         "companion",
-        "协调伙伴秘境、捕获、名册容量、配装独占与放生",
+        "协调宠物捕获、人物结交、通用名册、配装独占与告别",
         ("伙伴",),
     ),
     BusinessFeaturePlan(
         "dimension_shift",
         "dimension_shift",
-        "原子扣除跃迁凭证并切换角色世界投影",
+        "原子扣除跃迁凭证、切换真实世界并迁移存在体空间",
         ("跃迁",),
+    ),
+    BusinessFeaturePlan(
+        "world_travel",
+        "world_travel",
+        "统一校验世界地点意图、主要行动占用与角色位置移动",
+        ("地图", "探险", "伙伴"),
     ),
     BusinessFeaturePlan(
         "breakthrough",
@@ -76,6 +82,12 @@ ACTIVE_BUSINESS_FEATURES = (
         "协调持续探险、战斗、掉落与奖励联合结算",
         ("探险",),
         ("game_exploration_settlement",),
+    ),
+    BusinessFeaturePlan(
+        "world_progress",
+        "world_progress",
+        "消费探险胜利事实，累计世界区域行纪、发放阶段奖励并维护永久排行",
+        ("行纪",),
     ),
     BusinessFeaturePlan(
         "lottery",

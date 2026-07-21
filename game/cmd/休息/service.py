@@ -116,9 +116,9 @@ def _character(current: CurrentCharacterResult):
 
 
 def _view(current: CurrentCharacterResult):
-    if current.dimension is None:
+    if current.character_world is None:
         raise RuntimeError("休息命令缺少角色界相")
-    return current_game_services().world_view(current.dimension)
+    return current_game_services().world_view(current.character_world)
 
 
 def _resource_name(view, resource_id: str) -> str:

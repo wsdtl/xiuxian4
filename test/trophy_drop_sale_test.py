@@ -55,12 +55,15 @@ def main() -> None:
         )
         services.character_creation.workflow.id_factory = lambda kind: f"{kind}-fixed"
         services.database.initialize()
-        character_id = _create_character(services)
+        character_id, world_id = _create_character(services)
         _strengthen_character(services, character_id)
 
-        services.exploration.move(
+        services.world_travel.move(
             character_id,
-            GREEN_CLOUD_PLAIN_ID,
+            services.content.worlds.require_binding_for_display(
+                world_id,
+                GREEN_CLOUD_PLAIN_ID,
+            ).anchor_id,
             logical_time=TIME,
         )
         started = services.exploration.start(character_id, logical_time=TIME)
@@ -142,7 +145,7 @@ class _FailingLedgerEngine:
         return type("Outcome", (), {"failure": failure, "value": None})()
 
 
-def _create_character(services) -> str:
+def _create_character(services) -> tuple[str, str]:
     evidence = IdentityEvidence(
         "trophy-evidence",
         ExternalIdentity(
@@ -158,7 +161,7 @@ def _create_character(services) -> str:
     )
     created = services.create_character(evidence, requested_name="TrophyPlayer")
     assert created.status == "created" and created.receipt is not None
-    return created.receipt.character.id
+    return created.receipt.character.id, created.receipt.character_world.world_id
 
 
 def _strengthen_character(services, character_id: str) -> None:

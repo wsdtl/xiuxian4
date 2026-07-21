@@ -8,15 +8,9 @@ from game.core.gameplay import (
     ActionState,
     HEALTH_CURRENT,
     CharacterState,
-    MovePresence,
-    RuleContext,
-    Ruleset,
-    SeededRandomSource,
-    WorldPosition,
     WorldState,
-    WorldTransaction,
 )
-from game.rules.character import PRIMARY_WORLD_ID
+from game.rules.character import MULTIVERSE_WORLD_STATE_ID
 from game.rules.exploration import (
     EXPLORATION_AGGREGATE,
     EXPLORATION_RULESET_VERSION,
@@ -27,11 +21,11 @@ from game.rules.exploration import (
     start_exploration,
     stop_exploration,
 )
+from game.rules.character import CharacterWorldState
 
 from .models import (
     MAX_CATCH_UP_BATCHES,
     MAX_DISCOVERABLE_EXPLORATIONS,
-    ExplorationMovementResult,
     ExplorationOperationResult,
     ExplorationStorageKinds,
 )
@@ -39,12 +33,13 @@ from .settlement import ExplorationSettlementService
 
 
 class ExplorationFeature:
-    """组织移动、启停和批次结算，不包含命令或展示协议。"""
+    """组织探险启停和批次结算，不承担通用世界移动。"""
 
     def __init__(
         self,
         database,
         content,
+        world_views,
         snapshots,
         rewards,
         inventory_engine,
@@ -52,6 +47,7 @@ class ExplorationFeature:
         battle_reports,
         storage: ExplorationStorageKinds,
         reward_keys_factory,
+        settlement_observer=None,
     ) -> None:
         self.database = database
         self.content = content
@@ -60,6 +56,7 @@ class ExplorationFeature:
         self.settlement = ExplorationSettlementService(
             database,
             content,
+            world_views,
             snapshots,
             rewards,
             inventory_engine,
@@ -67,6 +64,7 @@ class ExplorationFeature:
             battle_reports,
             storage,
             reward_keys_factory,
+            settlement_observer,
         )
 
     def start(self, character_id: str, *, logical_time: datetime) -> ExplorationOperationResult:
@@ -87,14 +85,26 @@ class ExplorationFeature:
             if character.resources[HEALTH_CURRENT] <= 0:
                 return ExplorationOperationResult("health_depleted", previous)
             world = self.snapshots.require(
-                uow, self.storage.world, PRIMARY_WORLD_ID, WorldState
+                uow, self.storage.world, MULTIVERSE_WORLD_STATE_ID, WorldState
             )
             presence = _presence(world, character_id)
-            location_id = presence.position.location_id
-            if location_id is None:
+            character_world = self.snapshots.require(
+                uow,
+                self.storage.character_world,
+                character_id,
+                CharacterWorldState,
+            )
+            resolved = self.content.worlds.resolve_position(
+                character_world.world_id,
+                presence.position,
+                function_id="location.function.exploration",
+            )
+            if resolved is None:
                 return ExplorationOperationResult("not_in_region", previous)
             try:
-                region = self.content.exploration_regions.for_location(location_id)
+                region = self.content.exploration_regions.require(
+                    resolved.require_content_ref()
+                )
             except KeyError:
                 return ExplorationOperationResult("not_in_region", previous)
             session_id = f"exploration:{character_id}:{logical_time.isoformat()}"
@@ -102,7 +112,7 @@ class ExplorationFeature:
                 character_id,
                 session_id,
                 region.id,
-                location_id,
+                region.location_id,
                 logical_time=logical_time,
             )
             if previous is None:
@@ -121,58 +131,6 @@ class ExplorationFeature:
                 )
             uow.commit()
             return ExplorationOperationResult("started", current)
-
-    def move(
-        self,
-        character_id: str,
-        location_id: str,
-        *,
-        logical_time: datetime,
-    ) -> ExplorationMovementResult:
-        location = self.content.catalog.world.locations.require(location_id)
-        with self.database.unit_of_work() as uow:
-            exploration = self.snapshots.load(
-                uow, EXPLORATION_AGGREGATE, character_id, ExplorationState
-            )
-            if exploration is not None and exploration.status is ExplorationStatus.RUNNING:
-                return ExplorationMovementResult("exploring")
-            world = self.snapshots.require(
-                uow, self.storage.world, PRIMARY_WORLD_ID, WorldState
-            )
-            presence = _presence(world, character_id)
-            if presence.position.location_id == location.id:
-                return ExplorationMovementResult("already_there", location.id)
-            context = _context(
-                f"exploration:move:{character_id}:{location.id}:{world.revision}",
-                logical_time,
-            )
-            outcome = self.content.catalog.world_engine.execute(
-                WorldTransaction(
-                    context.trace_id,
-                    character_id,
-                    world.revision,
-                    (
-                        MovePresence(
-                            presence.id,
-                            WorldPosition(location.space_id, location_id=location.id),
-                        ),
-                    ),
-                ),
-                state=world,
-                context=context,
-            )
-            if outcome.failure or outcome.value is None:
-                return ExplorationMovementResult("failed")
-            self.snapshots.update(
-                uow,
-                self.storage.world,
-                PRIMARY_WORLD_ID,
-                world,
-                outcome.value.state,
-                logical_time,
-            )
-            uow.commit()
-            return ExplorationMovementResult("moved", location.id)
 
     def stop(self, character_id: str, *, logical_time: datetime) -> ExplorationOperationResult:
         settled = self.settle_due(character_id, logical_time=logical_time)
@@ -237,16 +195,6 @@ class ExplorationFeature:
 
 def _presence(world: WorldState, character_id: str):
     return next(value for value in world.presences.values() if value.owner_id == character_id)
-
-
-def _context(trace_id: str, logical_time: datetime) -> RuleContext:
-    return RuleContext(
-        trace_id,
-        EXPLORATION_RULESET_VERSION,
-        Ruleset("ruleset.standard"),
-        logical_time,
-        SeededRandomSource(trace_id),
-    )
 
 
 __all__ = ["ExplorationFeature"]

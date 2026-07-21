@@ -1,0 +1,41 @@
+"""星环界世界皮肤的唯一组装入口。"""
+
+from game.core.gameplay import SkinPack
+
+from .base import STELLAR_RING_BASE_ENTRIES
+from .character import STELLAR_RING_CHARACTER_ENTRIES
+from .combat import STELLAR_RING_COMBAT_ENTRIES
+from .companions import STELLAR_RING_COMPANION_ENTRIES
+from .equipment import STELLAR_RING_EQUIPMENT_ENTRIES
+from .enemies import STELLAR_RING_ENEMY_ENTRIES
+from .items import STELLAR_RING_ITEM_ENTRIES
+from .trophies import STELLAR_RING_TROPHY_ENTRIES
+from .weapons import STELLAR_RING_WEAPON_ENTRIES
+from .world import STELLAR_RING_WORLD_ENTRIES
+
+
+STELLAR_RING_SKIN_ID = "skin.stellar_ring"
+STELLAR_RING_SKIN_VERSION = 2
+
+
+STELLAR_RING_SKIN = SkinPack(
+    id=STELLAR_RING_SKIN_ID,
+    version=STELLAR_RING_SKIN_VERSION,
+    name="星环界",
+    icon="◎",
+    entries={
+        **STELLAR_RING_BASE_ENTRIES,
+        **STELLAR_RING_CHARACTER_ENTRIES,
+        **STELLAR_RING_COMBAT_ENTRIES,
+        **STELLAR_RING_COMPANION_ENTRIES,
+        **STELLAR_RING_EQUIPMENT_ENTRIES,
+        **STELLAR_RING_ENEMY_ENTRIES,
+        **STELLAR_RING_ITEM_ENTRIES,
+        **STELLAR_RING_TROPHY_ENTRIES,
+        **STELLAR_RING_WEAPON_ENTRIES,
+        **STELLAR_RING_WORLD_ENTRIES,
+    },
+)
+
+
+__all__ = ["STELLAR_RING_SKIN", "STELLAR_RING_SKIN_ID", "STELLAR_RING_SKIN_VERSION"]

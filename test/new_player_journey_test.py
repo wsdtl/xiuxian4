@@ -89,7 +89,7 @@ async def _main() -> None:
             assert "当前装配" in _content(await _dispatch("装配", "journey-loadout"))
             assert "配装" in _content(await _dispatch("配装 0", "journey-preset"))
 
-            world = services.world_view(before.dimension)
+            world = services.world_view(before.character_world)
             region_name = world.projector.name(GREEN_CLOUD_PLAIN_ID)
             assert "抵达" in _content(
                 await _dispatch(f"前往 {region_name}", "journey-move")

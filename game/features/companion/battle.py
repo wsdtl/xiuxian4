@@ -91,7 +91,7 @@ class CompanionSanctuaryBattleSimulator:
         )
         if started.failure or started.value is None:
             raise RuntimeError(
-                started.failure.message if started.failure else "伙伴秘境战斗启动失败"
+                started.failure.message if started.failure else "宠物秘境战斗启动失败"
             )
         session = started.value
         rules = self.lineup_projector.ai_rules(lineup)
@@ -99,7 +99,7 @@ class CompanionSanctuaryBattleSimulator:
         while session.state.status is BattleStatus.ACTIVE:
             actor_id = session.state.current_actor_id
             if actor_id is None:
-                raise RuntimeError("伙伴秘境战斗缺少当前行动者")
+                raise RuntimeError("宠物秘境战斗缺少当前行动者")
             action = self.content.battle_ai_engine.decide(
                 rules[actor_id],
                 session.state,
@@ -107,11 +107,11 @@ class CompanionSanctuaryBattleSimulator:
                 context=context,
             )
             if action is None:
-                raise RuntimeError(f"伙伴秘境无法为 {actor_id} 选择行动")
+                raise RuntimeError(f"宠物秘境无法为 {actor_id} 选择行动")
             outcome = session.execute_turn(action, context=context)
             if outcome.failure or outcome.value is None:
                 raise RuntimeError(
-                    outcome.failure.message if outcome.failure else "伙伴秘境战斗执行失败"
+                    outcome.failure.message if outcome.failure else "宠物秘境战斗执行失败"
                 )
         state = session.state
         player = state.entities[character.id]

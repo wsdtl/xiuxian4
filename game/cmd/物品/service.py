@@ -89,6 +89,15 @@ _MEDICINE_RESOURCE = {
     LARGE_SPIRIT_MEDICINE_ITEM_ID: (SPIRIT_CURRENT, SPIRIT_MAXIMUM, LARGE_MEDICINE_RECOVERY_RATIO),
 }
 
+_GEAR_SOURCE_NAMES = {
+    "source.character_creation": "初始获得",
+    "source.exploration": "探险",
+    "reward.party_battle": "组队挑战",
+    "source.draw": "抽奖",
+    "source.dimensional_disaster": "多次元灾厄",
+    "source.breakthrough": "境界突破",
+}
+
 
 async def nacre(message: str, result: CharacterOverviewResult) -> None:
     overview = _overview(result)
@@ -439,7 +448,7 @@ async def _use_specialized_item(item_asset, overview: CharacterOverview) -> None
 
 async def _use_companion_sanctuary(item_asset, current: CurrentCharacterResult) -> None:
     character = current.character
-    dimension = current.dimension
+    dimension = current.character_world
     if character is None or dimension is None:
         await send_game_reply(_unavailable("使用"))
         return
@@ -456,13 +465,13 @@ async def _use_companion_sanctuary(item_asset, current: CurrentCharacterResult) 
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
-            C.join(C.fail("伙伴秘境开启失败"), C.kv("character", character.id))
+            C.join(C.fail("宠物秘境开启失败"), C.kv("character", character.id))
         )
         await send_game_reply(_invalid("使用", "万灵引没有成功生效"))
         return
     if result.status != "opened" or result.sanctuary is None:
         await send_game_reply(
-            _invalid("使用", result.failure_message or "当前不能开启伙伴秘境")
+            _invalid("使用", result.failure_message or "当前不能开启宠物秘境")
         )
         return
     await send_game_reply(_opened_sanctuary_message(result.sanctuary, dimension))
@@ -656,6 +665,7 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
             ("品阶", display.quality_name),
             ("等级", f"Lv{state.level}/{state.maximum_level}"),
         )
+        _append_gear_origin(builder, asset)
         if state.maximum_level != state.natural_maximum_level:
             builder.field("天然上限", state.natural_maximum_level)
         profile = services.content.catalog.weapons.require(state.definition_id).quality_profiles[state.quality_id]
@@ -664,6 +674,13 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
         if display.score_text:
             builder.line(display.score_text)
         _append_roll(builder, state, overview)
+        _append_gear_comparison(
+            builder,
+            asset,
+            display,
+            overview,
+            STANDARD_LOADOUT_SLOT_ORDER[0],
+        )
         abilities = WeaponContributionProvider(services.content.catalog.weapons).contribution(state).contribution.abilities
         if abilities:
             builder.section("能力", icon="skill")
@@ -687,9 +704,17 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
         )
         if state.set_id is not None:
             builder.field("套装", view.projector.name(state.set_id))
+        _append_gear_origin(builder, asset)
         if display.score_text:
             builder.line(display.score_text)
         _append_roll(builder, state, overview)
+        _append_gear_comparison(
+            builder,
+            asset,
+            display,
+            overview,
+            equipment.slot_id,
+        )
         _append_gear_status(builder, asset, overview)
         actions.extend(_gear_actions(asset, overview))
     else:
@@ -705,6 +730,18 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
     if availability is not AssetAvailability.AVAILABLE:
         builder.field("状态", _availability_name(availability))
     return builder.actions(actions).build()
+
+
+def _append_gear_origin(builder, asset: ItemInstance) -> None:
+    """将资产凭证投影为玩家可读来源，不暴露内部来源编号。"""
+
+    receipt = asset.receipt
+    source = _GEAR_SOURCE_NAMES.get(str(receipt.source_kind), "其他途径")
+    local_time = receipt.logical_time.astimezone(ZoneInfo(config.project.timezone))
+    builder.row(
+        ("来源", source),
+        ("获得", local_time.strftime("%Y-%m-%d %H:%M")),
+    )
 
 
 def _append_roll(
@@ -736,7 +773,168 @@ def _gear_actions(asset: ItemInstance, overview: CharacterOverview) -> list[Acti
         equip_action = Action("item.unequip", "卸下", f"卸下 {slot_id}", behavior="fill")
     else:
         equip_action = Action("item.equip", "装备", f"装备 {reference}", behavior="fill")
-    return [equip_action, Action("item.inscribe", "铭刻", "铭刻")]
+    actions = [equip_action, Action("item.inscribe", "铭刻", "铭刻")]
+    assigned = any(
+        asset.id in preset.slots.values()
+        for preset in overview.loadout.presets.values()
+    )
+    if (
+        not assigned
+        and overview.inventory.availability(asset.id) is AssetAvailability.AVAILABLE
+    ):
+        actions.append(
+            Action(
+                "item.recycle",
+                "回收",
+                f"回收 {reference}",
+                behavior="send",
+                style="secondary",
+            )
+        )
+    return actions
+
+
+def _append_gear_comparison(
+    builder,
+    candidate: ItemInstance,
+    candidate_display,
+    overview: CharacterOverview,
+    slot_id: str,
+) -> None:
+    """展示同槽当前装备的客观差异，不替玩家判断构筑强弱。"""
+
+    current_id = overview.loadout.slots.get(slot_id)
+    if current_id is None or current_id == candidate.id:
+        return
+    current = overview.inventory.instances.get(current_id)
+    if current is None:
+        return
+    catalog = current_game_services().content.catalog.items
+    candidate_definition = catalog.require(candidate.definition_id)
+    current_definition = catalog.require(current.definition_id)
+    candidate_is_weapon = candidate_definition.tags.has("item.weapon")
+    if candidate_is_weapon != current_definition.tags.has("item.weapon"):
+        return
+    candidate_state = (
+        weapon_state_from_instance(candidate)
+        if candidate_is_weapon
+        else equipment_state_from_instance(candidate)
+    )
+    current_state = (
+        weapon_state_from_instance(current)
+        if candidate_is_weapon
+        else equipment_state_from_instance(current)
+    )
+    view = _view(overview)
+    current_display = (
+        view.gear_projector.weapon(
+            current_state,
+            current,
+            inscription_preference=overview.inscription_preference,
+        )
+        if candidate_is_weapon
+        else view.gear_projector.equipment(
+            current_state,
+            current,
+            inscription_preference=overview.inscription_preference,
+        )
+    )
+    current_reference = _reference(overview.inventory, current)
+    builder.section("同槽对比", icon="equipment")
+    builder.line(
+        "当前",
+        FieldSeparator(),
+        M.command(current_display.name, f"查看 {current_reference}"),
+    )
+    builder.row(
+        ("候选评分", _score_text(candidate_display.score)),
+        ("当前评分", _score_text(current_display.score)),
+    )
+    if candidate_display.score is not None and current_display.score is not None:
+        builder.field(
+            "评分差",
+            _number(candidate_display.score - current_display.score, signed=True),
+        )
+    if candidate_is_weapon:
+        builder.row(
+            (
+                "候选等级",
+                f"Lv{candidate_state.level}/{candidate_state.maximum_level}",
+            ),
+            (
+                "当前等级",
+                f"Lv{current_state.level}/{current_state.maximum_level}",
+            ),
+        )
+    else:
+        builder.row(
+            ("候选套装", _set_name(candidate_state.set_id, view)),
+            ("当前套装", _set_name(current_state.set_id, view)),
+        )
+        _append_set_progress(builder, candidate_state, current_state, overview)
+
+
+def _append_set_progress(
+    builder,
+    candidate_state: EquipmentState,
+    current_state: EquipmentState,
+    overview: CharacterOverview,
+) -> None:
+    """展示候选替换当前槽位后，受影响套装的件数变化。"""
+
+    if candidate_state.set_id == current_state.set_id:
+        affected_ids = {candidate_state.set_id} if candidate_state.set_id is not None else set()
+    else:
+        affected_ids = {
+            value
+            for value in (candidate_state.set_id, current_state.set_id)
+            if value is not None
+        }
+    if not affected_ids:
+        return
+
+    catalog = current_game_services().content.catalog
+    before: Counter[str] = Counter()
+    for asset_id in overview.loadout.slots.values():
+        asset = overview.inventory.instances.get(asset_id)
+        if asset is None:
+            continue
+        definition = catalog.items.require(asset.definition_id)
+        if not definition.tags.has("item.equipment"):
+            continue
+        state = equipment_state_from_instance(asset)
+        if state.set_id is not None:
+            before[state.set_id] += 1
+    after = before.copy()
+    if current_state.set_id is not None:
+        after[current_state.set_id] -= 1
+    if candidate_state.set_id is not None:
+        after[candidate_state.set_id] += 1
+
+    rows = []
+    for set_id in sorted(affected_ids):
+        definition = catalog.equipment.sets.require(set_id)
+        before_count = before.get(set_id, 0)
+        after_count = after.get(set_id, 0)
+        if before_count == after_count:
+            continue
+        maximum = definition.bonuses[-1].required_pieces
+        rows.append(
+            f"{_set_name(set_id, _view(overview))}："
+            f"{before_count}/{maximum} -> {after_count}/{maximum}"
+        )
+    if rows:
+        builder.section("套装进度", icon="equipment")
+        for row in rows:
+            builder.line(row)
+
+
+def _set_name(set_id: str | None, view) -> str:
+    return view.projector.name(set_id) if set_id is not None else "无套装"
+
+
+def _score_text(value: float | None) -> str:
+    return "暂无" if value is None else _number(value)
 
 
 def _use_result(
@@ -857,7 +1055,7 @@ def _asset_name(asset, overview: CharacterOverview) -> str:
 
 
 def _view(overview: CharacterOverview):
-    return current_game_services().world_view(overview.dimension)
+    return current_game_services().world_view(overview.character_world)
 
 
 def _compact_status(asset, overview: CharacterOverview) -> str:
@@ -960,8 +1158,11 @@ def _evidence_id() -> str:
     return context.identity.evidence_id
 
 
-def _number(value: float) -> str:
-    return f"{value:.2f}".rstrip("0").rstrip(".")
+def _number(value: float, *, signed: bool = False) -> str:
+    if abs(value) < 0.005:
+        return "0"
+    text = f"{value:+.2f}" if signed else f"{value:.2f}"
+    return text.rstrip("0").rstrip(".")
 
 
 def _now() -> datetime:

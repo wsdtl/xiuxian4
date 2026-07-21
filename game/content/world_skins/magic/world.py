@@ -11,18 +11,25 @@ from ...catalog.world import (
     MIRROR_LAKE_MARSH_ID,
     MYRIAD_SWORD_TOMB_ID,
     NORTHERN_ABYSS_SNOWFIELD_ID,
-    PRIMARY_WORLD_SPACE_ID,
+    PERSON_EAST_LOCATION_ID,
+    PERSON_NORTH_LOCATION_ID,
+    PERSON_WEST_LOCATION_ID,
+    MAGIC_WORLD_SPACE_ID,
     RETURNING_RUIN_ABYSS_ID,
     SCARLET_FLAME_VALLEY_ID,
     STARTING_CITY_ID,
     SUNSET_RIDGE_ID,
     THUNDER_MARSH_STEPPE_ID,
     VERDANT_WILDERNESS_ID,
+    TAIXUAN_WORLD_SPACE_ID,
+    STELLAR_RING_WORLD_SPACE_ID,
 )
 
 
 MAGIC_WORLD_ENTRIES = {
-    PRIMARY_WORLD_SPACE_ID: SkinEntry(name="星辉大陆"),
+    TAIXUAN_WORLD_SPACE_ID: SkinEntry(name="太玄界域"),
+    MAGIC_WORLD_SPACE_ID: SkinEntry(name="星辉界域"),
+    STELLAR_RING_WORLD_SPACE_ID: SkinEntry(name="星环界域"),
     STARTING_CITY_ID: SkinEntry(
         name="星辉王城",
         description="坐落于世界原点的第一座王城。",
@@ -41,6 +48,9 @@ MAGIC_WORLD_ENTRIES = {
     MYRIAD_SWORD_TOMB_ID: SkinEntry(name="英灵兵冢", description="历代英雄武装沉眠的古老墓园。", icon="⚔"),
     HEAVENLY_CRAFT_RELIC_ID: SkinEntry(name="泰坦工坊", description="远古铸造机关仍在运转的神工遗址。", icon="⚙"),
     RETURNING_RUIN_ABYSS_ID: SkinEntry(name="混沌深渊", description="精英魔物和古老灾厄汇聚的深渊。", icon="☄"),
+    PERSON_WEST_LOCATION_ID: SkinEntry(name="雾灯小屋", description="一盏银灯终年照亮林间薄雾。", icon="⌂"),
+    PERSON_EAST_LOCATION_ID: SkinEntry(name="白塔驿亭", description="废弃驿道旁仍有人看守的白石亭。", icon="⌂"),
+    PERSON_NORTH_LOCATION_ID: SkinEntry(name="星象高台", description="记录群星轨迹与界海潮汐的高台。", icon="⌂"),
 }
 
 

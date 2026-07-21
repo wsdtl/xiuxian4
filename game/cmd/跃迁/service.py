@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content import DIMENSION_SHIFT_ITEM_ID
-from game.rules.character import DimensionShiftResult
+from game.rules.character import WorldShiftResult
 from launch import C, config, logger
 from message import Action, DocumentMessage, M
 
@@ -20,24 +20,24 @@ async def dimension_shift(
     current: CurrentCharacterResult,
 ) -> None:
     character = current.character if current.status == "ok" else None
-    dimension = current.dimension if current.status == "ok" else None
+    dimension = current.character_world if current.status == "ok" else None
     if character is None or dimension is None:
         await send_game_reply(_unavailable())
         return
     services = current_game_services()
     requested = str(message or "").strip()
     if not requested:
-        await send_game_reply(_worlds_message(dimension.skin_id))
+        await send_game_reply(_worlds_message(dimension.world_id))
         return
     target = services.world_views.resolve(requested)
     if target is None:
-        await send_game_reply(_worlds_message(dimension.skin_id, invalid=True))
+        await send_game_reply(_worlds_message(dimension.world_id, invalid=True))
         return
     try:
         result = await asyncio.to_thread(
-            services.shift_character_dimension,
+            services.shift_character_world,
             character.id,
-            target.skin.id,
+            target.world.id,
             logical_time=_now(),
         )
     except Exception as exc:
@@ -49,9 +49,9 @@ async def dimension_shift(
     await send_game_reply(_result_message(result))
 
 
-def _worlds_message(current_skin_id: str, *, invalid: bool = False) -> DocumentMessage:
+def _worlds_message(current_world_id: str, *, invalid: bool = False) -> DocumentMessage:
     services = current_game_services()
-    current = services.world_views.require(current_skin_id)
+    current = services.world_views.require(current_world_id)
     builder = (
         M.document()
         .section("界门", icon="world")
@@ -61,21 +61,21 @@ def _worlds_message(current_skin_id: str, *, invalid: bool = False) -> DocumentM
         builder.line("没有找到这个世界")
     actions = []
     for index, view in enumerate(services.world_views.latest_views(), start=1):
-        state = "已连接" if view.skin.id == current.skin.id else "可登录"
+        state = "已连接" if view.world.id == current.world.id else "可登录"
         builder.item(index, f"{view.skin.icon} {view.skin.name} | {state}")
-        if view.skin.id != current.skin.id:
+        if view.world.id != current.world.id:
             actions.append(
                 Action(
-                    f"dimension.shift.{view.skin.id}",
+                    f"dimension.shift.{view.world.id}",
                     view.skin.name,
-                    f"跃迁 {view.skin.id}",
+                    f"跃迁 {view.world.id}",
                     behavior="send",
                 )
             )
     return builder.actions(tuple(actions)).build()
 
 
-def _result_message(result: DimensionShiftResult) -> DocumentMessage:
+def _result_message(result: WorldShiftResult) -> DocumentMessage:
     services = current_game_services()
     if result.current is None:
         return _unavailable()
@@ -103,8 +103,8 @@ def _result_message(result: DimensionShiftResult) -> DocumentMessage:
             .line("纳戒中没有可用的跃迁凭证")
             .build()
         )
-    if result.status == "shifted" and result.previous_skin_id is not None:
-        previous = services.world_views.require(result.previous_skin_id)
+    if result.status == "shifted" and result.previous_world_id is not None:
+        previous = services.world_views.require(result.previous_world_id)
         return (
             M.document()
             .section("跃迁", icon="world")
@@ -114,7 +114,7 @@ def _result_message(result: DimensionShiftResult) -> DocumentMessage:
             )
             .field("消耗", f"{previous.projector.name(DIMENSION_SHIFT_ITEM_ID)} x1")
             .line("目标世界已完成化身重构")
-            .note("角色档案、锚址、资产与构筑保持不变。")
+            .note("角色档案、资产与构筑保持不变；地点按目标世界重新解析。")
             .build()
         )
     return _unavailable()

@@ -19,7 +19,7 @@ class DimensionalDisasterDefinition:
     """一只不受世界皮肤投影的次元灾厄。"""
 
     id: StableId
-    source_skin_id: StableId
+    source_world_id: StableId
     enemy_definition_id: StableId
     combat_behavior_keys: tuple[str, ...]
     origin_kind: str
@@ -36,8 +36,8 @@ class DimensionalDisasterDefinition:
         object.__setattr__(self, "id", stable_id(self.id, field="disaster id"))
         object.__setattr__(
             self,
-            "source_skin_id",
-            stable_id(self.source_skin_id, field="source skin id"),
+            "source_world_id",
+            stable_id(self.source_world_id, field="source world id"),
         )
         object.__setattr__(
             self,
@@ -75,7 +75,7 @@ class DimensionalDisasterDefinition:
 
 @dataclass(frozen=True)
 class DisasterSourceAudit:
-    source_skin_id: StableId
+    source_world_id: StableId
     total: int
     documented: int
     original: int

@@ -66,13 +66,13 @@ DIMENSION_SHIFT_ITEM_COMPONENT_TYPE = ItemComponentType(
 
 @dataclass(frozen=True)
 class CompanionSanctuaryItemComponent:
-    """标记该特殊物品用于开启角色当前世界的伙伴秘境。"""
+    """标记该特殊物品用于开启角色当前世界的宠物秘境。"""
 
     quantity: int = 1
 
     def __post_init__(self) -> None:
         if self.quantity != 1:
-            raise ValueError("每次开启伙伴秘境必须且只能消耗一枚万灵引")
+            raise ValueError("每次开启宠物秘境必须且只能消耗一枚万灵引")
 
 
 COMPANION_SANCTUARY_ITEM_COMPONENT_TYPE = ItemComponentType(

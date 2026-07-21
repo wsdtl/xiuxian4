@@ -29,6 +29,7 @@ def main() -> None:
     _assert_import_boundaries()
     _assert_game_reply_boundaries()
     _assert_core_neutrality()
+    _assert_world_identity_boundaries()
     print("core architecture tests passed")
 
 
@@ -142,6 +143,7 @@ def _assert_physical_layout() -> None:
             "combat.py",
             "cultivation.py",
             "magic.py",
+            "stellar_ring.py",
             "models.py",
             "policy.py",
             "templates.py",
@@ -184,6 +186,7 @@ def _assert_physical_layout() -> None:
         },
         "economy": {"__init__.py", "lottery.py", "policy.py"},
         "world": {"__init__.py", "definitions.py"},
+        "world_progress": {"__init__.py", "definitions.py"},
     }
     assert {
         path.name
@@ -229,6 +232,15 @@ def _assert_physical_layout() -> None:
         "世界皮肤目录必须与官方世界包登记同步："
         f"目录={sorted(actual_skin_names)} 登记={sorted(registered_skin_names)}"
     )
+    worlds = content / "worlds"
+    assert (worlds / "__init__.py").is_file()
+    assert (worlds / "package.py").is_file()
+    from game.content.worlds import WORLD_PACKAGE
+
+    assert WORLD_PACKAGE.world_definitions
+    assert WORLD_PACKAGE.world_location_bindings
+    assert not WORLD_SKIN_PACKAGE.world_definitions
+    assert not WORLD_SKIN_PACKAGE.world_location_bindings
     for skin_name in sorted(registered_skin_names):
         skin = world_skins / skin_name
         for module_name in (
@@ -272,10 +284,10 @@ def _assert_physical_layout() -> None:
 
 
 def _assert_public_root() -> None:
-    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v10"
+    assert game.PUBLIC_FOUNDATION_VERSION == "public-foundation.v11"
     assert set(game.__all__) == {"PUBLIC_FOUNDATION_VERSION"}
     assert cmd.router is not None
-    assert core.GAME_CORE_VERSION == "game-core.v11"
+    assert core.GAME_CORE_VERSION == "game-core.v12"
     assert core.CORE_LAYERS == (
         "game.core.gameplay",
         "game.core.account",
@@ -290,6 +302,28 @@ def _assert_layer_public_exports() -> None:
         assert len(exports) == len(set(exports)), f"{module.__name__} 存在重复公开符号"
         missing = tuple(name for name in exports if not hasattr(module, name))
         assert not missing, f"{module.__name__} 缺少公开符号：{', '.join(missing)}"
+
+
+def _assert_world_identity_boundaries() -> None:
+    """玩法必须使用 world_id；skin_id 只能服务展示与历史还原。"""
+
+    forbidden = {
+        "CharacterDimensionState": "旧角色界相类型",
+        "CHARACTER_DIMENSION_AGGREGATE": "旧角色界相聚合",
+        "snapshot.character_dimension": "旧角色界相快照",
+        "world_space.primary": "共享世界空间",
+        ".character_world.skin_id": "角色世界状态读取皮肤",
+        "source_skin_id": "把玩法内容来源绑定到展示皮肤",
+        "PLAYABLE_WORLD_SKIN_IDS": "让展示皮肤声明世界可进入性",
+        "shift_character_dimension": "旧跃迁应用接口",
+    }
+    failures = []
+    for path in (ROOT / "game").rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        for token, label in forbidden.items():
+            if token in source:
+                failures.append(f"{path.relative_to(ROOT)} 仍包含{label}: {token}")
+    assert not failures, "\n".join(failures)
 
 
 def _assert_import_boundaries() -> None:

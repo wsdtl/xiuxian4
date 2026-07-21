@@ -125,13 +125,7 @@ class ExplorationRegionCatalog:
         values = {definition.id: definition for definition in definitions}
         if len(values) != len(definitions):
             raise ValueError("探险区域稳定 ID 不能重复")
-        locations = [definition.location_id for definition in definitions]
-        if len(locations) != len(set(locations)):
-            raise ValueError("同一个地点不能登记多个探险区域")
         self._definitions = MappingProxyType(values)
-        self._by_location = MappingProxyType(
-            {definition.location_id: definition for definition in definitions}
-        )
 
     def require(self, region_id: StableId) -> ExplorationRegionDefinition:
         key = stable_id(region_id, field="exploration region id")
@@ -140,23 +134,15 @@ class ExplorationRegionCatalog:
         except KeyError as exc:
             raise KeyError(f"未知探险区域：{key}") from exc
 
-    def for_location(self, location_id: StableId) -> ExplorationRegionDefinition:
-        key = stable_id(location_id, field="location id")
-        try:
-            return self._by_location[key]
-        except KeyError as exc:
-            raise KeyError(f"地点不是探险区域：{key}") from exc
-
     def definitions(self) -> tuple[ExplorationRegionDefinition, ...]:
         return tuple(self._definitions.values())
 
-    def validate(self, content) -> None:
-        known_locations = set(content.world.locations.ids())
+    def validate(self, content, worlds) -> None:
+        """校验区域内容及其在真实世界中的地点绑定。"""
+
         known_enemies = set(content.enemies.definitions.ids())
         known_items = set(content.items.definitions.ids())
         for definition in self._definitions.values():
-            if definition.location_id not in known_locations:
-                raise KeyError(f"探险区域引用未知地点：{definition.location_id}")
             unknown = (definition.regular_enemy_ids | definition.boss_enemy_ids) - known_enemies
             if unknown:
                 raise KeyError(f"探险区域引用未知敌人：{', '.join(sorted(unknown))}")
@@ -165,6 +151,26 @@ class ExplorationRegionCatalog:
                 raise KeyError(
                     f"探险区域引用未知战利品：{', '.join(sorted(unknown_trophies))}"
                 )
+        bound_regions: set[StableId] = set()
+        for world_id in worlds.world_ids():
+            for binding in worlds.bindings_for_world(
+                world_id,
+                function_id="location.function.exploration",
+            ):
+                if binding.content_ref is None:
+                    raise KeyError(
+                        f"世界探险地点没有绑定区域内容：{world_id}/{binding.anchor_id}"
+                    )
+                region = self.require(binding.content_ref)
+                if region.location_id != binding.display_ref:
+                    raise ValueError(
+                        f"探险区域展示地点与世界绑定不一致：{world_id}/"
+                        f"{binding.anchor_id}/{region.id}"
+                    )
+                bound_regions.add(region.id)
+        unused = set(self._definitions) - bound_regions
+        if unused:
+            raise ValueError("探险区域没有任何世界绑定：" + ", ".join(sorted(unused)))
 
 
 _REGULAR_IDS = MappingProxyType(

@@ -50,11 +50,11 @@ async def unbind_companion(overview=Depends(current_character_overview)) -> None
 
 
 @GameCommand.handler(
-    cmd="伙伴秘境",
+    cmd="宠物秘境",
     help=HelpSpec(
         category="世界",
-        summary="查看当前伙伴秘境和已经固定的踪迹",
-        usage=("伙伴秘境",),
+        summary="查看当前宠物秘境和已经固定的踪迹",
+        usage=("宠物秘境",),
         order=80,
     ),
 )
@@ -80,7 +80,7 @@ async def hunt_companion(message: str = "", overview=Depends(current_character_o
     cmd="放弃秘境",
     help=HelpSpec(
         category="世界",
-        summary="永久结束当前伙伴秘境",
+        summary="永久结束当前宠物秘境",
         usage=("放弃秘境",),
         side_effect="确认后当前全部踪迹消失，万灵引不会返还",
         order=100,
@@ -91,17 +91,57 @@ async def abandon_sanctuary(overview=Depends(current_character_overview)) -> Non
 
 
 @GameCommand.handler(
-    cmd="放生",
+    cmd="告别",
     help=HelpSpec(
         category="角色",
-        summary="永久移除一只伙伴并保留捕获图鉴",
-        usage=("放生 C1",),
-        side_effect="确认后实例永久消失且不会获得收益",
+        summary="让一名伙伴离开当前名册",
+        usage=("告别 C1",),
+        side_effect="宠物实例永久离开；人物保留成长并可再次结交",
         order=110,
     ),
 )
-async def release_companion(message: str = "", overview=Depends(current_character_overview)) -> None:
-    await service.preview_release(message, overview)
+async def farewell_companion(message: str = "", overview=Depends(current_character_overview)) -> None:
+    await service.preview_farewell(message, overview)
+
+
+@GameCommand.handler(
+    cmd="人物",
+    help=HelpSpec(
+        category="世界",
+        summary="查看当前世界的人物及专用地点",
+        usage=("人物",),
+        order=110,
+    ),
+)
+async def people(overview=Depends(current_character_overview)) -> None:
+    await service.view_people(overview)
+
+
+@GameCommand.handler(
+    cmd="赠礼",
+    help=HelpSpec(
+        category="世界",
+        summary="向当前位置的人物赠送偏好战利品",
+        usage=("赠礼 T编号", "赠礼 T编号 数量"),
+        side_effect="会消耗实际赠送的战利品",
+        order=120,
+    ),
+)
+async def gift_person(message: str = "", overview=Depends(current_character_overview)) -> None:
+    await service.gift_person(message, overview)
+
+
+@GameCommand.handler(
+    cmd="结交",
+    help=HelpSpec(
+        category="世界",
+        summary="与当前位置关系达标的人物结为伙伴",
+        usage=("结交",),
+        order=130,
+    ),
+)
+async def join_person(overview=Depends(current_character_overview)) -> None:
+    await service.join_person(overview)
 
 
 @GameCommand.handler(cmd="companion_bind_transfer_confirm", hidden=True)
@@ -109,9 +149,9 @@ async def confirm_bind_transfer(message: str = "", overview=Depends(current_char
     await service.confirm_bind_transfer(message, overview)
 
 
-@GameCommand.handler(cmd="companion_release_confirm", hidden=True)
-async def confirm_release(message: str = "", overview=Depends(current_character_overview)) -> None:
-    await service.confirm_release(message, overview)
+@GameCommand.handler(cmd="companion_farewell_confirm", hidden=True)
+async def confirm_farewell(message: str = "", overview=Depends(current_character_overview)) -> None:
+    await service.confirm_farewell(message, overview)
 
 
 @GameCommand.handler(cmd="companion_abandon_confirm", hidden=True)

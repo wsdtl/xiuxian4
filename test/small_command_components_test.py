@@ -19,9 +19,11 @@ from game.app import build_game_services, install_game_services, restore_game_se
 from game.content import (  # noqa: E402
     CHARACTER_LEVEL_PROGRESSION_ID,
     CULTIVATION_SKIN_ID,
+    TAIXUAN_WORLD_ID,
     DIMENSION_SHIFT_ITEM_ID,
     INSCRIPTION_FEATHER_ITEM_ID,
     MAGIC_SKIN_ID,
+    MAGIC_WORLD_ID,
     PRIMARY_CURRENCY_ID,
 )
 from game.content.catalog.character import REST_ACTION_ID  # noqa: E402
@@ -48,6 +50,7 @@ from game.rules import (  # noqa: E402
     EquipmentInstanceGenerator,
     game_operation_context,
 )
+from game.features.world_travel import WorldLocationIntent  # noqa: E402
 from game.cmd import 角色 as character_component  # noqa: E402,F401
 from game.cmd import 跃迁 as dimension_component  # noqa: E402,F401
 from game.cmd import 休息 as rest_component  # noqa: E402,F401
@@ -55,6 +58,8 @@ from game.cmd import 提醒 as reminder_component  # noqa: E402,F401
 from game.cmd import 铭刻 as inscription_component  # noqa: E402,F401
 from game.cmd import 装配 as loadout_component  # noqa: E402,F401
 from game.cmd import 物品 as item_component  # noqa: E402,F401
+from game.cmd import 伙伴 as companion_component  # noqa: E402,F401
+from game.cmd import 探险 as exploration_component  # noqa: E402,F401
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
 
@@ -108,13 +113,25 @@ async def _main() -> None:
             assert character is not None
             initial_overview = services.load_character_overview(character).overview
             assert initial_overview is not None
-            initial_world = initial_overview.world
-            target_skin_id = (
-                MAGIC_SKIN_ID
-                if initial_overview.dimension.skin_id == CULTIVATION_SKIN_ID
-                else CULTIVATION_SKIN_ID
+            starter_weapon_id = initial_overview.loadout.slots[WEAPON_SLOT_ID]
+            starter_weapon_ref = initial_overview.inventory.reference_number(starter_weapon_id)
+            starter_weapon_detail = await dispatch(
+                client_id="small-command-player",
+                raw_message=f"查看 W{starter_weapon_ref}",
+                sender_name="试剑客",
+                event_id="small-command-starter-weapon-detail",
             )
-            target_view = services.world_views.require(target_skin_id)
+            starter_weapon_text = starter_weapon_detail.replies[0].message.content
+            assert "来源" in starter_weapon_text
+            assert "初始获得" in starter_weapon_text
+            assert "获得" in starter_weapon_text
+            initial_world = initial_overview.world
+            target_world_id = (
+                MAGIC_WORLD_ID
+                if initial_overview.character_world.world_id == TAIXUAN_WORLD_ID
+                else TAIXUAN_WORLD_ID
+            )
+            target_view = services.world_views.require(target_world_id)
             worlds = await dispatch(
                 client_id="small-command-player",
                 raw_message="跃迁",
@@ -128,7 +145,7 @@ async def _main() -> None:
                 for action in worlds.replies[0].message.actions
                 if action.label == target_view.skin.name
             )
-            assert target_action.data == f"跃迁 {target_skin_id}"
+            assert target_action.data == f"跃迁 {target_world_id}"
             missing_shift = await dispatch(
                 client_id="small-command-player",
                 raw_message=target_action.data,
@@ -138,7 +155,8 @@ async def _main() -> None:
             assert "纳戒中没有可用的跃迁凭证" in missing_shift.replies[0].message.content
             unchanged = services.load_character_overview(character).overview
             assert unchanged is not None
-            assert unchanged.dimension == initial_overview.dimension
+            assert unchanged.character_world == initial_overview.character_world
+            assert unchanged.world == initial_world
             _grant_dimension_shift_items(services, character.id, 2)
             initial_overview = services.load_character_overview(character).overview
             assert initial_overview is not None
@@ -175,6 +193,32 @@ async def _main() -> None:
             )
             old_weapon_button = old_armory.replies[0].message.actions[0]
             assert old_weapon_button.data == f"武库 {WEAPON_SLOT_ID}"
+            old_people = await dispatch(
+                client_id="small-command-player",
+                raw_message="人物",
+                sender_name="试剑客",
+                event_id="small-command-old-people",
+            )
+            old_location_button = old_people.replies[0].message.actions[0]
+            person_location = services.content.companions.people_for_world(
+                initial_overview.character_world.world_id
+            )[0].location_id
+            person_anchor = services.content.worlds.require_binding_for_display(
+                initial_overview.character_world.world_id,
+                person_location,
+            ).anchor_id
+            stale_version = services.world_travel.move(
+                character.id,
+                person_anchor,
+                logical_time=datetime.now(ZoneInfo("Asia/Shanghai")),
+                intent=WorldLocationIntent(
+                    initial_overview.character_world.world_id,
+                    person_anchor,
+                    "location.function.companion_person",
+                    999,
+                ),
+            )
+            assert stale_version.status == "stale_binding"
             shifted_world = await dispatch(
                 client_id="small-command-player",
                 raw_message=target_action.data,
@@ -191,14 +235,28 @@ async def _main() -> None:
             assert _stack_quantity(shifted_overview.inventory, DIMENSION_SHIFT_ITEM_ID) == (
                 _stack_quantity(initial_inventory, DIMENSION_SHIFT_ITEM_ID) - 1
             )
-            assert shifted_overview.world == initial_world
-            assert shifted_overview.dimension.skin_id == target_skin_id
-            already_there = services.shift_character_dimension(
+            assert shifted_overview.world.revision == initial_world.revision + 1
+            assert shifted_overview.character_world.world_id == target_world_id
+            initial_presence = next(
+                value
+                for value in initial_world.presences.values()
+                if value.owner_id == character.id
+            )
+            shifted_presence = next(
+                value
+                for value in shifted_overview.world.presences.values()
+                if value.owner_id == character.id
+            )
+            assert shifted_presence.position.space_id != initial_presence.position.space_id
+            already_there = services.shift_character_world(
                 character.id,
-                target_skin_id,
+                target_world_id,
                 logical_time=datetime.now(ZoneInfo("Asia/Shanghai")),
             )
             assert already_there.status == "already_there"
+            after_idempotent = services.load_character_overview(character).overview
+            assert after_idempotent is not None
+            assert after_idempotent.world == shifted_overview.world
             assert _stack_quantity(
                 services.load_character_overview(character).overview.inventory,
                 DIMENSION_SHIFT_ITEM_ID,
@@ -213,6 +271,13 @@ async def _main() -> None:
                 f"武库·{target_view.projector.name(WEAPON_SLOT_ID)}"
                 in old_button_after_shift.replies[0].message.content
             )
+            stale_location = await dispatch(
+                client_id="small-command-player",
+                raw_message=old_location_button.data,
+                sender_name="试剑客",
+                event_id="small-command-stale-location",
+            )
+            assert "地点按钮已经失效" in stale_location.replies[0].message.content
 
             _injure_character(services, character.id)
             await dispatch(
@@ -221,7 +286,7 @@ async def _main() -> None:
                 sender_name="试剑客",
                 event_id="small-command-rest-start",
             )
-            original_view = services.world_views.require(initial_overview.dimension.skin_id)
+            original_view = services.world_views.require(initial_overview.character_world.world_id)
             blocked_shift = await dispatch(
                 client_id="small-command-player",
                 raw_message=f"跃迁 {original_view.skin.name}",
@@ -242,9 +307,12 @@ async def _main() -> None:
                 event_id="small-command-rest-stop",
             )
             region = services.content.exploration_regions.definitions()[0]
-            moved = services.exploration.move(
+            moved = services.world_travel.move(
                 character.id,
-                region.location_id,
+                services.content.worlds.require_binding_for_display(
+                    shifted_overview.character_world.world_id,
+                    region.location_id,
+                ).anchor_id,
                 logical_time=datetime.now(ZoneInfo("Asia/Shanghai")),
             )
             assert moved.status in {"moved", "already_there"}
@@ -253,9 +321,9 @@ async def _main() -> None:
                 logical_time=datetime.now(ZoneInfo("Asia/Shanghai")),
             )
             assert started.status == "started"
-            exploration_blocked = services.shift_character_dimension(
+            exploration_blocked = services.shift_character_world(
                 character.id,
-                original_view.skin.id,
+                original_view.world.id,
                 logical_time=datetime.now(ZoneInfo("Asia/Shanghai")),
             )
             assert exploration_blocked.status == "main_action_occupied"
@@ -325,7 +393,7 @@ async def _main() -> None:
             )
             assert "当前配装: _1_" in switched.replies[0].message.content
 
-            equipment_ref, feather_ref, slot_name = _grant_test_assets(
+            equipment_ref, candidate_ref, feather_ref, slot_name = _grant_test_assets(
                 services,
                 character.id,
             )
@@ -352,6 +420,36 @@ async def _main() -> None:
                 event_id="small-command-equip",
             )
             assert f"E{equipment_ref}" in equipped.replies[0].message.content
+
+            comparison = await dispatch(
+                client_id="small-command-player",
+                raw_message=f"查看 E{candidate_ref}",
+                sender_name="试剑客",
+                event_id="small-command-gear-comparison",
+            )
+            comparison_message = comparison.replies[0].message
+            assert "同槽对比" in comparison_message.content
+            assert "候选评分" in comparison_message.content
+            assert "当前评分" in comparison_message.content
+            assert "来源" in comparison_message.content
+            assert "探险" in comparison_message.content
+            assert "获得" in comparison_message.content
+            assert "2026-07-21 09:10" in comparison_message.content
+            assert "exploration-test-session" not in comparison_message.content
+            assert "套装进度" in comparison_message.content
+            assert "1/4 -> 0/4" in comparison_message.content
+            assert "0/4 -> 1/4" in comparison_message.content
+            assert {value.label for value in comparison_message.actions} >= {
+                "装备",
+                "回收",
+            }
+            recycle = next(
+                value
+                for value in comparison_message.actions
+                if value.label == "回收"
+            )
+            assert recycle.data == f"回收 E{candidate_ref}"
+            assert recycle.behavior == "send"
 
             unequipped = await dispatch(
                 client_id="small-command-player",
@@ -386,10 +484,10 @@ async def _main() -> None:
                 for value in overview.inventory.instances.values()
             )
 
-            magic_view = services.world_views.require(MAGIC_SKIN_ID)
+            magic_view = services.world_views.require(MAGIC_WORLD_ID)
             await dispatch(
                 client_id="small-command-player",
-                raw_message=f"跃迁 {MAGIC_SKIN_ID}",
+                raw_message=f"跃迁 {MAGIC_WORLD_ID}",
                 sender_name="试剑客",
                 event_id="small-command-final-magic-shift",
             )
@@ -424,9 +522,17 @@ async def _main() -> None:
                 for value in magic_overview.world.presences.values()
                 if value.owner_id == character.id
             )
-            assert presence.position.location_id is not None
+            anchor_id = services.content.worlds.anchor_at(
+                magic_overview.character_world.world_id,
+                presence.position,
+            )
+            assert anchor_id is not None
+            location = services.content.worlds.resolve(
+                magic_overview.character_world.world_id,
+                anchor_id,
+            )
             assert (
-                magic_view.projector.name(presence.position.location_id)
+                magic_view.projector.name(location.display_id)
                 in profile_text
             )
             magic_armory = await dispatch(
@@ -447,10 +553,13 @@ async def _main() -> None:
             restore_game_services(previous)
 
 
-def _grant_test_assets(services, character_id: str) -> tuple[int, int, str]:
-    logical_time = datetime.now(ZoneInfo("Asia/Shanghai"))
+def _grant_test_assets(services, character_id: str) -> tuple[int, int, int, str]:
+    logical_time = datetime(2026, 7, 21, 9, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
     snapshots = services.character_creation.snapshots
     equipment_definition = next(iter(services.content.catalog.equipment.definitions))
+    set_ids = tuple(services.content.catalog.equipment.sets.ids())
+    set_id = set_ids[0]
+    candidate_set_id = set_ids[1]
     generated = EquipmentInstanceGenerator(
         services.content.catalog.equipment,
         services.content.catalog.itemization_engine,
@@ -467,10 +576,28 @@ def _grant_test_assets(services, character_id: str) -> tuple[int, int, str]:
             logical_time=logical_time,
         ),
     )
+    candidate = EquipmentInstanceGenerator(
+        services.content.catalog.equipment,
+        services.content.catalog.itemization_engine,
+        set_mark_chance=0,
+    ).generate(
+        EquipmentGenerationRequest(
+            "small-command-equipment-candidate-generation",
+            "equipment-command-2",
+            equipment_definition.id,
+            services.content.catalog.report.content_fingerprint,
+        ),
+        context=game_operation_context(
+            "small-command-equipment-candidate-generation",
+            logical_time=logical_time,
+        ),
+    )
+    generated = replace(generated, state=replace(generated.state, set_id=set_id))
+    candidate = replace(candidate, state=replace(candidate.state, set_id=candidate_set_id))
     receipt = SourceReceipt(
         "small-command-assets-receipt",
-        "source.test_setup",
-        character_id,
+        "source.exploration",
+        "exploration-test-session",
         logical_time,
     )
     with services.database.unit_of_work() as uow:
@@ -504,6 +631,13 @@ def _grant_test_assets(services, character_id: str) -> tuple[int, int, str]:
                         equipment_state_data(generated.state),
                     ),
                     GrantInstance(
+                        "equipment-command-2",
+                        equipment_definition.item_definition_id,
+                        armory,
+                        receipt,
+                        equipment_state_data(candidate.state),
+                    ),
+                    GrantInstance(
                         "feather-command-1",
                         INSCRIPTION_FEATHER_ITEM_ID,
                         inscription,
@@ -533,15 +667,16 @@ def _grant_test_assets(services, character_id: str) -> tuple[int, int, str]:
         )
         uow.commit()
     equipment_ref = outcome.state.reference_number("equipment-command-1")
+    candidate_ref = outcome.state.reference_number("equipment-command-2")
     feather_ref = outcome.state.reference_number("feather-command-1")
     character = services.characters.load_character(character_id)
     assert character is not None
     overview = services.load_character_overview(character).overview
     assert overview is not None
-    slot_name = services.world_view(overview.dimension).projector.name(
+    slot_name = services.world_view(overview.character_world).projector.name(
         equipment_definition.slot_id
     )
-    return equipment_ref, feather_ref, slot_name
+    return equipment_ref, candidate_ref, feather_ref, slot_name
 
 
 def _injure_character(services, character_id: str) -> None:

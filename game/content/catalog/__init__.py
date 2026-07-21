@@ -55,7 +55,7 @@ from .companion import (
     COMPANION_BALANCE,
     COMPANION_BIND_ACTION_ID,
     COMPANION_CATALOG,
-    COMPANION_RELEASE_ACTION_ID,
+    COMPANION_FAREWELL_ACTION_ID,
     COMPANION_SANCTUARY_TERM_ID,
     COMPANION_TERM_ID,
     CompanionCatalog,
@@ -153,10 +153,21 @@ from .social import (
 from .weapon import STARTER_WEAPON_ID
 from .world import (
     CHARACTER_PRESENCE_KIND_ID,
-    PRIMARY_WORLD_SPACE_ID,
+    MAGIC_WORLD_ID,
+    MAGIC_WORLD_SPACE_ID,
+    STELLAR_RING_WORLD_ID,
+    STELLAR_RING_WORLD_SPACE_ID,
+    PLAYABLE_WORLD_IDS,
     STARTING_CITY_ID,
+    TAIXUAN_WORLD_ID,
+    TAIXUAN_WORLD_SPACE_ID,
     coordinate_token,
-    validate_location_coordinate_id,
+    validate_anchor_coordinate_id,
+)
+from .world_progress import (
+    WORLD_PROGRESS_DEFINITION,
+    WorldProgressDefinition,
+    WorldProgressMilestone,
 )
 
 

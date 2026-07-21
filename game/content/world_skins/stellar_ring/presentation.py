@@ -1,0 +1,23 @@
+"""星环界的武器装备名称与评分格式。"""
+
+from ...presentation import EnemyPresentationStyle, GearPresentationStyle
+from .enemies import STELLAR_RING_ENEMY_BEHAVIOR_NAMES, STELLAR_RING_ENEMY_PREFIXES
+from .skin import STELLAR_RING_SKIN_ID, STELLAR_RING_SKIN_VERSION
+
+
+STELLAR_RING_GEAR_PRESENTATION = GearPresentationStyle(
+    STELLAR_RING_SKIN_ID,
+    STELLAR_RING_SKIN_VERSION,
+    "{quality}·{name}",
+    "结构评分",
+)
+
+STELLAR_RING_ENEMY_PRESENTATION = EnemyPresentationStyle(
+    STELLAR_RING_SKIN_ID,
+    STELLAR_RING_SKIN_VERSION,
+    STELLAR_RING_ENEMY_PREFIXES,
+    STELLAR_RING_ENEMY_BEHAVIOR_NAMES,
+)
+
+
+__all__ = ["STELLAR_RING_ENEMY_PRESENTATION", "STELLAR_RING_GEAR_PRESENTATION"]

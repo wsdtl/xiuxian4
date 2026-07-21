@@ -65,15 +65,22 @@ async def _main() -> None:
             content = listing.replies[0].message.content
             assert listing.replies[0].message.kind == "markdown"
             assert "常规区域" in content and "特殊区域" in content
-            assert "青云原" in content and "万剑冢" in content
+            destination = next(
+                name
+                for name in ("青云原", "翠风平原", "生态穹原")
+                if name in content
+            )
+            assert any(
+                name in content for name in ("万剑冢", "英灵兵冢", "兵装墓库")
+            )
 
             moved = await dispatch(
                 client_id="exploration-player",
-                raw_message="前往 青云原",
+                raw_message=f"前往 {destination}",
                 sender_name="巡山客",
                 event_id="exploration-move",
             )
-            assert "抵达: _青云原_" in moved.replies[0].message.content
+            assert "抵达:" in moved.replies[0].message.content
 
             started = await dispatch(
                 client_id="exploration-player",

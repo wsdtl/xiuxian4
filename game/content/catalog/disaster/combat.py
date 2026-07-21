@@ -23,6 +23,7 @@ from ..combat.stats import COMBAT_CONTROL_RESISTANCE, COMBAT_TENACITY
 from ..enemy.behaviors import ENEMY_BEHAVIOR_CONTENT
 from .cultivation import CULTIVATION_DISASTERS
 from .magic import MAGIC_DISASTERS
+from .stellar_ring import STELLAR_RING_DISASTERS
 
 
 DISASTER_ENEMY_LEVEL_PROFILE_ID = "enemy.level.dimensional_disaster"
@@ -86,7 +87,7 @@ def _enemy(definition, index: int) -> EnemyDefinition:
         for value in _BEHAVIOR_KEYS
         if f"enemy.behavior.{value}" not in defaults
     )
-    source_key = definition.source_skin_id.removeprefix("skin.")
+    source_key = definition.source_world_id.removeprefix("world.")
     disaster_key = definition.id.rsplit(".", 1)[-1]
     phases = (
         EnemyPhaseDefinition(
@@ -126,7 +127,9 @@ def _enemy(definition, index: int) -> EnemyDefinition:
 
 DISASTER_ENEMY_DEFINITIONS = tuple(
     _enemy(value, index)
-    for index, value in enumerate((*CULTIVATION_DISASTERS, *MAGIC_DISASTERS))
+    for index, value in enumerate(
+        (*CULTIVATION_DISASTERS, *MAGIC_DISASTERS, *STELLAR_RING_DISASTERS)
+    )
 )
 
 

@@ -77,7 +77,7 @@ async def _main() -> None:
             character = _character(services)
             overview = services.load_character_overview(character).overview
             assert overview is not None
-            view = services.world_view(overview.dimension)
+            view = services.world_view(overview.character_world)
             assert any(
                 container.kind == "container.inscription"
                 and container.required_item_tags.has("storage.inscription")
@@ -146,7 +146,11 @@ async def _main() -> None:
             backpack = await _dispatch("背包", "item-rest-backpack")
             assert "空间: _0/40_" in backpack.replies[0].message.content
 
-            await _assert_rest_window_and_exploration(services, character.id)
+            await _assert_rest_window_and_exploration(
+                services,
+                character.id,
+                overview.character_world.world_id,
+            )
             _set_resources(services, character.id, health=25, spirit=25)
             rest_result = await _dispatch("休息", "item-rest-start")
             assert "已经开始休息" in rest_result.replies[0].message.content
@@ -156,7 +160,11 @@ async def _main() -> None:
             restore_game_services(previous)
 
 
-async def _assert_rest_window_and_exploration(services, character_id: str) -> None:
+async def _assert_rest_window_and_exploration(
+    services,
+    character_id: str,
+    world_id: str,
+) -> None:
     started_at = datetime.now(TIMEZONE)
     first = services.rest.start(
         "rest-test-start-1",
@@ -191,9 +199,12 @@ async def _assert_rest_window_and_exploration(services, character_id: str) -> No
     assert second.recovered_spirit < 2
 
     region = services.content.exploration_regions.definitions()[0]
-    moved = services.exploration.move(
+    moved = services.world_travel.move(
         character_id,
-        region.location_id,
+        services.content.worlds.require_binding_for_display(
+            world_id,
+            region.location_id,
+        ).anchor_id,
         logical_time=started_at + timedelta(seconds=125),
     )
     assert moved.status == "moved"

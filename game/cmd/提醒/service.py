@@ -179,9 +179,9 @@ def _projected_name(definition_id: str, fallback: str, world_view) -> str:
 
 
 def _world_view(current: CurrentCharacterResult):
-    if current.dimension is None:
+    if current.character_world is None:
         return None
-    return current_game_services().world_view(current.dimension)
+    return current_game_services().world_view(current.character_world)
 
 
 def _unavailable_message(title: str) -> DocumentMessage:

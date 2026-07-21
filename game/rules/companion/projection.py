@@ -25,6 +25,7 @@ from .models import (
     APTITUDE_OFFENSE,
     APTITUDE_VITALITY,
     CompanionInstance,
+    CompanionKind,
     CompanionTrace,
 )
 
@@ -52,16 +53,16 @@ class CompanionCombatProjector:
         entity_id: str | None = None,
         context_tags: TagSet = TagSet(),
     ) -> CompanionCombatProjection:
-        species = self.companions.species.require(value.definition_id)
+        definition = self.companions.require_definition(value.definition_id)
         behaviors = tuple(
             self.content.enemies.behaviors.require(behavior_id)
-            for behavior_id in (species.core_behavior_id, value.trait_behavior_id)
+            for behavior_id in (definition.core_behavior_id, value.trait_behavior_id)
         )
         companion_id = entity_id or getattr(value, "id", None)
         if companion_id is None:
             companion_id = f"companion-trace:{value.index}"
         attributes = self._base_attributes(value.level, value.aptitudes)
-        for attribute_id, multiplier in species.attribute_multipliers.items():
+        for attribute_id, multiplier in definition.attribute_multipliers.items():
             attributes[attribute_id] *= multiplier
         for behavior in behaviors:
             for attribute_id, multiplier in behavior.attribute_multipliers.items():
@@ -82,8 +83,9 @@ class CompanionCombatProjector:
             attributes,
             base_tags=TagSet.of(
                 "entity.companion",
-                f"companion.definition.{species.id}",
-                f"companion.origin.{species.origin_skin_id}",
+                f"entity.companion.{_kind(value)}",
+                f"companion.definition.{definition.id}",
+                f"companion.origin.{definition.origin_world_id}",
             ).merged(context_tags),
             active_effects=effects,
         )
@@ -109,11 +111,10 @@ class CompanionCombatProjector:
         )
         return CompanionCombatProjection(
             companion_id,
-            str(species.id),
+            str(definition.id),
             entity,
             tuple(ai_rules),
         )
-
     @staticmethod
     def _base_attributes(level: int, aptitudes) -> dict[str, float]:
         vitality = aptitudes[APTITUDE_VITALITY] / 100
@@ -156,6 +157,10 @@ class CompanionCombatProjector:
             granted_interceptors=spec.interceptors,
             granted_target_constraints=spec.target_constraints,
         )
+
+
+def _kind(value: CompanionInstance | CompanionTrace) -> str:
+    return value.kind.value if isinstance(value, CompanionInstance) else CompanionKind.PET.value
 
 
 __all__ = ["CompanionCombatProjection", "CompanionCombatProjector"]

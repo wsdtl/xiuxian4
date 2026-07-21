@@ -17,7 +17,7 @@ from ..draw import DrawEngine, DrawPoolCatalog
 from ..loot import LootCatalog, LootEngine
 from ..party import PartyCatalog, PartyEngine
 from ..social import SocialCatalog, SocialEngine
-from ..world import WorldCatalog, WorldEngine
+from ..world import WorldCatalog, WorldEngine, WorldRuntimeCatalog
 from ..abilities import AbilityDefinition, AbilityEngine
 from ..attributes import AttributeDefinition, AttributeResolver, MagnitudeEvaluators, ResourceDefinition
 from ..character import CharacterCatalog
@@ -70,7 +70,7 @@ from ..weapon import WeaponCatalog, weapon_level_contribution
 from .models import CombatProfileDefinition, ContentPackage, ContentVersion
 
 
-CONTENT_FOUNDATION_VERSION = "content.foundation.v7"
+CONTENT_FOUNDATION_VERSION = "content.foundation.v8"
 
 
 @dataclass(frozen=True)
@@ -166,6 +166,7 @@ class ContentRuntime:
     loot_tables: LootCatalog
     draw_pools: DrawPoolCatalog
     world: WorldCatalog
+    world_runtime: WorldRuntimeCatalog | None
     social: SocialCatalog
     parties: PartyCatalog
     enemies: EnemyCatalog
@@ -235,6 +236,9 @@ class ContentAssembler:
         loot_tables = LootCatalog()
         draw_pools = DrawPoolCatalog()
         world = WorldCatalog()
+        world_definitions = DefinitionRegistry("WorldDefinition")
+        map_anchors = DefinitionRegistry("MapAnchor")
+        world_location_bindings = DefinitionRegistry("WorldLocationBinding")
         social = SocialCatalog()
         parties = PartyCatalog()
         enemies = EnemyCatalog()
@@ -373,6 +377,30 @@ class ContentAssembler:
                 "world_space",
                 package.world_spaces,
                 world.spaces.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "world_definition",
+                package.world_definitions,
+                world_definitions.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "map_anchor",
+                package.map_anchors,
+                map_anchors.register,
+                ownership,
+                known_displayable,
+            )
+            self._register_many(
+                package,
+                "world_location_binding",
+                package.world_location_bindings,
+                world_location_bindings.register,
                 ownership,
                 known_displayable,
             )
@@ -848,6 +876,21 @@ class ContentAssembler:
                 )
         draw_engine = DrawEngine(draw_pools, loot_engine)
         world_engine = WorldEngine(world)
+        world_definitions.freeze()
+        map_anchors.freeze()
+        world_location_bindings.freeze()
+        runtime_parts = (
+            tuple(world_definitions),
+            tuple(map_anchors),
+            tuple(world_location_bindings),
+        )
+        if any(runtime_parts) and not all(runtime_parts):
+            raise ValueError("真实世界、地图锚点与地点绑定必须成套装配")
+        world_runtime = (
+            WorldRuntimeCatalog(*runtime_parts, world_catalog=world)
+            if all(runtime_parts)
+            else None
+        )
         social_engine = SocialEngine(social)
         party_engine = PartyEngine(parties)
         selectors.freeze()
@@ -864,6 +907,13 @@ class ContentAssembler:
             for pack in package.skin_packs:
                 skins.register(pack)
         skins.freeze()
+        if world_runtime is not None:
+            unknown_world_skins = set(world_runtime.skin_ids()) - set(skins.skin_ids())
+            if unknown_world_skins:
+                raise KeyError(
+                    "真实世界引用未知展示皮肤："
+                    + ", ".join(sorted(unknown_world_skins))
+                )
 
         fingerprint = _content_fingerprint(ordered, profile_id)
         report = ContentAssemblyReport(
@@ -901,6 +951,7 @@ class ContentAssembler:
             loot_tables,
             draw_pools,
             world,
+            world_runtime,
             social,
             parties,
             enemies,

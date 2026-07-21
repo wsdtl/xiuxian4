@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
-from game.rules.exploration import ExplorationBatchResult, ExplorationState
+from game.rules.exploration import (
+    ExplorationBatchResult,
+    ExplorationState,
+    ExplorationVictoryFact,
+)
 
 
 MAX_CATCH_UP_BATCHES = 144
@@ -15,17 +20,18 @@ def exploration_battle_report_id(session_id: str) -> str:
     return f"battle-report:{session_id}"
 
 
+class ExplorationSettlementObserver(Protocol):
+    """旁路系统可实现的探险胜利观察端口。"""
+
+    def observe_victory_in_uow(self, uow, fact: ExplorationVictoryFact) -> object:
+        ...
+
+
 @dataclass(frozen=True)
 class ExplorationOperationResult:
     status: str
     state: ExplorationState | None = None
     batches: tuple[ExplorationBatchResult, ...] = ()
-
-
-@dataclass(frozen=True)
-class ExplorationMovementResult:
-    status: str
-    location_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,12 +47,14 @@ class ExplorationStorageKinds:
     reward_claim: str
     weapon: str
     world: str
+    character_world: str
 
 
 __all__ = [
-    "ExplorationMovementResult",
     "ExplorationOperationResult",
+    "ExplorationSettlementObserver",
     "ExplorationStorageKinds",
+    "ExplorationVictoryFact",
     "MAX_CATCH_UP_BATCHES",
     "MAX_DISCOVERABLE_EXPLORATIONS",
     "exploration_battle_report_id",

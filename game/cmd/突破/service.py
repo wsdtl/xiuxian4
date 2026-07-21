@@ -26,7 +26,7 @@ async def breakthrough(
     context: MessageContext | None,
 ) -> None:
     character = current.character if current.status == "ok" else None
-    dimension = current.dimension if current.status == "ok" else None
+    dimension = current.character_world if current.status == "ok" else None
     if character is None or dimension is None or context is None:
         await send_game_reply(_failure("当前没有可用角色"))
         return

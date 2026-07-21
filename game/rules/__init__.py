@@ -29,7 +29,7 @@ from .character import (
     CharacterSettingsState,
     PRIMARY_ISSUER_ACCOUNT_ID,
     PRIMARY_LEDGER_ID,
-    PRIMARY_WORLD_ID,
+    MULTIVERSE_WORLD_STATE_ID,
     PreparedCharacterIdentity,
 )
 from .combat import PlayerCombatProjector
@@ -113,7 +113,7 @@ __all__ = [
     "GlobalActivityView",
     "PRIMARY_ISSUER_ACCOUNT_ID",
     "PRIMARY_LEDGER_ID",
-    "PRIMARY_WORLD_ID",
+    "MULTIVERSE_WORLD_STATE_ID",
     "PreparedCharacterIdentity",
     "PlayerCombatProjector",
     "global_activity_catalog",

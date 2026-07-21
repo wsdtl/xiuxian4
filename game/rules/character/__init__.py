@@ -11,12 +11,12 @@ from .settings import (
     CharacterSettingsState,
 )
 from .dimension import (
-    CHARACTER_DIMENSION_AGGREGATE,
-    CHARACTER_DIMENSION_RULE_VERSION,
-    CharacterDimensionState,
-    DimensionShiftResult,
-    assign_initial_dimension,
-    shift_dimension,
+    CHARACTER_WORLD_AGGREGATE,
+    CHARACTER_WORLD_RULE_VERSION,
+    CharacterWorldState,
+    WorldShiftResult,
+    assign_initial_world,
+    shift_world,
 )
 from .creation import (
     CHARACTER_CREATION_PROTOCOL_VERSION,
@@ -31,18 +31,18 @@ from .creation import (
     character_creation_context,
     PRIMARY_ISSUER_ACCOUNT_ID,
     PRIMARY_LEDGER_ID,
-    PRIMARY_WORLD_ID,
+    MULTIVERSE_WORLD_STATE_ID,
 )
 from .loadout import equipped_character_contributions
 
 
 __all__ = [
     "CHARACTER_CREATION_PROTOCOL_VERSION",
-    "CHARACTER_DIMENSION_AGGREGATE",
-    "CHARACTER_DIMENSION_RULE_VERSION",
+    "CHARACTER_WORLD_AGGREGATE",
+    "CHARACTER_WORLD_RULE_VERSION",
     "CHARACTER_SETTINGS_AGGREGATE",
     "CharacterIdentityPolicy",
-    "CharacterDimensionState",
+    "CharacterWorldState",
     "CharacterCreationIds",
     "CharacterCreationPlan",
     "CharacterCreationPlanner",
@@ -54,13 +54,13 @@ __all__ = [
     "CharacterIdentityViolation",
     "CharacterNameSource",
     "CharacterSettingsState",
-    "DimensionShiftResult",
+    "WorldShiftResult",
     "PRIMARY_ISSUER_ACCOUNT_ID",
     "PRIMARY_LEDGER_ID",
-    "PRIMARY_WORLD_ID",
+    "MULTIVERSE_WORLD_STATE_ID",
     "PreparedCharacterIdentity",
     "validate_character_name",
     "equipped_character_contributions",
-    "assign_initial_dimension",
-    "shift_dimension",
+    "assign_initial_world",
+    "shift_world",
 ]

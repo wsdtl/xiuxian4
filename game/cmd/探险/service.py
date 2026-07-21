@@ -9,10 +9,10 @@ from zoneinfo import ZoneInfo
 from game.app import CurrentCharacterResult, current_game_services
 from game.content.catalog import PRIMARY_CURRENCY_ID
 from game.features.exploration import (
-    ExplorationMovementResult,
     ExplorationOperationResult,
     exploration_battle_report_id,
 )
+from game.features.world_travel import WorldLocationIntent, WorldTravelResult
 from game.core.gameplay import equipment_state_from_instance, weapon_state_from_instance
 from game.rules.exploration import (
     ExplorationEncounterKind,
@@ -20,6 +20,7 @@ from game.rules.exploration import (
     ExplorationStatus,
     ExplorationStopReason,
 )
+from game.rules.item import asset_reference
 from launch import C, config, logger
 from launch.paths import public_url
 from message import Action, DocumentMessage, M
@@ -42,7 +43,7 @@ async def view_exploration(current: CurrentCharacterResult) -> None:
             ),
             asyncio.to_thread(services.load_character_overview, character),
         )
-        view = services.world_view(current.dimension)
+        view = services.world_view(current.character_world)
         await send_game_reply(_exploration_message(state, overview.overview, view))
     except Exception as exc:
         await _failed("探险状态查询失败", character.id, exc)
@@ -54,12 +55,12 @@ async def move(message: str, current: CurrentCharacterResult) -> None:
         await send_game_reply(_unavailable())
         return
     services = current_game_services()
-    view = services.world_view(current.dimension)
+    view = services.world_view(current.character_world)
     requested = str(message or "").strip()
     if not requested:
         await view_exploration(current)
         return
-    location_id = _resolve_location(requested, view)
+    location_id, intent = _resolve_location(requested, view)
     if location_id is None:
         await send_game_reply(
             M.document()
@@ -71,10 +72,11 @@ async def move(message: str, current: CurrentCharacterResult) -> None:
         return
     try:
         result = await asyncio.to_thread(
-            services.exploration.move,
+            services.world_travel.move,
             character.id,
             location_id,
             logical_time=_now(),
+            intent=intent,
         )
         await send_game_reply(_movement_message(result, view))
     except Exception as exc:
@@ -107,7 +109,7 @@ async def summary(current: CurrentCharacterResult) -> None:
         if overview_result.status != "ok" or overview_result.overview is None:
             await send_game_reply(_unavailable())
             return
-        view = services.world_view(overview_result.overview.dimension)
+        view = services.world_view(overview_result.overview.character_world)
         report = (
             services.battle_reports.reference(
                 exploration_battle_report_id(result.state.session_id)
@@ -134,7 +136,7 @@ async def _operate(current, method_name, presenter, log_message) -> None:
             character.id,
             logical_time=_now(),
         )
-        view = current_game_services().world_view(current.dimension)
+        view = current_game_services().world_view(current.character_world)
         await send_game_reply(presenter(result, view))
     except Exception as exc:
         await _failed(log_message, character.id, exc)
@@ -143,6 +145,7 @@ async def _operate(current, method_name, presenter, log_message) -> None:
 def _exploration_message(result, overview, view) -> DocumentMessage:
     services = current_game_services()
     projector = view.projector
+    anchor_id = None
     location_id = None
     if overview is not None:
         presence = next(
@@ -153,7 +156,22 @@ def _exploration_message(result, overview, view) -> DocumentMessage:
             ),
             None,
         )
-        location_id = presence.position.location_id if presence else None
+        anchor_id = (
+            services.content.worlds.anchor_at(
+                overview.character_world.world_id,
+                presence.position,
+            )
+            if presence
+            else None
+        )
+        location_id = (
+            services.content.worlds.resolve(
+                overview.character_world.world_id,
+                anchor_id,
+            ).display_id
+            if anchor_id is not None
+            else None
+        )
     builder = M.document().section("探险", icon="world")
     builder.row(
         ("位置", projector.name(location_id) if location_id else "未知"),
@@ -162,9 +180,22 @@ def _exploration_message(result, overview, view) -> DocumentMessage:
     if result.state is not None and result.state.status is ExplorationStatus.RUNNING:
         builder.field("下次结算", _time(result.state.next_batch_at))
     builder.section("常规区域", icon="combat")
+    bindings = (
+        services.content.worlds.bindings_for_world(
+            overview.character_world.world_id,
+            function_id="location.function.exploration",
+        )
+        if overview is not None
+        else ()
+    )
+    regions = tuple(
+        services.content.exploration_regions.require(binding.content_ref)
+        for binding in bindings
+        if binding.content_ref is not None
+    )
     regular = [
         value
-        for value in services.content.exploration_regions.definitions()
+        for value in regions
         if value.kind.value == "regular"
     ]
     for index, region in enumerate(regular, start=1):
@@ -175,7 +206,7 @@ def _exploration_message(result, overview, view) -> DocumentMessage:
     builder.section("特殊区域", icon="notice")
     special = [
         value
-        for value in services.content.exploration_regions.definitions()
+        for value in regions
         if value.kind.value != "regular"
     ]
     for index, region in enumerate(special, start=1):
@@ -186,26 +217,33 @@ def _exploration_message(result, overview, view) -> DocumentMessage:
     actions = []
     if result.state is not None and result.state.status is ExplorationStatus.RUNNING:
         actions.append(Action("exploration.stop", "停止", "停止探险", behavior="send"))
-    elif location_id is not None:
+    elif anchor_id is not None:
         try:
-            services.content.exploration_regions.for_location(location_id)
+            resolved = services.content.worlds.resolve(
+                overview.character_world.world_id,
+                anchor_id,
+                function_id="location.function.exploration",
+            ) if overview is not None else None
         except KeyError:
-            pass
-        else:
+            resolved = None
+        if resolved is not None and resolved.binding.content_ref is not None:
             actions.append(Action("exploration.start", "开始", "开始探险", behavior="send"))
     actions.append(Action("exploration.move", "前往", "前往 ", behavior="fill", style="secondary"))
     return builder.actions(tuple(actions)).build()
 
 
-def _movement_message(result: ExplorationMovementResult, view) -> DocumentMessage:
-    projector = view.projector
+def _movement_message(result: WorldTravelResult, view) -> DocumentMessage:
     builder = M.document().section("前往", icon="world")
     if result.status == "moved":
-        return builder.field("抵达", projector.name(result.location_id)).build()
+        return builder.field("抵达", _anchor_name(result.anchor_id, view)).build()
     if result.status == "already_there":
-        return builder.field("位置", projector.name(result.location_id)).line("已经在这里").build()
-    if result.status == "exploring":
-        return builder.line("探险进行中，停止后才能移动").build()
+        return builder.field("位置", _anchor_name(result.anchor_id, view)).line("已经在这里").build()
+    if result.status == "main_action_occupied":
+        return builder.line("当前主要行动进行中，结束后才能移动").build()
+    if result.status in {"stale_world", "stale_binding"}:
+        return builder.line("这条地点按钮已经失效，请重新打开当前世界页面").build()
+    if result.status == "unavailable":
+        return builder.line("当前世界没有这个地点").build()
     return builder.line("本次移动没有完成").build()
 
 
@@ -296,13 +334,9 @@ def _summary_message(
             )
             builder.field("结果", "胜利" if last.victory else "平局" if last.draw else "战败")
             if last.rewards:
-                builder.field(
-                    "获得",
-                    ", ".join(
-                        _reward_name(reference, overview, view)
-                        for reference in last.rewards
-                    ),
-                )
+                builder.section("最近获得", icon="inventory")
+                for reference in last.rewards:
+                    builder.line(_reward_line(reference, overview, view))
             if last.medicines_used:
                 builder.field(
                     "自动用药",
@@ -330,16 +364,17 @@ def _status_text(result: ExplorationOperationResult) -> str:
     }.get(state.stop_reason, "已停止")
 
 
-def _resolve_location(value: str, view) -> str | None:
+def _resolve_location(value: str, view) -> tuple[str | None, WorldLocationIntent | None]:
     services = current_game_services()
-    locations = services.content.catalog.world.locations
-    if value in locations:
-        return value
+    intent = WorldLocationIntent.parse(value)
+    if intent is not None:
+        return intent.anchor_id, intent
     normalized = value.casefold()
-    for definition_id in locations.ids():
-        if view.projector.name(definition_id).casefold() == normalized:
-            return definition_id
-    return None
+    for binding in services.content.worlds.bindings_for_world(view.world.id):
+        display_id = binding.display_ref or binding.anchor_id
+        if value == binding.anchor_id or view.projector.name(display_id).casefold() == normalized:
+            return binding.anchor_id, None
+    return None, None
 
 
 def _focus(kind: str) -> str:
@@ -356,6 +391,11 @@ def _levels(low: int, high: int) -> str:
 
 def _name(definition_id: str, view) -> str:
     return view.projector.name(definition_id)
+
+
+def _anchor_name(anchor_id: str, view) -> str:
+    resolved = current_game_services().content.worlds.resolve(view.world.id, anchor_id)
+    return view.projector.name(resolved.display_id)
 
 
 def _reward_name(reference, overview, view) -> str:
@@ -375,6 +415,23 @@ def _reward_name(reference, overview, view) -> str:
         instance,
         inscription_preference=overview.inscription_preference,
     ).name
+
+
+def _reward_line(reference, overview, view):
+    if reference.kind is ExplorationRewardKind.ITEM:
+        return f"{view.projector.name(reference.definition_id)} x{reference.quantity}"
+    instance = overview.inventory.instances.get(reference.asset_id)
+    if instance is None:
+        return view.projector.name(reference.definition_id)
+    token = asset_reference(
+        overview.inventory,
+        instance,
+        current_game_services().content.catalog.items,
+    )
+    return M.command(
+        _reward_name(reference, overview, view),
+        f"查看 {token}",
+    )
 
 
 def _time(value: datetime) -> str:

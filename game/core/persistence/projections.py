@@ -86,15 +86,35 @@ class ProjectionStore:
         partition_id = _non_empty(partition_id, field="projection partition id")
         _aware(logical_time)
         with self.database.unit_of_work() as uow:
-            uow.connection.execute(
-                """
-                INSERT OR IGNORE INTO projection_checkpoint(
-                    projector_id, partition_id, fact_offset, revision, updated_at
-                ) VALUES (?, ?, 0, 0, ?)
-                """,
-                (projector_id, partition_id, logical_time.isoformat()),
+            self.initialize_in_uow(
+                uow,
+                projector_id,
+                partition_id,
+                logical_time=logical_time,
             )
             uow.commit()
+
+    def initialize_in_uow(
+        self,
+        uow,
+        projector_id: str,
+        partition_id: str,
+        *,
+        logical_time: datetime,
+    ) -> None:
+        """在调用方事务内幂等初始化投影检查点。"""
+
+        projector_id = stable_id(projector_id, field="projector id")
+        partition_id = _non_empty(partition_id, field="projection partition id")
+        _aware(logical_time)
+        uow.connection.execute(
+            """
+            INSERT OR IGNORE INTO projection_checkpoint(
+                projector_id, partition_id, fact_offset, revision, updated_at
+            ) VALUES (?, ?, 0, 0, ?)
+            """,
+            (projector_id, partition_id, logical_time.isoformat()),
+        )
 
     def checkpoint(self, projector_id: str, partition_id: str) -> tuple[int, int] | None:
         projector_id = stable_id(projector_id, field="projector id")
@@ -107,6 +127,25 @@ class ProjectionStore:
                 """,
                 (projector_id, partition_id),
             ).fetchone()
+        return (int(row["fact_offset"]), int(row["revision"])) if row else None
+
+    def checkpoint_in_uow(
+        self,
+        uow,
+        projector_id: str,
+        partition_id: str,
+    ) -> tuple[int, int] | None:
+        """读取调用方事务当前可见的投影检查点。"""
+
+        projector_id = stable_id(projector_id, field="projector id")
+        partition_id = _non_empty(partition_id, field="projection partition id")
+        row = uow.connection.execute(
+            """
+            SELECT fact_offset, revision FROM projection_checkpoint
+            WHERE projector_id = ? AND partition_id = ?
+            """,
+            (projector_id, partition_id),
+        ).fetchone()
         return (int(row["fact_offset"]), int(row["revision"])) if row else None
 
     def records(self, projector_id: str, partition_id: str) -> tuple[ProjectionValue, ...]:
@@ -122,6 +161,54 @@ class ProjectionStore:
                 """,
                 (projector_id, partition_id),
             ).fetchall()
+        return self._decode_records(projector_id, partition_id, rows)
+
+    def records_in_uow(
+        self,
+        uow,
+        projector_id: str,
+        partition_id: str,
+    ) -> tuple[ProjectionValue, ...]:
+        """读取调用方事务当前可见的投影记录。"""
+
+        projector_id = stable_id(projector_id, field="projector id")
+        partition_id = _non_empty(partition_id, field="projection partition id")
+        rows = uow.connection.execute(
+            """
+            SELECT record_key, revision, payload, fact_offset
+            FROM projection_record
+            WHERE projector_id = ? AND partition_id = ?
+            ORDER BY record_key
+            """,
+            (projector_id, partition_id),
+        ).fetchall()
+        return self._decode_records(projector_id, partition_id, rows)
+
+    def record_in_uow(
+        self,
+        uow,
+        projector_id: str,
+        partition_id: str,
+        record_key: str,
+    ) -> ProjectionValue | None:
+        """按键读取调用方事务当前可见的一条投影记录。"""
+
+        projector_id = stable_id(projector_id, field="projector id")
+        partition_id = _non_empty(partition_id, field="projection partition id")
+        record_key = _non_empty(record_key, field="projection record key")
+        row = uow.connection.execute(
+            """
+            SELECT record_key, revision, payload, fact_offset
+            FROM projection_record
+            WHERE projector_id = ? AND partition_id = ? AND record_key = ?
+            """,
+            (projector_id, partition_id, record_key),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._decode_records(projector_id, partition_id, (row,))[0]
+
+    def _decode_records(self, projector_id, partition_id, rows):
         return tuple(
             ProjectionValue(
                 projector_id,
@@ -145,6 +232,34 @@ class ProjectionStore:
         deletes: tuple[str, ...] = (),
         logical_time: datetime,
     ) -> tuple[ProjectionValue, ...]:
+        with self.database.unit_of_work() as uow:
+            written = self.commit_in_uow(
+                uow,
+                projector_id,
+                partition_id,
+                expected_revision=expected_revision,
+                through_fact_offset=through_fact_offset,
+                updates=updates,
+                deletes=deletes,
+                logical_time=logical_time,
+            )
+            uow.commit()
+        return written
+
+    def commit_in_uow(
+        self,
+        uow,
+        projector_id: str,
+        partition_id: str,
+        *,
+        expected_revision: int,
+        through_fact_offset: int,
+        updates: Mapping[str, Mapping[str, object]],
+        deletes: tuple[str, ...] = (),
+        logical_time: datetime,
+    ) -> tuple[ProjectionValue, ...]:
+        """把投影记录和检查点推进加入调用方事务，不自行提交。"""
+
         projector_id = stable_id(projector_id, field="projector id")
         partition_id = _non_empty(partition_id, field="projection partition id")
         _aware(logical_time)
@@ -156,95 +271,88 @@ class ProjectionStore:
             raise ValueError("投影删除键不能重复")
         for key in (*updates, *deletes):
             _non_empty(key, field="projection record key")
+        checkpoint = self.checkpoint_in_uow(uow, projector_id, partition_id)
+        if checkpoint is None:
+            raise ValueError("投影检查点尚未初始化")
+        current_offset, current_revision = checkpoint
+        if current_revision != expected_revision:
+            raise ConcurrencyConflict("投影检查点 revision 冲突")
+        if through_fact_offset < current_offset:
+            raise ValueError("投影事实偏移不能倒退")
+        maximum = uow.connection.execute(
+            "SELECT COALESCE(MAX(fact_offset), 0) AS value FROM fact_journal"
+        ).fetchone()
+        if through_fact_offset > int(maximum["value"]):
+            raise ValueError("投影不能越过尚不存在的事实")
+
         timestamp = logical_time.isoformat()
         written = []
-        with self.database.unit_of_work() as uow:
-            checkpoint = uow.connection.execute(
+        for key, payload in updates.items():
+            row = uow.connection.execute(
                 """
-                SELECT fact_offset, revision FROM projection_checkpoint
-                WHERE projector_id = ? AND partition_id = ?
+                SELECT revision FROM projection_record
+                WHERE projector_id = ? AND partition_id = ? AND record_key = ?
                 """,
-                (projector_id, partition_id),
+                (projector_id, partition_id, key),
             ).fetchone()
-            if checkpoint is None:
-                raise ValueError("投影检查点尚未初始化")
-            current_offset = int(checkpoint["fact_offset"])
-            if int(checkpoint["revision"]) != expected_revision:
-                raise ConcurrencyConflict("投影检查点 revision 冲突")
-            if through_fact_offset < current_offset:
-                raise ValueError("投影事实偏移不能倒退")
-            maximum = uow.connection.execute(
-                "SELECT COALESCE(MAX(fact_offset), 0) AS value FROM fact_journal"
-            ).fetchone()
-            if through_fact_offset > int(maximum["value"]):
-                raise ValueError("投影不能越过尚不存在的事实")
-            for key, payload in updates.items():
-                row = uow.connection.execute(
-                    """
-                    SELECT revision FROM projection_record
-                    WHERE projector_id = ? AND partition_id = ? AND record_key = ?
-                    """,
-                    (projector_id, partition_id, key),
-                ).fetchone()
-                revision = int(row["revision"]) + 1 if row else 0
-                encoded = self.codec.dumps(dict(payload))
-                uow.connection.execute(
-                    """
-                    INSERT INTO projection_record(
-                        projector_id, partition_id, record_key, revision,
-                        payload, fact_offset, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(projector_id, partition_id, record_key) DO UPDATE SET
-                        revision = excluded.revision,
-                        payload = excluded.payload,
-                        fact_offset = excluded.fact_offset,
-                        updated_at = excluded.updated_at
-                    """,
-                    (
-                        projector_id,
-                        partition_id,
-                        key,
-                        revision,
-                        encoded,
-                        through_fact_offset,
-                        timestamp,
-                    ),
-                )
-                written.append(
-                    ProjectionValue(
-                        projector_id,
-                        partition_id,
-                        key,
-                        revision,
-                        payload,
-                        through_fact_offset,
-                    )
-                )
-            for key in deletes:
-                uow.connection.execute(
-                    """
-                    DELETE FROM projection_record
-                    WHERE projector_id = ? AND partition_id = ? AND record_key = ?
-                    """,
-                    (projector_id, partition_id, key),
-                )
-            cursor = uow.connection.execute(
+            revision = int(row["revision"]) + 1 if row else 0
+            encoded = self.codec.dumps(dict(payload))
+            uow.connection.execute(
                 """
-                UPDATE projection_checkpoint
-                SET fact_offset = ?, revision = revision + 1, updated_at = ?
-                WHERE projector_id = ? AND partition_id = ? AND revision = ?
+                INSERT INTO projection_record(
+                    projector_id, partition_id, record_key, revision,
+                    payload, fact_offset, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(projector_id, partition_id, record_key) DO UPDATE SET
+                    revision = excluded.revision,
+                    payload = excluded.payload,
+                    fact_offset = excluded.fact_offset,
+                    updated_at = excluded.updated_at
                 """,
                 (
-                    through_fact_offset,
-                    timestamp,
                     projector_id,
                     partition_id,
-                    expected_revision,
+                    key,
+                    revision,
+                    encoded,
+                    through_fact_offset,
+                    timestamp,
                 ),
             )
-            if cursor.rowcount != 1:
-                raise ConcurrencyConflict("投影检查点并发更新失败")
-            uow.commit()
+            written.append(
+                ProjectionValue(
+                    projector_id,
+                    partition_id,
+                    key,
+                    revision,
+                    payload,
+                    through_fact_offset,
+                )
+            )
+        for key in deletes:
+            uow.connection.execute(
+                """
+                DELETE FROM projection_record
+                WHERE projector_id = ? AND partition_id = ? AND record_key = ?
+                """,
+                (projector_id, partition_id, key),
+            )
+        cursor = uow.connection.execute(
+            """
+            UPDATE projection_checkpoint
+            SET fact_offset = ?, revision = revision + 1, updated_at = ?
+            WHERE projector_id = ? AND partition_id = ? AND revision = ?
+            """,
+            (
+                through_fact_offset,
+                timestamp,
+                projector_id,
+                partition_id,
+                expected_revision,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise ConcurrencyConflict("投影检查点并发更新失败")
         return tuple(written)
 
     def reset(

@@ -75,7 +75,7 @@ async def challenge_disaster(current: CurrentCharacterResult) -> None:
             operation_id,
             logical_time=_now(),
         )
-        view = current_game_services().world_view(current.dimension)
+        view = current_game_services().world_view(current.character_world)
         await send_game_reply(_challenge_message(result, view.projector))
     except Exception as exc:
         await _failed("讨伐灾厄失败", character.id, exc)

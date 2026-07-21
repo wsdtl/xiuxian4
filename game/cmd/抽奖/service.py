@@ -73,7 +73,7 @@ async def draw(current: CurrentCharacterResult, rolls: int) -> None:
             rolls,
             logical_time=_now(),
         )
-        view = services.world_view(current.dimension)
+        view = services.world_view(current.character_world)
         await send_game_reply(_result_message(result, view.projector, rolls))
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -90,7 +90,7 @@ async def pool(current: CurrentCharacterResult) -> None:
     try:
         services = current_game_services()
         status = await asyncio.to_thread(services.draw.status, character.id, history_limit=0)
-        projector = services.world_view(current.dimension).projector
+        projector = services.world_view(current.character_world).projector
         high_open = bool(DRAW_CATALOG_CONTENT.special_item_ids)
         low_weight = DRAW_LOW_WEIGHT if high_open else DRAW_LOW_WEIGHT + DRAW_HIGH_WEIGHT
         builder = (
@@ -137,7 +137,7 @@ async def history(current: CurrentCharacterResult) -> None:
     try:
         services = current_game_services()
         status = await asyncio.to_thread(services.draw.status, character.id, history_limit=10)
-        projector = services.world_view(current.dimension).projector
+        projector = services.world_view(current.character_world).projector
         builder = M.document().section("抽奖记录", icon="history")
         if not status.records:
             builder.line("暂无抽奖记录")

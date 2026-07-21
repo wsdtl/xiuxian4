@@ -12,7 +12,7 @@ from game.core.gameplay import StableId, stable_id
 
 
 DIMENSIONAL_DISASTER_AGGREGATE = "snapshot.dimensional_disaster"
-DIMENSIONAL_DISASTER_RULESET_VERSION = "rules.dimensional_disaster.v1"
+DIMENSIONAL_DISASTER_RULESET_VERSION = "rules.dimensional_disaster.v2"
 
 
 class DimensionalDisasterStatus(str, Enum):
@@ -138,7 +138,7 @@ class DimensionalDisasterState:
     event_id: str
     window_id: str
     definition_id: StableId
-    source_skin_id: StableId
+    source_world_id: StableId
     narrative: DisasterNarrativeSnapshot
     combat: DisasterCombatSnapshot
     opens_at: datetime
@@ -161,8 +161,8 @@ class DimensionalDisasterState:
         object.__setattr__(self, "definition_id", stable_id(self.definition_id, field="disaster id"))
         object.__setattr__(
             self,
-            "source_skin_id",
-            stable_id(self.source_skin_id, field="source skin id"),
+            "source_world_id",
+            stable_id(self.source_world_id, field="source world id"),
         )
         _aware(self.opens_at, "DimensionalDisasterState.opens_at")
         _aware(self.closes_at, "DimensionalDisasterState.closes_at")

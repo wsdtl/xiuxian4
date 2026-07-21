@@ -32,7 +32,7 @@ from game.rules.battle_report import (
     capture_battle_participant,
     capture_battle_transitions,
 )
-from game.rules.character import CHARACTER_DIMENSION_AGGREGATE, CharacterDimensionState
+from game.rules.character import CHARACTER_WORLD_AGGREGATE, CharacterWorldState
 from game.rules.companion import CompanionRosterState
 from game.rules.sparring import SparringBattleSimulator
 
@@ -291,9 +291,9 @@ class SparringFeature:
             )
             dimension = self.snapshots.require(
                 uow,
-                CHARACTER_DIMENSION_AGGREGATE,
+                CHARACTER_WORLD_AGGREGATE,
                 character_id,
-                CharacterDimensionState,
+                CharacterWorldState,
             )
             roster = self.snapshots.load(
                 uow,
@@ -315,7 +315,7 @@ class SparringFeature:
         outcome,
         logical_time,
     ):
-        skin = self.world_views.require(challenger_dimension.skin_id)
+        skin = self.world_views.require(challenger_dimension.world_id)
         labels = {
             challenger.id: (challenger.name, "challenger"),
             defender.id: (defender.name, "defender"),
@@ -328,7 +328,7 @@ class SparringFeature:
                 continue
             companion = roster.instances[companion_id]
             labels[companion_id] = (
-                self.content.companions.species.require(companion.definition_id).name,
+                self.content.companions.require_definition(companion.definition_id).name,
                 role,
             )
         initial = outcome.trace.initial_frame.state

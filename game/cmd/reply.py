@@ -118,7 +118,7 @@ async def _decorate_current_player_reply(
         return message
     if result.status != "ok" or result.state is None:
         return message
-    return GameReplyComposer(services.world_view(result.state.dimension).projector).compose(
+    return GameReplyComposer(services.world_view(result.state.character_world).projector).compose(
         message,
         result.state,
         logical_time=logical_time,

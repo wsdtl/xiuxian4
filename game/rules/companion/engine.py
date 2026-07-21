@@ -1,4 +1,4 @@
-"""伙伴秘境生成、捕获、配装绑定和放生纯规则。"""
+"""宠物秘境、人物关系、通用伙伴名册与配装绑定纯规则。"""
 
 from __future__ import annotations
 
@@ -10,11 +10,14 @@ from game.core.gameplay import RandomSource, StableId, stable_id
 
 from .models import (
     COMPANION_APTITUDE_IDS,
+    CompanionAcquisitionKind,
     CompanionInstance,
+    CompanionKind,
     CompanionRosterState,
     CompanionSanctuaryState,
     CompanionSanctuaryStatus,
     CompanionTrace,
+    PersonBondState,
 )
 
 
@@ -36,16 +39,16 @@ class CompanionEngine:
         previous: CompanionSanctuaryState | None,
         *,
         session_id: str,
-        world_skin_id: StableId,
+        world_id: StableId,
         character_level: int,
         logical_time,
         random: RandomSource,
     ) -> CompanionSanctuaryState:
         if previous is not None and previous.active:
-            self._fail("companion.sanctuary_active", "当前已有尚未结束的伙伴秘境")
+            self._fail("companion.sanctuary_active", "当前已有尚未结束的宠物秘境")
         if len(roster.instances) >= self.catalog.balance.roster_capacity:
             self._fail("companion.roster_full", "伙伴名册已经达到上限")
-        sanctuary = self.catalog.require_sanctuary(world_skin_id)
+        sanctuary = self.catalog.require_sanctuary(world_id)
         selected = self._weighted_unique_species(
             sanctuary.species_ids,
             sanctuary.trace_count,
@@ -60,7 +63,7 @@ class CompanionEngine:
             roster.character_id,
             str(session_id),
             sanctuary.id,
-            sanctuary.world_skin_id,
+            sanctuary.world_id,
             logical_time,
             logical_time + timedelta(seconds=sanctuary.duration_seconds),
             traces,
@@ -76,13 +79,13 @@ class CompanionEngine:
     ) -> CompanionSanctuaryState:
         current = self.expire(sanctuary, logical_time=logical_time)
         if not current.active:
-            self._fail("companion.sanctuary_inactive", "伙伴秘境已经结束")
+            self._fail("companion.sanctuary_inactive", "宠物秘境已经结束")
         trace = next((value for value in current.traces if value.index == trace_index), None)
         if trace is None:
-            self._fail("companion.trace_unknown", "伙伴秘境中没有这条踪迹")
+            self._fail("companion.trace_unknown", "宠物秘境中没有这条踪迹")
         if current.selected_trace_index is not None:
             if current.selected_trace_index != trace_index:
-                self._fail("companion.trace_locked", "伙伴秘境已经锁定另一条踪迹")
+                self._fail("companion.trace_locked", "宠物秘境已经锁定另一条踪迹")
             return current
         return replace(
             current,
@@ -120,7 +123,7 @@ class CompanionEngine:
             self._fail("companion.roster_full", "伙伴名册预留位置已经失效")
         trace = current.selected_trace()
         if trace is None:
-            raise RuntimeError("追踪中的伙伴秘境缺少固定踪迹")
+            raise RuntimeError("追踪中的宠物秘境缺少固定踪迹")
         species = self.catalog.species.require(trace.definition_id)
         sequence = roster.next_sequence
         instance = CompanionInstance(
@@ -128,16 +131,17 @@ class CompanionEngine:
             reference=f"C{sequence}",
             owner_id=roster.character_id,
             definition_id=species.id,
-            origin_skin_id=species.origin_skin_id,
+            origin_world_id=species.origin_world_id,
             quality_id=trace.quality_id,
             level=trace.level,
             experience=0,
             total_experience=0,
             aptitudes=trace.aptitudes,
             trait_behavior_id=trace.trait_behavior_id,
-            captured_at=logical_time,
-            sanctuary_id=current.sanctuary_id,
-            capture_session_id=current.session_id,
+            kind=CompanionKind.PET,
+            acquired_at=logical_time,
+            acquisition_kind=CompanionAcquisitionKind.SANCTUARY_CAPTURE,
+            acquisition_id=current.session_id,
         )
         instances = dict(roster.instances)
         instances[instance.id] = instance
@@ -193,22 +197,120 @@ class CompanionEngine:
         del bindings[preset_id]
         return replace(roster, bindings=bindings, revision=roster.revision + 1)
 
-    def release(
+    def give_gift(
+        self,
+        roster: CompanionRosterState,
+        person_definition_id: StableId,
+        favor: int,
+        *,
+        logical_time,
+    ) -> tuple[CompanionRosterState, int, int]:
+        person = self.catalog.people.require(person_definition_id)
+        if favor < 1:
+            self._fail("companion.gift_value_invalid", "赠礼关系值必须大于零")
+        if roster.active_by_definition(person.id) is not None:
+            self._fail("companion.person_joined", "这名人物已经是你的伙伴")
+        if person.id in roster.departed_people:
+            self._fail("companion.person_departed", "这名人物曾与你同行，可以直接再次结交")
+        previous = roster.person_bonds.get(person.id)
+        before = previous.favor if previous is not None else 0
+        after = min(person.bond_required, before + favor)
+        bonds = dict(roster.person_bonds)
+        bonds[person.id] = PersonBondState(
+            person.id,
+            after,
+            previous.met_at if previous is not None else logical_time,
+        )
+        return (
+            replace(roster, person_bonds=bonds, revision=roster.revision + 1),
+            before,
+            after,
+        )
+
+    def join_person(
+        self,
+        roster: CompanionRosterState,
+        person_definition_id: StableId,
+        character_level: int,
+        *,
+        logical_time,
+    ) -> tuple[CompanionRosterState, CompanionInstance, bool]:
+        person = self.catalog.people.require(person_definition_id)
+        active = roster.active_by_definition(person.id)
+        if active is not None:
+            self._fail("companion.person_joined", "这名人物已经是你的伙伴")
+        if len(roster.instances) >= self.catalog.balance.roster_capacity:
+            self._fail("companion.roster_full", "伙伴名册已经达到上限")
+        bond = roster.person_bonds.get(person.id)
+        if bond is None or bond.favor < person.bond_required:
+            current = bond.favor if bond is not None else 0
+            self._fail(
+                "companion.bond_insufficient",
+                f"关系尚未达到结交要求：{current}/{person.bond_required}",
+            )
+        archived = roster.departed_people.get(person.id)
+        departed = dict(roster.departed_people)
+        if archived is not None:
+            instance = archived
+            del departed[person.id]
+            next_sequence = roster.next_sequence
+            restored = True
+        else:
+            sequence = roster.next_sequence
+            instance = CompanionInstance(
+                id=f"{roster.character_id}:companion:{sequence}",
+                reference=f"C{sequence}",
+                owner_id=roster.character_id,
+                definition_id=person.id,
+                origin_world_id=person.origin_world_id,
+                quality_id=person.quality_id,
+                level=min(self.catalog.balance.maximum_level, max(1, int(character_level))),
+                experience=0,
+                total_experience=0,
+                aptitudes=person.aptitudes,
+                trait_behavior_id=person.trait_behavior_id,
+                kind=CompanionKind.PERSON,
+                acquired_at=logical_time,
+                acquisition_kind=CompanionAcquisitionKind.PERSON_BOND,
+                acquisition_id=str(person.id),
+            )
+            next_sequence = sequence + 1
+            restored = False
+        instances = dict(roster.instances)
+        instances[instance.id] = instance
+        return (
+            replace(
+                roster,
+                instances=instances,
+                departed_people=departed,
+                next_sequence=next_sequence,
+                revision=roster.revision + 1,
+            ),
+            instance,
+            restored,
+        )
+
+    def farewell(
         self,
         roster: CompanionRosterState,
         companion_id: str,
     ) -> CompanionRosterState:
         if companion_id not in roster.instances:
-            self._fail("companion.unknown", "找不到要放生的伙伴")
+            self._fail("companion.unknown", "找不到要告别的伙伴")
+        companion = roster.instances[companion_id]
         instances = dict(roster.instances)
         del instances[companion_id]
         bindings = {
             key: value for key, value in roster.bindings.items() if value != companion_id
         }
+        departed = dict(roster.departed_people)
+        if companion.kind is CompanionKind.PERSON:
+            departed[companion.definition_id] = companion
         return replace(
             roster,
             instances=instances,
             bindings=bindings,
+            departed_people=departed,
             revision=roster.revision + 1,
         )
 

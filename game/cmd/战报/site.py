@@ -51,7 +51,7 @@ def _render_page(report: BattleReportView, services) -> str:
     lines = "".join(f"<li>{escape(line)}</li>" for line in summary.lines)
     detail = ""
     if report.detail_available and report.segments:
-        view = services.world_views.require(
+        view = services.world_views.require_skin(
             report.presentation_skin_id,
             report.presentation_skin_version,
         )

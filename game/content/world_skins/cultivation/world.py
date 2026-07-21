@@ -11,18 +11,25 @@ from ...catalog.world import (
     MIRROR_LAKE_MARSH_ID,
     MYRIAD_SWORD_TOMB_ID,
     NORTHERN_ABYSS_SNOWFIELD_ID,
-    PRIMARY_WORLD_SPACE_ID,
+    PERSON_EAST_LOCATION_ID,
+    PERSON_NORTH_LOCATION_ID,
+    PERSON_WEST_LOCATION_ID,
+    MAGIC_WORLD_SPACE_ID,
     RETURNING_RUIN_ABYSS_ID,
     SCARLET_FLAME_VALLEY_ID,
     STARTING_CITY_ID,
     SUNSET_RIDGE_ID,
     THUNDER_MARSH_STEPPE_ID,
     VERDANT_WILDERNESS_ID,
+    TAIXUAN_WORLD_SPACE_ID,
+    STELLAR_RING_WORLD_SPACE_ID,
 )
 
 
 CULTIVATION_WORLD_ENTRIES = {
-    PRIMARY_WORLD_SPACE_ID: SkinEntry(name="太玄界"),
+    TAIXUAN_WORLD_SPACE_ID: SkinEntry(name="太玄界域"),
+    MAGIC_WORLD_SPACE_ID: SkinEntry(name="星辉界域"),
+    STELLAR_RING_WORLD_SPACE_ID: SkinEntry(name="星环界域"),
     STARTING_CITY_ID: SkinEntry(
         name="太玄仙城",
         description="坐落于世界原点的第一座仙城。",
@@ -41,6 +48,9 @@ CULTIVATION_WORLD_ENTRIES = {
     MYRIAD_SWORD_TOMB_ID: SkinEntry(name="万剑冢", description="无数古剑与执念沉眠的兵冢。", icon="⚔"),
     HEAVENLY_CRAFT_RELIC_ID: SkinEntry(name="天工遗府", description="上古机关与护宝傀儡守卫的遗府。", icon="⚙"),
     RETURNING_RUIN_ABYSS_ID: SkinEntry(name="归墟魔渊", description="精英妖魔与灾主汇聚的高危深渊。", icon="☄"),
+    PERSON_WEST_LOCATION_ID: SkinEntry(name="听雨庐", description="竹影掩映的清寂小庐，只闻檐下雨声。", icon="⌂"),
+    PERSON_EAST_LOCATION_ID: SkinEntry(name="照骨亭", description="立于荒径尽头的石亭，亭中灯火长明。", icon="⌂"),
+    PERSON_NORTH_LOCATION_ID: SkinEntry(name="观星台", description="远离灵脉争斗、可俯瞰天象的孤台。", icon="⌂"),
 }
 
 

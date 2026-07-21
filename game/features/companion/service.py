@@ -1,9 +1,10 @@
-"""伙伴秘境、捕获、配装绑定和放生的联合事务。"""
+"""宠物捕获、人物结交、通用名册、配装与告别联合事务。"""
 
 from __future__ import annotations
 
 from dataclasses import replace
 from hashlib import sha256
+from math import ceil
 
 from game.content.catalog.item import (
     COMPANION_SANCTUARY_ITEM_COMPONENT_ID,
@@ -17,11 +18,13 @@ from game.core.gameplay import (
     HEALTH_CURRENT,
     InventoryState,
     InventoryTransaction,
+    ItemStack,
     LoadoutState,
     RuleContext,
     Ruleset,
     SPIRIT_CURRENT,
     SeededRandomSource,
+    WorldState,
 )
 from game.rules.battle_report import (
     BattleReportDraft,
@@ -30,10 +33,11 @@ from game.rules.battle_report import (
     capture_battle_participant,
     capture_battle_transitions,
 )
-from game.rules.character import CharacterDimensionState
+from game.rules.character import CharacterWorldState, MULTIVERSE_WORLD_STATE_ID
 from game.rules.companion import (
     COMPANION_RULESET_VERSION,
     CompanionEngine,
+    CompanionKind,
     CompanionRosterState,
     CompanionRuleError,
     CompanionSanctuaryState,
@@ -98,11 +102,246 @@ class CompanionFeature:
                     uow.commit()
             return CompanionView(roster, sanctuary)
 
+    def gift_person(
+        self,
+        operation_id: str,
+        character_id: str,
+        item_asset_id: str,
+        quantity: int,
+        *,
+        logical_time,
+    ) -> CompanionOperationResult:
+        fingerprint = _fingerprint("gift", character_id, item_asset_id, quantity)
+        context = _context(operation_id, logical_time, "gift")
+        with self.database.unit_of_work() as uow:
+            replay = self._replay(uow, operation_id, fingerprint, character_id)
+            if replay is not None:
+                return self._replayed_result(uow, replay)
+            roster, roster_exists = self._load_roster_entry(uow, character_id)
+            person = self._person_here(uow, character_id)
+            if person is None:
+                return CompanionOperationResult(
+                    "person_missing",
+                    roster,
+                    failure_message="当前位置没有可以赠礼的人物",
+                )
+            if quantity < 1:
+                return CompanionOperationResult(
+                    "quantity_invalid",
+                    roster,
+                    definition_id=str(person.id),
+                    failure_message="赠礼数量必须大于零",
+                )
+            inventory = self.snapshots.require(
+                uow,
+                self.storage.inventory,
+                character_id,
+                InventoryState,
+            )
+            try:
+                asset = inventory.asset(item_asset_id)
+            except KeyError:
+                return CompanionOperationResult(
+                    "item_unknown",
+                    roster,
+                    definition_id=str(person.id),
+                    failure_message="找不到要赠送的物品",
+                )
+            if not isinstance(asset, ItemStack) or inventory.owner_of(asset.id) != character_id:
+                return CompanionOperationResult(
+                    "item_invalid",
+                    roster,
+                    definition_id=str(person.id),
+                    failure_message="这件物品不能作为礼物",
+                )
+            unit_value = person.gift_values.get(asset.definition_id)
+            if unit_value is None:
+                return CompanionOperationResult(
+                    "gift_disliked",
+                    roster,
+                    definition_id=str(person.id),
+                    failure_message=f"{person.name} 对这件物品没有兴趣",
+                )
+            available = inventory.available_quantity(asset.id)
+            if available < 1:
+                return CompanionOperationResult(
+                    "item_unavailable",
+                    roster,
+                    definition_id=str(person.id),
+                    failure_message="这件物品当前不可用",
+                )
+            previous = roster.person_bonds.get(person.id)
+            before = previous.favor if previous is not None else 0
+            if before >= person.bond_required:
+                return CompanionOperationResult(
+                    "bond_ready",
+                    roster,
+                    definition_id=str(person.id),
+                    value_before=before,
+                    value_after=before,
+                    failure_message="关系已经满足结交要求，不必继续赠礼",
+                )
+            needed = ceil((person.bond_required - before) / unit_value)
+            consumed = min(quantity, available, needed)
+            try:
+                next_roster, value_before, value_after = self.engine.give_gift(
+                    roster,
+                    person.id,
+                    unit_value * consumed,
+                    logical_time=logical_time,
+                )
+            except CompanionRuleError as exc:
+                return CompanionOperationResult(
+                    exc.code,
+                    roster,
+                    definition_id=str(person.id),
+                    failure_message=str(exc),
+                )
+            inventory_outcome = self.inventory_engine.execute(
+                InventoryTransaction(
+                    f"{operation_id}:inventory",
+                    character_id,
+                    "companion.person.gift",
+                    (ConsumeStack(asset.id, consumed),),
+                ),
+                state=inventory,
+                context=context,
+            )
+            if inventory_outcome.failure or inventory_outcome.value is None:
+                return CompanionOperationResult(
+                    "item_consume_failed",
+                    roster,
+                    definition_id=str(person.id),
+                    failure_message=(
+                        inventory_outcome.failure.message
+                        if inventory_outcome.failure
+                        else "赠礼物品扣除失败"
+                    ),
+                )
+            self.snapshots.update(
+                uow,
+                self.storage.inventory,
+                character_id,
+                inventory,
+                inventory_outcome.value.state,
+                logical_time,
+            )
+            if roster_exists:
+                self.snapshots.update(
+                    uow,
+                    self.storage.roster,
+                    character_id,
+                    roster,
+                    next_roster,
+                    logical_time,
+                )
+            else:
+                self.snapshots.insert(
+                    uow,
+                    self.storage.roster,
+                    character_id,
+                    next_roster,
+                    logical_time,
+                )
+            receipt = CompanionOperationReceipt(
+                operation_id,
+                character_id,
+                "gift",
+                definition_id=str(person.id),
+                value_before=value_before,
+                value_after=value_after,
+                quantity=consumed,
+            )
+            self._commit_receipt(uow, receipt, fingerprint, logical_time)
+            uow.commit()
+            return CompanionOperationResult(
+                "gifted",
+                next_roster,
+                definition_id=str(person.id),
+                value_before=value_before,
+                value_after=value_after,
+                quantity=consumed,
+            )
+
+    def join_person(
+        self,
+        operation_id: str,
+        character_id: str,
+        *,
+        logical_time,
+    ) -> CompanionOperationResult:
+        fingerprint = _fingerprint("join_person", character_id)
+        with self.database.unit_of_work() as uow:
+            replay = self._replay(uow, operation_id, fingerprint, character_id)
+            if replay is not None:
+                return self._replayed_result(uow, replay)
+            roster, roster_exists = self._load_roster_entry(uow, character_id)
+            person = self._person_here(uow, character_id)
+            if person is None:
+                return CompanionOperationResult(
+                    "person_missing",
+                    roster,
+                    failure_message="当前位置没有可以结交的人物",
+                )
+            character = self.snapshots.require(
+                uow,
+                self.storage.character,
+                character_id,
+                CharacterState,
+            )
+            try:
+                next_roster, companion, restored = self.engine.join_person(
+                    roster,
+                    person.id,
+                    _character_level(character),
+                    logical_time=logical_time,
+                )
+            except CompanionRuleError as exc:
+                return CompanionOperationResult(
+                    exc.code,
+                    roster,
+                    definition_id=str(person.id),
+                    failure_message=str(exc),
+                )
+            if roster_exists:
+                self.snapshots.update(
+                    uow,
+                    self.storage.roster,
+                    character_id,
+                    roster,
+                    next_roster,
+                    logical_time,
+                )
+            else:
+                self.snapshots.insert(
+                    uow,
+                    self.storage.roster,
+                    character_id,
+                    next_roster,
+                    logical_time,
+                )
+            receipt = CompanionOperationReceipt(
+                operation_id,
+                character_id,
+                "join_person",
+                companion_id=companion.id,
+                definition_id=str(person.id),
+                value_after=int(restored),
+            )
+            self._commit_receipt(uow, receipt, fingerprint, logical_time)
+            uow.commit()
+            return CompanionOperationResult(
+                "rejoined" if restored else "joined",
+                next_roster,
+                companion=companion,
+                definition_id=str(person.id),
+            )
+
     def open_sanctuary(
         self,
         operation_id: str,
         character: CharacterState,
-        dimension: CharacterDimensionState,
+        dimension: CharacterWorldState,
         item_asset_id: str,
         *,
         logical_time,
@@ -110,7 +349,7 @@ class CompanionFeature:
         fingerprint = _fingerprint(
             "open",
             character.id,
-            dimension.skin_id,
+            dimension.world_id,
             item_asset_id,
         )
         context = _context(operation_id, logical_time, "open")
@@ -154,7 +393,7 @@ class CompanionFeature:
                     "item_invalid",
                     roster,
                     previous,
-                    failure_message="这件物品不能开启伙伴秘境",
+                    failure_message="这件物品不能开启宠物秘境",
                 )
             if inventory.available_quantity(item_asset.id) < component.quantity:
                 return CompanionOperationResult(
@@ -168,7 +407,7 @@ class CompanionFeature:
                     roster,
                     previous,
                     session_id=f"companion-sanctuary:{operation_id}",
-                    world_skin_id=dimension.skin_id,
+                    world_id=dimension.world_id,
                     character_level=_character_level(character),
                     logical_time=logical_time,
                     random=context.random,
@@ -269,15 +508,15 @@ class CompanionFeature:
                 return CompanionOperationResult(
                     "sanctuary_missing",
                     roster,
-                    failure_message="当前没有已经开启的伙伴秘境",
+                    failure_message="当前没有已经开启的宠物秘境",
                 )
             dimension = self.snapshots.require(
                 uow,
-                self.storage.dimension,
+                self.storage.character_world,
                 character_id,
-                CharacterDimensionState,
+                CharacterWorldState,
             )
-            if dimension.skin_id != sanctuary.world_skin_id:
+            if dimension.world_id != sanctuary.world_id:
                 return CompanionOperationResult(
                     "wrong_world",
                     roster,
@@ -557,7 +796,7 @@ class CompanionFeature:
             uow.commit()
             return CompanionOperationResult("unbound", next_roster, companion=companion)
 
-    def release(
+    def farewell(
         self,
         operation_id: str,
         character_id: str,
@@ -567,7 +806,7 @@ class CompanionFeature:
         logical_time,
     ) -> CompanionOperationResult:
         fingerprint = _fingerprint(
-            "release",
+            "farewell",
             character_id,
             reference,
             expected_revision,
@@ -581,16 +820,16 @@ class CompanionFeature:
                 return CompanionOperationResult(
                     "stale",
                     roster,
-                    failure_message="伙伴名册已经变化，请重新确认放生",
+                    failure_message="伙伴名册已经变化，请重新确认告别",
                 )
             companion = roster.by_reference(reference)
             if companion is None:
                 return CompanionOperationResult(
                     "companion_unknown",
                     roster,
-                    failure_message="找不到要放生的伙伴",
+                    failure_message="找不到要告别的伙伴",
                 )
-            next_roster = self.engine.release(roster, companion.id)
+            next_roster = self.engine.farewell(roster, companion.id)
             self.snapshots.update(
                 uow,
                 self.storage.roster,
@@ -602,12 +841,19 @@ class CompanionFeature:
             receipt = CompanionOperationReceipt(
                 operation_id,
                 character_id,
-                "release",
+                "farewell",
                 companion_id=companion.id,
+                definition_id=str(companion.definition_id),
+                value_after=int(companion.kind is CompanionKind.PERSON),
             )
             self._commit_receipt(uow, receipt, fingerprint, logical_time)
             uow.commit()
-            return CompanionOperationResult("released", next_roster, companion=companion)
+            return CompanionOperationResult(
+                "person_departed" if companion.kind is CompanionKind.PERSON else "pet_departed",
+                next_roster,
+                companion=companion,
+                definition_id=str(companion.definition_id),
+            )
 
     def abandon(
         self,
@@ -675,7 +921,7 @@ class CompanionFeature:
         labels = {character.id: (character.name, "player")}
         own_companion = roster.companion_for_preset(loadout.active_preset_id)
         if own_companion is not None:
-            own_species = self.content.companions.species.require(
+            own_species = self.content.companions.require_definition(
                 own_companion.definition_id
             )
             labels[own_companion.id] = (own_species.name, "companion")
@@ -702,7 +948,7 @@ class CompanionFeature:
             )
             for entity_id in participant_ids
         )
-        view = self.world_views.require(sanctuary.world_skin_id)
+        view = self.world_views.require(sanctuary.world_id)
         outcome = "追猎成功" if battle.victory else "追猎失败"
         report_id = (
             f"battle-report:companion:{sanctuary.session_id}:"
@@ -780,6 +1026,14 @@ class CompanionFeature:
             CompanionSanctuaryState,
         )
         companion = roster.instances.get(receipt.companion_id)
+        if companion is None:
+            companion = next(
+                (
+                    value for value in roster.departed_people.values()
+                    if value.id == receipt.companion_id
+                ),
+                None,
+            )
         report = (
             self.battle_reports.reference(receipt.battle_report_id)
             if receipt.battle_report_id
@@ -790,8 +1044,10 @@ class CompanionFeature:
             "hunt": "captured" if companion is not None else "defeated",
             "bind": "bound",
             "unbind": "unbound",
-            "release": "released",
+            "farewell": "person_departed" if receipt.value_after else "pet_departed",
             "abandon": "abandoned",
+            "gift": "gifted",
+            "join_person": "rejoined" if receipt.value_after else "joined",
         }[receipt.operation]
         return CompanionOperationResult(
             status,
@@ -799,6 +1055,10 @@ class CompanionFeature:
             sanctuary,
             companion,
             report,
+            definition_id=receipt.definition_id,
+            value_before=receipt.value_before,
+            value_after=receipt.value_after,
+            quantity=receipt.quantity,
             replayed=True,
         )
 
@@ -822,6 +1082,39 @@ class CompanionFeature:
             CompanionRosterState,
         )
         return (roster or CompanionRosterState(character_id), roster is not None)
+
+    def _person_here(self, uow, character_id: str):
+        dimension = self.snapshots.require(
+            uow,
+            self.storage.character_world,
+            character_id,
+            CharacterWorldState,
+        )
+        world = self.snapshots.require(
+            uow,
+            self.storage.world,
+            MULTIVERSE_WORLD_STATE_ID,
+            WorldState,
+        )
+        presence = next(
+            (value for value in world.presences.values() if value.owner_id == character_id),
+            None,
+        )
+        if presence is None:
+            return None
+        resolved = self.content.worlds.resolve_position(
+            dimension.world_id,
+            presence.position,
+            function_id="location.function.companion_person",
+        )
+        if resolved is None:
+            return None
+        try:
+            return self.content.companions.people.require(
+                resolved.require_content_ref()
+            )
+        except KeyError:
+            return None
 
 
 def _character_level(character: CharacterState) -> int:

@@ -5,6 +5,7 @@ from game.core.gameplay import SkinEntry
 from ...catalog.enemy.blueprints import (
     CULTIVATION_PARTY_BOSS_BLUEPRINTS,
     MAGIC_PARTY_BOSS_BLUEPRINTS,
+    STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
     PERSONAL_BOSS_BLUEPRINTS,
     REGULAR_ENEMY_BLUEPRINTS,
 )
@@ -74,6 +75,8 @@ _PARTY_BOSS_TROPHY_NAMES = (
     "青鳞石瞳", "吞舟巨触", "覆溟逆鳞", "岳沉地核", "食日狼牙",
     "青帝祖心", "夜巡阴兵令", "崔府君笔锋", "无极魔印", "长明时鳞",
     "司罗命丝", "照世镜屑", "蚩尤战角", "望舒寒珠", "大羿弓屑",
+    "巡天巨兽骨", "万卷天机芯", "断环巨神核", "金乌日镜片", "无声天将令",
+    "织机母巢丝", "岁轮机心", "饕餮界核", "天条法印", "十三天枢片",
 )
 
 _CURIO_NAMES = (
@@ -111,6 +114,7 @@ def _build_entries() -> dict[str, SkinEntry]:
     party_blueprints = (
         ("cultivation", CULTIVATION_PARTY_BOSS_BLUEPRINTS),
         ("magic", MAGIC_PARTY_BOSS_BLUEPRINTS),
+        ("stellar_ring", STELLAR_RING_PARTY_BOSS_BLUEPRINTS),
     )
     party_enemy_ids = tuple(
         f"enemy.boss.party.{source}.{value.key}"
@@ -129,8 +133,8 @@ def _build_entries() -> dict[str, SkinEntry]:
             description=f"太玄界极难得见的奇珍: {name}。",
             icon="✧",
         )
-    if len(entries) != 200:
-        raise ValueError("太玄界战利品展示必须完整覆盖 200 项正式名录")
+    if len(entries) != 210:
+        raise ValueError("太玄界战利品展示必须完整覆盖 210 项正式名录")
     if len({entry.name for entry in entries.values()}) != len(entries):
         raise ValueError("太玄界战利品名称不能重复")
     return entries

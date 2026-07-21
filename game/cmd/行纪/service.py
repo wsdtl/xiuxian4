@@ -1,0 +1,190 @@
+"""世界行纪查询、地点解析与排行榜消息展示。"""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from game.app import CharacterOverview, CharacterOverviewResult, current_game_services
+from game.content.catalog.world import LOCATION_FUNCTION_EXPLORATION
+from launch import C, config, logger
+from message import DocumentMessage, M
+from message.schema import FieldSeparator
+
+from ..reply import send_game_reply
+
+
+async def view_world_progress(message: str, result: CharacterOverviewResult) -> None:
+    overview = _overview(result)
+    if overview is None:
+        await send_game_reply(_failure("当前没有读取到角色状态，请稍后重试"))
+        return
+    try:
+        services = current_game_services()
+        requested = str(message or "").strip()
+        requested_world = services.world_views.resolve(requested) if requested else None
+        view = requested_world or services.world_view(overview.character_world)
+        progress = await asyncio.to_thread(
+            services.world_progress.view,
+            overview.character.id,
+            view.world.id,
+        )
+        if requested and requested_world is None:
+            reply = _region_detail(requested, progress, view)
+        else:
+            reply = _world_overview(progress, view)
+    except (KeyError, TypeError, ValueError) as exc:
+        reply = _failure(str(exc))
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("行纪查询失败"), C.kv("character", overview.character.id))
+        )
+        reply = _failure("当前没有读取到行纪，请稍后重试")
+    await send_game_reply(reply)
+
+
+async def view_world_progress_ranking(
+    message: str,
+    result: CharacterOverviewResult,
+) -> None:
+    overview = _overview(result)
+    if overview is None:
+        await send_game_reply(_failure("当前没有读取到角色状态，请稍后重试"))
+        return
+    try:
+        services = current_game_services()
+        requested = str(message or "").strip()
+        view = services.world_views.resolve(requested) if requested else None
+        if requested and view is None:
+            raise ValueError("没有找到这个世界")
+        ranking = await asyncio.to_thread(
+            services.world_progress.ranking_view,
+            overview.character.id,
+            world_id=view.world.id if view else None,
+            logical_time=_now(),
+            limit=10,
+        )
+        reply = _ranking(ranking, view)
+    except (KeyError, TypeError, ValueError) as exc:
+        reply = _failure(str(exc))
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("行纪排行查询失败"), C.kv("character", overview.character.id))
+        )
+        reply = _failure("当前没有读取到行纪排行，请稍后重试")
+    await send_game_reply(reply)
+
+
+def _world_overview(progress, view) -> DocumentMessage:
+    services = current_game_services()
+    builder = (
+        M.document()
+        .section("行纪", icon="world")
+        .row(
+            ("世界", view.skin.name),
+            ("总进度", f"{progress.percent}%"),
+            ("完成", f"{progress.completed_regions}/{len(progress.regions)}"),
+        )
+        .section("区域记载", icon="combat")
+    )
+    for region in progress.regions:
+        name = _region_name(services, view, region.region_id)
+        builder.line(
+            "[完成] " if region.completed else "",
+            name,
+            FieldSeparator(),
+            f"{region.percent}%",
+        )
+    return builder.note("发送：行纪 地点名称，可查看详细记载").build()
+
+
+def _region_detail(requested: str, progress, view) -> DocumentMessage:
+    services = current_game_services()
+    display_id = view.projector.resolve_alias(requested)
+    binding = (
+        services.content.worlds.binding_for_display(view.world.id, display_id)
+        if display_id is not None
+        else None
+    )
+    if binding is None or binding.function_id != LOCATION_FUNCTION_EXPLORATION:
+        return _failure("当前世界没有这处行纪区域")
+    region = progress.require_region(binding.content_ref)
+    next_stage = next(
+        (value for value in (25, 50, 75, 100) if value > region.percent),
+        None,
+    )
+    builder = (
+        M.document()
+        .section(view.projector.name(display_id), icon="combat")
+        .row(
+            ("进度", f"{region.points}/{region.maximum_points} ({region.percent}%)"),
+            ("胜利", str(region.victories)),
+        )
+        .field(
+            "阶段",
+            " / ".join(
+                f"{value}%{'[已得]' if value in region.claimed_milestones else ''}"
+                for value in (25, 50, 75, 100)
+            ),
+        )
+    )
+    if next_stage is None:
+        builder.note("这处区域的行纪已经写至圆满。")
+    else:
+        builder.note(f"距离下一阶段还差 {next_stage - region.percent}%")
+    return builder.build()
+
+
+def _ranking(ranking, view) -> DocumentMessage:
+    title = f"{view.skin.name}行纪排行" if view is not None else "诸界行纪排行"
+    builder = M.document().section(title, icon="world")
+    if not ranking.entries:
+        return builder.line("尚无人留下行纪。").build()
+    for entry in ranking.entries:
+        builder.line(
+            f"{entry.rank}. ",
+            entry.character_name,
+            FieldSeparator(),
+            f"{entry.points}点",
+            FieldSeparator(),
+            f"圆满{entry.completed_regions}",
+        )
+    if ranking.own_entry is not None:
+        entry = ranking.own_entry
+        builder.section("我的位次", icon="player").line(
+            f"{entry.rank}. ",
+            entry.character_name,
+            FieldSeparator(),
+            f"{entry.points}点",
+            FieldSeparator(),
+            f"圆满{entry.completed_regions}",
+        )
+    return builder.note("排行永久累计，不发放名次奖励").build()
+
+
+def _region_name(services, view, region_id: str) -> str:
+    binding = next(
+        value
+        for value in services.content.worlds.bindings_for_world(
+            view.world.id,
+            function_id=LOCATION_FUNCTION_EXPLORATION,
+        )
+        if value.content_ref == region_id
+    )
+    return view.projector.name(binding.display_ref)
+
+
+def _overview(result: CharacterOverviewResult) -> CharacterOverview | None:
+    return result.overview if result.status == "ok" else None
+
+
+def _failure(message: str) -> DocumentMessage:
+    return M.document().section("行纪", icon="notice").line(message).build()
+
+
+def _now() -> datetime:
+    return datetime.now(ZoneInfo(config.project.timezone))
+
+
+__all__ = ["view_world_progress", "view_world_progress_ranking"]

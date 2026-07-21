@@ -6,9 +6,10 @@ from .models import (
     DimensionalDisasterDefinition,
 )
 from .templates import DISASTER_BEHAVIOR_KEYS_BY_TEMPLATE
+from ..world import MAGIC_WORLD_ID
 
 
-MAGIC_DISASTER_SOURCE_ID = "skin.magic"
+MAGIC_DISASTER_SOURCE_ID = MAGIC_WORLD_ID
 
 
 def _disaster(

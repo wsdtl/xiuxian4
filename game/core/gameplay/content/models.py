@@ -73,6 +73,9 @@ from ..social import (
 from ..world import (
     WorldConnectionDefinition,
     WorldLocationDefinition,
+    MapAnchorDefinition,
+    WorldDefinition,
+    WorldLocationBinding,
     WorldMeterDefinition,
     WorldSpaceDefinition,
 )
@@ -243,6 +246,9 @@ class ContentPackage:
     loot_tables: tuple[LootTableDefinition, ...] = ()
     draw_pools: tuple[DrawPoolDefinition, ...] = ()
     world_spaces: tuple[WorldSpaceDefinition, ...] = ()
+    world_definitions: tuple[WorldDefinition, ...] = ()
+    map_anchors: tuple[MapAnchorDefinition, ...] = ()
+    world_location_bindings: tuple[WorldLocationBinding, ...] = ()
     world_locations: tuple[WorldLocationDefinition, ...] = ()
     world_connections: tuple[WorldConnectionDefinition, ...] = ()
     world_meters: tuple[WorldMeterDefinition, ...] = ()
@@ -306,6 +312,9 @@ class ContentPackage:
             "loot_tables",
             "draw_pools",
             "world_spaces",
+            "world_definitions",
+            "map_anchors",
+            "world_location_bindings",
             "world_locations",
             "world_connections",
             "world_meters",

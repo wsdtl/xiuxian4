@@ -13,7 +13,7 @@ from game.core.gameplay import StableId, stable_id
 
 COMPANION_ROSTER_AGGREGATE = "game.companion.roster"
 COMPANION_SANCTUARY_AGGREGATE = "game.companion.sanctuary"
-COMPANION_RULESET_VERSION = "ruleset.companion.v1"
+COMPANION_RULESET_VERSION = "ruleset.companion.v2"
 
 APTITUDE_VITALITY = "companion.aptitude.vitality"
 APTITUDE_OFFENSE = "companion.aptitude.offense"
@@ -35,24 +35,35 @@ class CompanionSanctuaryStatus(str, Enum):
     EXPIRED = "expired"
 
 
+class CompanionKind(str, Enum):
+    PET = "pet"
+    PERSON = "person"
+
+
+class CompanionAcquisitionKind(str, Enum):
+    SANCTUARY_CAPTURE = "sanctuary_capture"
+    PERSON_BOND = "person_bond"
+
+
 @dataclass(frozen=True)
 class CompanionInstance:
-    """一只归属于玩家且不可复制的伙伴实例。"""
+    """进入名册后由宠物和人物共同使用的伙伴实例。"""
 
     id: str
     reference: str
     owner_id: str
     definition_id: StableId
-    origin_skin_id: StableId
+    origin_world_id: StableId
     quality_id: StableId
     level: int
     experience: int
     total_experience: int
     aptitudes: Mapping[StableId, int]
     trait_behavior_id: StableId
-    captured_at: datetime
-    sanctuary_id: StableId
-    capture_session_id: str
+    kind: CompanionKind
+    acquired_at: datetime
+    acquisition_kind: CompanionAcquisitionKind
+    acquisition_id: str
 
     def __post_init__(self) -> None:
         if not str(self.id or "").strip() or not str(self.owner_id or "").strip():
@@ -72,21 +83,49 @@ class CompanionInstance:
             raise ValueError("伙伴实例必须完整保存四项资质")
         if any(value < 60 or value > 140 for value in aptitudes.values()):
             raise ValueError("伙伴单项资质必须位于 60 至 140")
-        if self.captured_at.tzinfo is None or self.captured_at.utcoffset() is None:
-            raise ValueError("伙伴捕获时间必须包含时区")
-        if not str(self.capture_session_id or "").strip():
-            raise ValueError("伙伴实例缺少捕获秘境会话")
+        if self.acquired_at.tzinfo is None or self.acquired_at.utcoffset() is None:
+            raise ValueError("伙伴获得时间必须包含时区")
+        kind = CompanionKind(self.kind)
+        acquisition_kind = CompanionAcquisitionKind(self.acquisition_kind)
+        expected = {
+            CompanionKind.PET: CompanionAcquisitionKind.SANCTUARY_CAPTURE,
+            CompanionKind.PERSON: CompanionAcquisitionKind.PERSON_BOND,
+        }[kind]
+        if acquisition_kind is not expected or not str(self.acquisition_id or "").strip():
+            raise ValueError("伙伴类别与获得来源不一致")
         object.__setattr__(self, "reference", reference)
         object.__setattr__(self, "definition_id", stable_id(self.definition_id))
-        object.__setattr__(self, "origin_skin_id", stable_id(self.origin_skin_id))
+        object.__setattr__(self, "origin_world_id", stable_id(self.origin_world_id))
         object.__setattr__(self, "quality_id", stable_id(self.quality_id))
         object.__setattr__(
             self,
             "trait_behavior_id",
             stable_id(self.trait_behavior_id),
         )
-        object.__setattr__(self, "sanctuary_id", stable_id(self.sanctuary_id))
+        object.__setattr__(self, "kind", kind)
+        object.__setattr__(self, "acquisition_kind", acquisition_kind)
+        object.__setattr__(self, "acquisition_id", str(self.acquisition_id).strip())
         object.__setattr__(self, "aptitudes", MappingProxyType(aptitudes))
+
+
+@dataclass(frozen=True)
+class PersonBondState:
+    """一名固定人物与角色之间可持续保留的关系。"""
+
+    definition_id: StableId
+    favor: int
+    met_at: datetime
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "definition_id",
+            stable_id(self.definition_id, field="person companion definition id"),
+        )
+        if self.favor < 0:
+            raise ValueError("人物关系不能小于零")
+        if self.met_at.tzinfo is None or self.met_at.utcoffset() is None:
+            raise ValueError("人物相识时间必须包含时区")
 
 
 @dataclass(frozen=True)
@@ -122,12 +161,14 @@ class CompanionTrace:
 
 @dataclass(frozen=True)
 class CompanionRosterState:
-    """角色伙伴实例、历史图鉴和六套配装独占引用。"""
+    """通用伙伴名册、宠物图鉴、人物关系与离队档案。"""
 
     character_id: str
     instances: Mapping[str, CompanionInstance] = field(default_factory=dict)
     bindings: Mapping[StableId, str] = field(default_factory=dict)
     captured_definition_ids: frozenset[StableId] = frozenset()
+    person_bonds: Mapping[StableId, PersonBondState] = field(default_factory=dict)
+    departed_people: Mapping[StableId, CompanionInstance] = field(default_factory=dict)
     next_sequence: int = 1
     revision: int = 0
 
@@ -145,6 +186,12 @@ class CompanionRosterState:
             if instance.reference in references:
                 raise ValueError("伙伴名册存在重复玩家引用")
             references.add(instance.reference)
+        active_people = [
+            value.definition_id for value in instances.values()
+            if value.kind is CompanionKind.PERSON
+        ]
+        if len(active_people) != len(set(active_people)):
+            raise ValueError("同一人物伙伴不能同时存在多个实例")
         bindings = {
             stable_id(key, field="companion loadout preset id"): str(value)
             for key, value in self.bindings.items()
@@ -157,10 +204,32 @@ class CompanionRosterState:
             stable_id(value, field="captured companion definition id")
             for value in self.captured_definition_ids
         )
+        bonds = {
+            stable_id(key, field="person companion definition id"): value
+            for key, value in self.person_bonds.items()
+        }
+        if any(key != value.definition_id for key, value in bonds.items()):
+            raise ValueError("人物关系映射键与 definition_id 不一致")
+        departed = {
+            stable_id(key, field="person companion definition id"): value
+            for key, value in self.departed_people.items()
+        }
+        for key, instance in departed.items():
+            if (
+                instance.kind is not CompanionKind.PERSON
+                or instance.definition_id != key
+                or instance.owner_id != character_id
+            ):
+                raise ValueError("人物离队档案内容无效")
+            if instance.reference in references or key in active_people:
+                raise ValueError("人物伙伴不能同时在名册和离队档案中")
+            references.add(instance.reference)
         object.__setattr__(self, "character_id", character_id)
         object.__setattr__(self, "instances", MappingProxyType(instances))
         object.__setattr__(self, "bindings", MappingProxyType(bindings))
         object.__setattr__(self, "captured_definition_ids", captured)
+        object.__setattr__(self, "person_bonds", MappingProxyType(bonds))
+        object.__setattr__(self, "departed_people", MappingProxyType(departed))
 
     def by_reference(self, reference: object) -> CompanionInstance | None:
         token = str(reference or "").strip().upper()
@@ -181,15 +250,22 @@ class CompanionRosterState:
             None,
         )
 
+    def active_by_definition(self, definition_id: StableId) -> CompanionInstance | None:
+        key = stable_id(definition_id, field="companion definition id")
+        return next(
+            (value for value in self.instances.values() if value.definition_id == key),
+            None,
+        )
+
 
 @dataclass(frozen=True)
 class CompanionSanctuaryState:
-    """一个角色当前或最近一次伙伴秘境。"""
+    """一个角色当前或最近一次宠物秘境。"""
 
     character_id: str
     session_id: str
     sanctuary_id: StableId
-    world_skin_id: StableId
+    world_id: StableId
     opened_at: datetime
     expires_at: datetime
     traces: tuple[CompanionTrace, ...]
@@ -201,14 +277,14 @@ class CompanionSanctuaryState:
 
     def __post_init__(self) -> None:
         if not str(self.character_id or "").strip() or not str(self.session_id or "").strip():
-            raise ValueError("伙伴秘境缺少角色或会话 id")
+            raise ValueError("宠物秘境缺少角色或会话 id")
         if self.opened_at.tzinfo is None or self.opened_at.utcoffset() is None:
-            raise ValueError("伙伴秘境时间必须包含时区")
+            raise ValueError("宠物秘境时间必须包含时区")
         if self.expires_at <= self.opened_at:
-            raise ValueError("伙伴秘境结束时间必须晚于开启时间")
+            raise ValueError("宠物秘境结束时间必须晚于开启时间")
         indices = tuple(value.index for value in self.traces)
         if not indices or len(indices) != len(set(indices)):
-            raise ValueError("伙伴秘境踪迹不能为空或重复")
+            raise ValueError("宠物秘境踪迹不能为空或重复")
         status = CompanionSanctuaryStatus(self.status)
         if status is CompanionSanctuaryStatus.OPEN and self.selected_trace_index is not None:
             raise ValueError("未追踪秘境不能保存选中踪迹")
@@ -217,9 +293,9 @@ class CompanionSanctuaryState:
         if status is CompanionSanctuaryStatus.CAPTURED and not self.captured_companion_id:
             raise ValueError("已捕获秘境必须保存伙伴实例 id")
         if self.attempt_count < 0 or self.revision < 0:
-            raise ValueError("伙伴秘境尝试次数或 revision 无效")
+            raise ValueError("宠物秘境尝试次数或 revision 无效")
         object.__setattr__(self, "sanctuary_id", stable_id(self.sanctuary_id))
-        object.__setattr__(self, "world_skin_id", stable_id(self.world_skin_id))
+        object.__setattr__(self, "world_id", stable_id(self.world_id))
         object.__setattr__(self, "status", status)
 
     @property

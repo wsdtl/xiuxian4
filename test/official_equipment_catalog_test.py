@@ -100,13 +100,16 @@ def _assert_catalog_shape(catalog) -> None:
 def _assert_world_skin_projection(catalog) -> None:
     cultivation = select_world_skin(catalog, DEFAULT_SKIN_ID)
     magic = select_world_skin(catalog, MAGIC_SKIN_ID)
+    stellar = select_world_skin(catalog, "skin.stellar_ring")
     definition_id = equipment_definition_id("mystic_sky", "head")
     item_id = equipment_item_id("mystic_sky", "head")
-    assert cultivation.skin.version == 22
-    assert magic.skin.version == 21
+    assert cultivation.skin.version == 25
+    assert magic.skin.version == 24
+    assert stellar.skin.version == 2
     assert cultivation.projector.name(definition_id) == "昆仑冠"
     assert cultivation.projector.name(item_id) == "昆仑冠器胚"
     assert magic.projector.name(definition_id) == "奥林匹斯头冠"
+    assert stellar.projector.name(definition_id) == "欧几里得头冠"
     assert cultivation.projector.name(equipment_set_id("army_breaker")) == "七杀破军套"
     assert cultivation.projector.name(equipment_property_id("critical_echo")) == "暴烈回响"
 

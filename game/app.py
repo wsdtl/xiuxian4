@@ -10,9 +10,9 @@ from zoneinfo import ZoneInfo
 
 from game.content import (
     DIMENSIONAL_DISASTER_BATTLE_ROUNDS,
-    DEFAULT_SKIN_ID,
+    DEFAULT_WORLD_ID,
     OfficialContent,
-    PLAYABLE_WORLD_SKIN_IDS,
+    PLAYABLE_WORLD_DEFINITIONS,
     WorldViewCatalog,
     assemble_official_catalog,
     build_dimensional_disaster_catalog,
@@ -47,6 +47,7 @@ from game.core.persistence import (
     LOOT_AGGREGATE,
     PersistenceError,
     NotificationInboxService,
+    ProjectionStore,
     PersistedActivityService,
     PersistedActionService,
     PersistedAccountService,
@@ -70,13 +71,13 @@ from game.core.persistence import (
     gameplay_snapshot_codec,
 )
 from game.rules.character import (
-    CHARACTER_DIMENSION_AGGREGATE,
+    CHARACTER_WORLD_AGGREGATE,
     CHARACTER_SETTINGS_AGGREGATE,
-    CharacterDimensionState,
+    CharacterWorldState,
     CharacterCreationPlanner,
     CharacterCreationWorkflow,
     CharacterSettingsState,
-    DimensionShiftResult,
+    WorldShiftResult,
 )
 from game.rules.activity import (
     GLOBAL_ACTIVITY_SCOPE_ID,
@@ -95,6 +96,15 @@ from game.features.exploration import (
     ExplorationFeature,
     ExplorationStorageKinds,
     exploration_codec_registrations,
+)
+from game.features.world_progress import (
+    WorldProgressFeature,
+    WorldProgressStorageKinds,
+    world_progress_codec_registrations,
+)
+from game.features.world_travel import (
+    WorldTravelFeature,
+    WorldTravelStorageKinds,
 )
 from game.features.dimensional_disaster import (
     DimensionalDisasterFeature,
@@ -163,6 +173,7 @@ from game.features.party_battle import (
 )
 from game.features.party.service import PARTY_SCOPE_ID
 from game.rules.exploration import EXPLORATION_AGGREGATE
+from game.rules.world_progress import WORLD_PROGRESS_AGGREGATE
 from game.rules.economy import MARKET_AGGREGATE
 from game.rules.sparring import SparringBattleSimulator
 from launch import C, OnEvent, config, logger
@@ -199,6 +210,8 @@ class GameServices:
     companions: CompanionFeature
     player_lineup: PlayerBattleLineupProjector
     exploration: ExplorationFeature
+    world_progress: WorldProgressFeature
+    world_travel: WorldTravelFeature
     rest: RestFeature
     sparring: SparringFeature
     economy: EconomyFeature
@@ -209,16 +222,16 @@ class GameServices:
 
     def world_view(
         self,
-        dimension: CharacterDimensionState | str,
+        character_world: CharacterWorldState | str,
     ) -> OfficialContent:
-        """读取角色当前界相对应的缓存展示投影。"""
+        """按角色当前真实世界读取缓存展示投影。"""
 
-        skin_id = (
-            dimension.skin_id
-            if isinstance(dimension, CharacterDimensionState)
-            else dimension
+        world_id = (
+            character_world.world_id
+            if isinstance(character_world, CharacterWorldState)
+            else character_world
         )
-        return self.world_views.require(skin_id)
+        return self.world_views.require(world_id)
 
     def create_character(
         self,
@@ -304,18 +317,18 @@ class GameServices:
             )
             return PlayerReplyStateResult("failed")
 
-    def shift_character_dimension(
+    def shift_character_world(
         self,
         character_id: str,
-        target_skin_id: str,
+        target_world_id: str,
         *,
         logical_time: datetime,
-    ) -> DimensionShiftResult:
+    ) -> WorldShiftResult:
         """转发到跃迁业务的唯一写入口。"""
 
         return self.dimension_shift.shift(
             character_id,
-            target_skin_id,
+            target_world_id,
             logical_time=logical_time,
         )
 
@@ -468,7 +481,7 @@ def build_game_services(
     database_path: Path | str | None = None,
     busy_timeout_ms: int | None = None,
     identity_secret: str | None = None,
-    skin_id: str = DEFAULT_SKIN_ID,
+    world_id: str = DEFAULT_WORLD_ID,
 ) -> GameServices:
     """组装一次完整服务集合；数据库初始化由生命周期显式执行。"""
 
@@ -488,10 +501,10 @@ def build_game_services(
         ),
     )
     catalog = assemble_official_catalog()
-    world_views = WorldViewCatalog(catalog, PLAYABLE_WORLD_SKIN_IDS)
-    content = world_views.require(skin_id)
+    world_views = WorldViewCatalog(catalog, PLAYABLE_WORLD_DEFINITIONS)
+    content = world_views.require(world_id)
     disaster_catalog = build_dimensional_disaster_catalog()
-    disaster_catalog.validate(catalog, world_views.skin_ids())
+    disaster_catalog.validate(catalog, world_views.world_ids())
     for warning in disaster_catalog.audit().warnings:
         logger.opt(colors=True).warning(C.warn(warning))
     registered_global_activities = GlobalActivityCatalog()
@@ -505,7 +518,7 @@ def build_game_services(
     workflow = CharacterCreationWorkflow(
         CharacterCreationPlanner(
             content.catalog,
-            world_views.skin_ids(),
+            world_views.world_ids(),
         )
     )
     snapshots = SnapshotRepository(
@@ -515,6 +528,7 @@ def build_game_services(
                 *dimensional_disaster_codec_registrations(),
                 *breakthrough_codec_registrations(),
                 *exploration_codec_registrations(),
+                *world_progress_codec_registrations(),
                 *rest_codec_registrations(),
                 *economy_codec_registrations(),
                 *lottery_codec_registrations(),
@@ -612,6 +626,20 @@ def build_game_services(
         reward_engine,
         snapshots,
     )
+    world_progress = WorldProgressFeature(
+        database,
+        content,
+        world_views,
+        snapshots,
+        reward_settlement,
+        ProjectionStore(database, snapshots),
+        WorldProgressStorageKinds(
+            progress=WORLD_PROGRESS_AGGREGATE,
+            ledger=LEDGER_AGGREGATE,
+            reward_claim=REWARD_CLAIM_AGGREGATE,
+        ),
+        RewardSettlementStorageKeys,
+    )
     battle_reports = BattleReportService(database)
     companions = CompanionFeature(
         database,
@@ -629,17 +657,30 @@ def build_game_services(
         CompanionStorageKinds(
             action=ACTION_AGGREGATE,
             character=CHARACTER_AGGREGATE,
-            dimension=CHARACTER_DIMENSION_AGGREGATE,
+            character_world=CHARACTER_WORLD_AGGREGATE,
             exploration=EXPLORATION_AGGREGATE,
             inventory=INVENTORY_AGGREGATE,
             loadout=LOADOUT_AGGREGATE,
             roster=COMPANION_ROSTER_AGGREGATE,
             sanctuary=COMPANION_SANCTUARY_AGGREGATE,
+            world=WORLD_AGGREGATE,
+        ),
+    )
+    world_travel = WorldTravelFeature(
+        database,
+        content,
+        snapshots,
+        WorldTravelStorageKinds(
+            action=ACTION_AGGREGATE,
+            exploration=EXPLORATION_AGGREGATE,
+            world=WORLD_AGGREGATE,
+            character_world=CHARACTER_WORLD_AGGREGATE,
         ),
     )
     exploration = ExplorationFeature(
         database,
         content,
+        world_views,
         snapshots,
         reward_settlement,
         inventory_engine,
@@ -655,14 +696,17 @@ def build_game_services(
             REWARD_CLAIM_AGGREGATE,
             WEAPON_AGGREGATE,
             WORLD_AGGREGATE,
+            CHARACTER_WORLD_AGGREGATE,
         ),
         RewardSettlementStorageKeys,
+        world_progress,
     )
     dimensional_disasters = DimensionalDisasterFeature(
         database,
         content,
+        world_views,
         disaster_catalog,
-        world_views.skin_ids(),
+        world_views.world_ids(),
         snapshots,
         reward_settlement,
         player_lineup,
@@ -671,6 +715,7 @@ def build_game_services(
             ACTION_AGGREGATE,
             ACTIVITY_AGGREGATE,
             CHARACTER_AGGREGATE,
+            CHARACTER_WORLD_AGGREGATE,
             EXPLORATION_AGGREGATE,
             INVENTORY_AGGREGATE,
             LOADOUT_AGGREGATE,
@@ -762,7 +807,7 @@ def build_game_services(
             loadout=LOADOUT_AGGREGATE,
             ledger=LEDGER_AGGREGATE,
             world=WORLD_AGGREGATE,
-            dimension=CHARACTER_DIMENSION_AGGREGATE,
+            character_world=CHARACTER_WORLD_AGGREGATE,
             action=ACTION_AGGREGATE,
             settings=CHARACTER_SETTINGS_AGGREGATE,
             inscription_preference=INSCRIPTION_PREFERENCE_AGGREGATE,
@@ -775,7 +820,8 @@ def build_game_services(
         snapshots,
         inventory_engine,
         DimensionShiftStorageKinds(
-            dimension=CHARACTER_DIMENSION_AGGREGATE,
+            character_world=CHARACTER_WORLD_AGGREGATE,
+            world=WORLD_AGGREGATE,
             action=ACTION_AGGREGATE,
             exploration=EXPLORATION_AGGREGATE,
             inventory=INVENTORY_AGGREGATE,
@@ -872,6 +918,8 @@ def build_game_services(
         companions=companions,
         player_lineup=player_lineup,
         exploration=exploration,
+        world_progress=world_progress,
+        world_travel=world_travel,
         rest=rest,
         sparring=sparring,
         economy=economy,
