@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from game.app import CurrentCharacterResult, current_game_services
 from game.content.catalog import PRIMARY_CURRENCY_ID
 from game.features.exploration import (
+    MAX_EXPLORATION_BATCHES,
     ExplorationOperationResult,
     exploration_battle_report_id,
 )
@@ -254,7 +255,7 @@ def _start_message(result: ExplorationOperationResult, view) -> DocumentMessage:
         return (
             builder.field("区域", _name(result.state.location_id, view))
             .field("首次结算", _time(result.state.next_batch_at))
-            .line("之后每 10 分钟自动结算，直到停止、战败或容量已满。")
+            .line(f"之后每 10 分钟自动结算，最多 {MAX_EXPLORATION_BATCHES} 批，或直到停止、战败、容量已满。")
             .actions((Action("exploration.stop", "停止", "停止探险", behavior="send"),))
             .build()
         )
@@ -362,6 +363,7 @@ def _status_text(result: ExplorationOperationResult) -> str:
         ExplorationStopReason.MANUAL: "已停止",
         ExplorationStopReason.DEFEATED: "战败停止",
         ExplorationStopReason.CAPACITY_FULL: "容量已满",
+        ExplorationStopReason.BATCH_LIMIT: f"达到 {MAX_EXPLORATION_BATCHES} 批上限",
         ExplorationStopReason.INVALID_LOCATION: "位置失效",
     }.get(state.stop_reason, "已停止")
 

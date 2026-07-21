@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 import sys
@@ -14,7 +15,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.app import build_game_services  # noqa: E402
-from game.features.exploration import exploration_battle_report_id  # noqa: E402
+from game.features.exploration import (  # noqa: E402
+    MAX_EXPLORATION_BATCHES,
+    exploration_battle_report_id,
+)
 from game.content import build_official_content  # noqa: E402
 from game.content.catalog.enemy import (  # noqa: E402
     AWARD_BOSS_TROPHY_ID,
@@ -52,10 +56,15 @@ from game.core.gameplay import SeededRandomSource  # noqa: E402
 from game.rules.encounter import EnemyEncounterGenerator  # noqa: E402
 from game.rules.exploration import (  # noqa: E402
     EXPLORATION_AGGREGATE,
+    ExplorationBatchPlan,
     ExplorationBatchPlanner,
+    ExplorationBatchResult,
     ExplorationEncounterKind,
     ExplorationState,
     ExplorationStatus,
+    ExplorationStopReason,
+    record_batch,
+    start_exploration,
 )
 
 
@@ -65,8 +74,41 @@ TIME = datetime(2026, 7, 18, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 def main() -> None:
     _assert_content()
     _assert_generation()
+    _assert_batch_limit()
     _assert_persisted_loop()
     print("exploration loop tests passed")
+
+
+def _assert_batch_limit() -> None:
+    state = start_exploration(
+        "batch-limit-character",
+        "batch-limit-session",
+        "exploration.region.r1",
+        "location.test",
+        logical_time=TIME,
+    )
+    state = replace(
+        state,
+        batch_index=MAX_EXPLORATION_BATCHES - 1,
+        completed_batches=MAX_EXPLORATION_BATCHES - 1,
+    )
+    plan = ExplorationBatchPlan(
+        state.session_id,
+        MAX_EXPLORATION_BATCHES,
+        state.region_id,
+        state.location_id,
+        ExplorationEncounterKind.EMPTY,
+        1,
+        "batch-limit-seed",
+    )
+    next_state = record_batch(
+        state,
+        ExplorationBatchResult(plan, TIME + timedelta(minutes=10)),
+        stop_reason=ExplorationStopReason.BATCH_LIMIT,
+    )
+    assert next_state.completed_batches == MAX_EXPLORATION_BATCHES
+    assert next_state.status is ExplorationStatus.STOPPED
+    assert next_state.stop_reason is ExplorationStopReason.BATCH_LIMIT
 
 
 def _assert_content() -> None:

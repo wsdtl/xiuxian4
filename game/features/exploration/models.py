@@ -12,6 +12,7 @@ from game.rules.exploration import (
 )
 
 
+MAX_EXPLORATION_BATCHES = 144
 MAX_CATCH_UP_BATCHES = 144
 MAX_DISCOVERABLE_EXPLORATIONS = 1_000
 
@@ -55,6 +56,7 @@ __all__ = [
     "ExplorationSettlementObserver",
     "ExplorationStorageKinds",
     "ExplorationVictoryFact",
+    "MAX_EXPLORATION_BATCHES",
     "MAX_CATCH_UP_BATCHES",
     "MAX_DISCOVERABLE_EXPLORATIONS",
     "exploration_battle_report_id",

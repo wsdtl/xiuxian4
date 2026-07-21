@@ -4,6 +4,7 @@ from .codec import exploration_codec_registrations
 from .models import (
     MAX_CATCH_UP_BATCHES,
     MAX_DISCOVERABLE_EXPLORATIONS,
+    MAX_EXPLORATION_BATCHES,
     ExplorationOperationResult,
     ExplorationSettlementObserver,
     ExplorationStorageKinds,
@@ -21,6 +22,7 @@ __all__ = [
     "ExplorationVictoryFact",
     "MAX_CATCH_UP_BATCHES",
     "MAX_DISCOVERABLE_EXPLORATIONS",
+    "MAX_EXPLORATION_BATCHES",
     "exploration_codec_registrations",
     "exploration_battle_report_id",
 ]

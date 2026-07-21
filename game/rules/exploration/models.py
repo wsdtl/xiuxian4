@@ -25,6 +25,7 @@ class ExplorationStopReason(str, Enum):
     MANUAL = "manual"
     DEFEATED = "defeated"
     CAPACITY_FULL = "capacity_full"
+    BATCH_LIMIT = "batch_limit"
     INVALID_LOCATION = "invalid_location"
 
 

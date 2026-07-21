@@ -63,6 +63,7 @@ from .medicine import ExplorationMedicineService
 from .models import (
     MAX_CATCH_UP_BATCHES,
     MAX_DISCOVERABLE_EXPLORATIONS,
+    MAX_EXPLORATION_BATCHES,
     ExplorationOperationResult,
     ExplorationVictoryFact,
     ExplorationStorageKinds,
@@ -180,6 +181,22 @@ class ExplorationSettlementService:
                 or state.status is not ExplorationStatus.RUNNING
                 or state.next_batch_at > logical_time
             ):
+                return None
+            if state.batch_index >= MAX_EXPLORATION_BATCHES:
+                stopped = stop_exploration(
+                    state,
+                    ExplorationStopReason.BATCH_LIMIT,
+                    logical_time=logical_time,
+                )
+                self.snapshots.update(
+                    uow,
+                    EXPLORATION_AGGREGATE,
+                    character_id,
+                    state,
+                    stopped,
+                    logical_time,
+                )
+                uow.commit()
                 return None
             resolved_at = state.next_batch_at
             batch_index = state.batch_index + 1
@@ -469,6 +486,8 @@ class ExplorationSettlementService:
             reason = None
             if plan.encounter is not None and not victory:
                 reason = ExplorationStopReason.DEFEATED
+            elif batch_index >= MAX_EXPLORATION_BATCHES:
+                reason = ExplorationStopReason.BATCH_LIMIT
             next_state = record_batch(state, result, stop_reason=reason)
             self.snapshots.update(
                 uow,
