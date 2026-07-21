@@ -38,7 +38,7 @@
 - 统一参考价、系统回收、二手市场、价格纠偏、中央资金与环形号码彩票
 - 已封板的统一奖励结算底座 `reward.foundation.v1`
 - 已封板的权益凭证与兑付底座 `grant.foundation.v1`
-- 已封板的持久化联合事务底座 `persistence.foundation.v7`
+- 已封板的持久化联合事务底座 `persistence.foundation.v8`
 - 已封板的内容包统一组装底座 `content.foundation.v7`
 - 已封板的时间与周期底座 `cycle.foundation.v1`
 - 异步行动槽与生命周期底座 `action.foundation.v1`

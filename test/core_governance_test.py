@@ -143,6 +143,7 @@ FOUNDATION_TESTS = {
 
 def main() -> None:
     _assert_database_write_boundary()
+    _assert_feature_sql_boundary()
     _assert_feature_layer_boundary()
     _assert_business_feature_catalog()
     _assert_application_composition_boundary()
@@ -280,6 +281,19 @@ def _assert_feature_layer_boundary() -> None:
         if path.name not in allowed_root_files
     )
     failures.extend(f"game 根目录出现业务模块 {name}，请归入 features" for name in unexpected)
+    assert not failures, "\n".join(failures)
+
+
+def _assert_feature_sql_boundary() -> None:
+    """玩法可以控制工作单元，但 SQL 只能由持久化仓储拥有。"""
+
+    failures = []
+    for path in (ROOT / "game" / "features").rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        if ".connection.execute(" in source:
+            failures.append(
+                f"{path.relative_to(ROOT).as_posix()} 直接执行 SQL，请下沉到持久化仓储"
+            )
     assert not failures, "\n".join(failures)
 
 

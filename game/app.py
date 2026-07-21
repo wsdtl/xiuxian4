@@ -38,6 +38,7 @@ from game.core.gameplay import (
 from game.core.persistence import (
     ACTIVITY_AGGREGATE,
     ACTION_AGGREGATE,
+    BattleReportStore,
     CHARACTER_AGGREGATE,
     ConcurrencyConflict,
     INVENTORY_AGGREGATE,
@@ -640,7 +641,7 @@ def build_game_services(
         ),
         RewardSettlementStorageKeys,
     )
-    battle_reports = BattleReportService(database)
+    battle_reports = BattleReportService(database, BattleReportStore(database))
     companions = CompanionFeature(
         database,
         content,

@@ -292,7 +292,7 @@ class WorldProgressFeature:
                 WORLD_PROGRESS_PROJECTOR_ID,
                 WORLD_PROGRESS_PARTITION_ID,
             )
-            maximum = _maximum_fact_offset(uow)
+            maximum = self.projections.maximum_fact_offset_in_uow(uow)
             self.projections.commit_in_uow(
                 uow,
                 WORLD_PROGRESS_PROJECTOR_ID,
@@ -415,7 +415,7 @@ class WorldProgressFeature:
             WORLD_PROGRESS_PROJECTOR_ID,
             WORLD_PROGRESS_PARTITION_ID,
             expected_revision=checkpoint[1],
-            through_fact_offset=_maximum_fact_offset(uow),
+            through_fact_offset=self.projections.maximum_fact_offset_in_uow(uow),
             updates={fact.character_id: payload},
             logical_time=fact.resolved_at,
         )
@@ -487,13 +487,6 @@ def _context(event_id: str, logical_time: datetime) -> RuleContext:
         logical_time,
         SeededRandomSource(event_id),
     )
-
-
-def _maximum_fact_offset(uow) -> int:
-    row = uow.connection.execute(
-        "SELECT COALESCE(MAX(fact_offset), 0) AS value FROM fact_journal"
-    ).fetchone()
-    return int(row["value"])
 
 
 def _fact_fingerprint(fact: ExplorationVictoryFact) -> str:

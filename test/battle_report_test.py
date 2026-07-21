@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.core.gameplay import ExecutionPhase, HEALTH_CURRENT, RuleEvent  # noqa: E402
-from game.core.persistence import SqliteDatabase  # noqa: E402
+from game.core.persistence import BattleReportStore, SqliteDatabase  # noqa: E402
 from game.app import build_game_services, install_game_services, restore_game_services  # noqa: E402
 from game.cmd import router as game_router  # noqa: E402
 from game.content.world_skins.cultivation import (  # noqa: E402
@@ -53,7 +53,7 @@ def main() -> None:
     with TemporaryDirectory() as directory:
         database = SqliteDatabase(Path(directory) / "battle-report.db")
         database.initialize()
-        service = BattleReportService(database)
+        service = BattleReportService(database, BattleReportStore(database))
         first = _draft("segment-1", "第一战", NOW)
         reference = service.capture(first)
         replayed = service.capture(first)

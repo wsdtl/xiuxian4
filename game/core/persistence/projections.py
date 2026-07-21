@@ -63,6 +63,19 @@ class FactJournalService:
             for row in rows
         )
 
+    def maximum_offset(self) -> int:
+        with self.database.unit_of_work(write=False) as uow:
+            return self.maximum_offset_in_uow(uow)
+
+    @staticmethod
+    def maximum_offset_in_uow(uow) -> int:
+        """返回调用方事务当前可见的最大永久事实偏移。"""
+
+        row = uow.connection.execute(
+            "SELECT COALESCE(MAX(fact_offset), 0) AS value FROM fact_journal"
+        ).fetchone()
+        return int(row["value"])
+
 
 class ProjectionStore:
     """只提交次核心已经计算好的投影，不在读取时运行副作用。"""
@@ -93,6 +106,19 @@ class ProjectionStore:
                 logical_time=logical_time,
             )
             uow.commit()
+
+    def maximum_fact_offset(self) -> int:
+        with self.database.unit_of_work(write=False) as uow:
+            return self.maximum_fact_offset_in_uow(uow)
+
+    @staticmethod
+    def maximum_fact_offset_in_uow(uow) -> int:
+        """返回调用方事务当前可见的最大永久事实偏移。"""
+
+        row = uow.connection.execute(
+            "SELECT COALESCE(MAX(fact_offset), 0) AS value FROM fact_journal"
+        ).fetchone()
+        return int(row["value"])
 
     def initialize_in_uow(
         self,

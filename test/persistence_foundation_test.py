@@ -108,7 +108,7 @@ def _assert_atomic_persisted_settlement(directory: Path) -> None:
     database.initialize()
     service = PersistedRewardSettlementService(database, engine)
     service.initialize_snapshot(keys, initial, logical_time=TIME)
-    assert PERSISTENCE_FOUNDATION_VERSION == "persistence.foundation.v7"
+    assert PERSISTENCE_FOUNDATION_VERSION == "persistence.foundation.v8"
     assert PERSISTENCE_SCHEMA_VERSION == 5
     assert service.load_snapshot(keys, claim_scope_id="account-a") == initial
 

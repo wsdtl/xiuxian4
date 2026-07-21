@@ -23,8 +23,9 @@ SUMMARY_RETENTION = timedelta(days=30)
 class BattleReportService:
     """一张报告主表和一张片段表承接所有战斗模式。"""
 
-    def __init__(self, database) -> None:
+    def __init__(self, database, store) -> None:
         self.database = database
+        self.store = store
 
     def capture(self, draft: BattleReportDraft) -> BattleReportReference:
         with self.database.unit_of_work() as uow:
@@ -35,119 +36,55 @@ class BattleReportService:
     def capture_in_uow(self, uow, draft: BattleReportDraft) -> BattleReportReference:
         """与玩法结算共用工作单元，战报失败时不会留下半份结算。"""
 
-        existing = uow.connection.execute(
-            """
-            SELECT report_id, share_id, mode_id, presentation_skin_id,
-                   presentation_skin_version, content_fingerprint
-            FROM battle_report
-            WHERE report_id = ?
-            """,
-            (draft.report_id,),
-        ).fetchone()
+        existing = self.store.header_in_uow(uow, draft.report_id)
         if existing is None:
             share_id = self._new_share_id(uow)
             started_at = draft.segment.started_at
             finished_at = draft.segment.finished_at
-            uow.connection.execute(
-                """
-                INSERT INTO battle_report(
-                    report_id, share_id, mode_id, presentation_skin_id,
-                    presentation_skin_version, content_fingerprint,
-                    summary_payload, started_at, finished_at,
-                    detail_expires_at, summary_expires_at,
-                    uncompressed_bytes, compressed_bytes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
-                """,
-                (
-                    draft.report_id,
-                    share_id,
-                    draft.mode_id,
-                    draft.presentation_skin_id,
-                    draft.presentation_skin_version,
-                    draft.content_fingerprint,
-                    _encode_summary(draft.summary),
-                    started_at.isoformat(),
-                    finished_at.isoformat(),
-                    (finished_at + DETAIL_RETENTION).isoformat(),
-                    (finished_at + SUMMARY_RETENTION).isoformat(),
-                    finished_at.isoformat(),
-                ),
+            self.store.insert_header_in_uow(
+                uow,
+                report_id=draft.report_id,
+                share_id=share_id,
+                mode_id=draft.mode_id,
+                presentation_skin_id=draft.presentation_skin_id,
+                presentation_skin_version=draft.presentation_skin_version,
+                content_fingerprint=draft.content_fingerprint,
+                summary_payload=_encode_summary(draft.summary),
+                started_at=started_at.isoformat(),
+                finished_at=finished_at.isoformat(),
+                detail_expires_at=(finished_at + DETAIL_RETENTION).isoformat(),
+                summary_expires_at=(finished_at + SUMMARY_RETENTION).isoformat(),
+                created_at=finished_at.isoformat(),
             )
         else:
             self._validate_identity(existing, draft)
-            share_id = str(existing["share_id"])
+            share_id = existing.share_id
 
-        duplicate = uow.connection.execute(
-            """
-            SELECT 1 FROM battle_report_segment
-            WHERE report_id = ? AND segment_id = ?
-            """,
-            (draft.report_id, draft.segment.segment_id),
-        ).fetchone()
-        if duplicate is not None:
+        if self.store.segment_exists_in_uow(
+            uow,
+            draft.report_id,
+            draft.segment.segment_id,
+        ):
             return BattleReportReference(draft.report_id, share_id)
 
-        sequence = int(
-            uow.connection.execute(
-                """
-                SELECT COALESCE(MAX(sequence), -1) + 1
-                FROM battle_report_segment
-                WHERE report_id = ?
-                """,
-                (draft.report_id,),
-            ).fetchone()[0]
-        )
         compressed, uncompressed_bytes = encode_segment(draft.segment)
-        uow.connection.execute(
-            """
-            INSERT INTO battle_report_segment(
-                report_id, sequence, segment_id, detail_payload,
-                uncompressed_bytes, compressed_bytes
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                draft.report_id,
-                sequence,
-                draft.segment.segment_id,
-                compressed,
-                uncompressed_bytes,
-                len(compressed),
-            ),
-        )
-        uow.connection.execute(
-            """
-            UPDATE battle_report
-            SET summary_payload = ?,
-                started_at = MIN(started_at, ?),
-                finished_at = MAX(finished_at, ?),
-                detail_expires_at = MAX(detail_expires_at, ?),
-                summary_expires_at = MAX(summary_expires_at, ?),
-                uncompressed_bytes = uncompressed_bytes + ?,
-                compressed_bytes = compressed_bytes + ?
-            WHERE report_id = ?
-            """,
-            (
-                _encode_summary(draft.summary),
-                draft.segment.started_at.isoformat(),
-                draft.segment.finished_at.isoformat(),
-                (draft.segment.finished_at + DETAIL_RETENTION).isoformat(),
-                (draft.segment.finished_at + SUMMARY_RETENTION).isoformat(),
-                uncompressed_bytes,
-                len(compressed),
-                draft.report_id,
-            ),
+        self.store.append_segment_in_uow(
+            uow,
+            report_id=draft.report_id,
+            segment_id=draft.segment.segment_id,
+            detail_payload=compressed,
+            uncompressed_bytes=uncompressed_bytes,
+            summary_payload=_encode_summary(draft.summary),
+            started_at=draft.segment.started_at.isoformat(),
+            finished_at=draft.segment.finished_at.isoformat(),
+            detail_expires_at=(draft.segment.finished_at + DETAIL_RETENTION).isoformat(),
+            summary_expires_at=(draft.segment.finished_at + SUMMARY_RETENTION).isoformat(),
         )
         return BattleReportReference(draft.report_id, share_id)
 
     def reference(self, report_id: str) -> BattleReportReference | None:
-        with self.database.unit_of_work(write=False) as uow:
-            row = uow.connection.execute(
-                "SELECT report_id, share_id FROM battle_report WHERE report_id = ?",
-                (report_id,),
-            ).fetchone()
-        if row is None:
-            return None
-        return BattleReportReference(str(row["report_id"]), str(row["share_id"]))
+        value = self.store.reference(report_id)
+        return BattleReportReference(*value) if value is not None else None
 
     def load_public(
         self,
@@ -156,45 +93,24 @@ class BattleReportService:
         logical_time: datetime,
     ) -> BattleReportView | None:
         _aware(logical_time)
-        with self.database.unit_of_work(write=False) as uow:
-            row = uow.connection.execute(
-                """
-                SELECT share_id, mode_id, presentation_skin_id,
-                       presentation_skin_version, content_fingerprint,
-                       summary_payload, started_at, finished_at,
-                       detail_expires_at, summary_expires_at
-                FROM battle_report
-                WHERE share_id = ?
-                """,
-                (str(share_id or "").strip(),),
-            ).fetchone()
-            if row is None or logical_time >= datetime.fromisoformat(row["summary_expires_at"]):
-                return None
-            detail_available = logical_time < datetime.fromisoformat(row["detail_expires_at"])
-            segments = ()
-            if detail_available:
-                segment_rows = uow.connection.execute(
-                    """
-                    SELECT detail_payload
-                    FROM battle_report_segment
-                    WHERE report_id = (
-                        SELECT report_id FROM battle_report WHERE share_id = ?
-                    )
-                    ORDER BY sequence
-                    """,
-                    (share_id,),
-                ).fetchall()
-                segments = tuple(decode_segment(bytes(item[0])) for item in segment_rows)
+        stored = self.store.load_public(
+            str(share_id or "").strip(),
+            logical_time=logical_time.isoformat(),
+        )
+        if stored is None:
+            return None
+        row = stored.header
+        segments = tuple(decode_segment(value) for value in stored.segment_payloads)
         return BattleReportView(
-            share_id=str(row["share_id"]),
-            mode_id=str(row["mode_id"]),
-            presentation_skin_id=str(row["presentation_skin_id"]),
-            presentation_skin_version=int(row["presentation_skin_version"]),
-            content_fingerprint=str(row["content_fingerprint"]),
-            summary=_decode_summary(str(row["summary_payload"])),
-            started_at=datetime.fromisoformat(row["started_at"]),
-            finished_at=datetime.fromisoformat(row["finished_at"]),
-            detail_available=detail_available,
+            share_id=row.share_id,
+            mode_id=row.mode_id,
+            presentation_skin_id=row.presentation_skin_id,
+            presentation_skin_version=row.presentation_skin_version,
+            content_fingerprint=row.content_fingerprint,
+            summary=_decode_summary(row.summary_payload),
+            started_at=datetime.fromisoformat(row.started_at),
+            finished_at=datetime.fromisoformat(row.finished_at),
+            detail_available=stored.detail_available,
             segments=segments,
         )
 
@@ -202,23 +118,7 @@ class BattleReportService:
         """删除七天前的明细，并在三十天后删除整份摘要。"""
 
         _aware(logical_time)
-        now = logical_time.isoformat()
-        with self.database.unit_of_work() as uow:
-            detail = uow.connection.execute(
-                """
-                DELETE FROM battle_report_segment
-                WHERE report_id IN (
-                    SELECT report_id FROM battle_report WHERE detail_expires_at <= ?
-                )
-                """,
-                (now,),
-            ).rowcount
-            summaries = uow.connection.execute(
-                "DELETE FROM battle_report WHERE summary_expires_at <= ?",
-                (now,),
-            ).rowcount
-            uow.commit()
-        return int(detail), int(summaries)
+        return self.store.cleanup(logical_time=logical_time.isoformat())
 
     @staticmethod
     def _validate_identity(row, draft: BattleReportDraft) -> None:
@@ -229,23 +129,18 @@ class BattleReportService:
             draft.content_fingerprint,
         )
         actual = (
-            str(row["mode_id"]),
-            str(row["presentation_skin_id"]),
-            int(row["presentation_skin_version"]),
-            str(row["content_fingerprint"]),
+            row.mode_id,
+            row.presentation_skin_id,
+            row.presentation_skin_version,
+            row.content_fingerprint,
         )
         if actual != expected:
             raise ValueError("同一战报身份对应了不同模式、皮肤或内容版本")
 
-    @staticmethod
-    def _new_share_id(uow) -> str:
+    def _new_share_id(self, uow) -> str:
         while True:
             value = token_urlsafe(18)
-            exists = uow.connection.execute(
-                "SELECT 1 FROM battle_report WHERE share_id = ?",
-                (value,),
-            ).fetchone()
-            if exists is None:
+            if not self.store.share_id_exists_in_uow(uow, value):
                 return value
 
 
