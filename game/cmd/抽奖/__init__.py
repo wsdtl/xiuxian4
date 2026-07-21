@@ -13,7 +13,7 @@ from . import service
     cmd="抽奖",
     help=HelpSpec(
         category="活动",
-        summary="消耗一张抽奖签进行一次抽奖",
+        summary="消耗一张抽奖签显化一次未定结果",
         usage=("抽奖",),
         side_effect="成功后消耗一张抽奖签",
         order=10,
@@ -27,7 +27,7 @@ async def draw_once(current=Depends(current_character)) -> None:
     cmd="十连抽奖",
     help=HelpSpec(
         category="活动",
-        summary="一次消耗十张抽奖签连续抽奖",
+        summary="一次消耗十张抽奖签连续显化",
         usage=("十连抽奖",),
         side_effect="成功后消耗十张抽奖签",
         order=20,
@@ -41,7 +41,7 @@ async def draw_ten(current=Depends(current_character)) -> None:
     cmd="抽奖奖池",
     help=HelpSpec(
         category="活动",
-        summary="查看当前抽奖档位和可能获得的奖励",
+        summary="查看显化档位、稳定度和可能获得的奖励",
         usage=("抽奖奖池",),
         order=30,
     ),
@@ -54,7 +54,7 @@ async def draw_pool(current=Depends(current_character)) -> None:
     cmd="抽奖记录",
     help=HelpSpec(
         category="活动",
-        summary="查看自己的近期抽奖结果",
+        summary="查看自己的近期显化结果",
         usage=("抽奖记录",),
         order=40,
     ),

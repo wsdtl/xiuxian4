@@ -1,4 +1,4 @@
-"""世界行纪查询、地点解析与排行榜消息展示。"""
+"""行纪查询、地点解析与永久排行榜消息展示。"""
 
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def _world_overview(progress, view) -> DocumentMessage:
     services = current_game_services()
     builder = (
         M.document()
-        .section("行纪", icon="world")
+        .section(f"行纪·{view.skin.name}", icon="world")
         .row(
             ("世界", view.skin.name),
             ("总进度", f"{progress.percent}%"),
@@ -117,6 +117,7 @@ def _region_detail(requested: str, progress, view) -> DocumentMessage:
     builder = (
         M.document()
         .section(view.projector.name(display_id), icon="combat")
+        .field("世界", view.skin.name)
         .row(
             ("进度", f"{region.points}/{region.maximum_points} ({region.percent}%)"),
             ("胜利", str(region.victories)),
@@ -160,7 +161,7 @@ def _ranking(ranking, view) -> DocumentMessage:
             FieldSeparator(),
             f"圆满{entry.completed_regions}",
         )
-    return builder.note("排行永久累计，不发放名次奖励").build()
+    return builder.note("排行永久累计，只记录共同历史，不发放名次奖励").build()
 
 
 def _region_name(services, view, region_id: str) -> str:

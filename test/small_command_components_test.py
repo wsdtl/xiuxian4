@@ -358,6 +358,7 @@ async def _main() -> None:
                 f"暂无{target_view.projector.name(INSCRIPTION_FEATHER_ITEM_ID)}"
                 in inscription.replies[0].message.content
             )
+            assert "世界:" in inscription.replies[0].message.content
 
             original = await dispatch(
                 client_id="small-command-player",
@@ -374,6 +375,7 @@ async def _main() -> None:
                 event_id="small-command-loadout",
             )
             assert "当前装配" in loadout.replies[0].message.content
+            assert "世界:" in loadout.replies[0].message.content
             assert target_view.projector.name(WEAPON_SLOT_ID) in loadout.replies[0].message.content
 
             preset_list = await dispatch(
@@ -384,6 +386,7 @@ async def _main() -> None:
             )
             assert "配装 0" in preset_list.replies[0].message.content
             assert "配装 5" in preset_list.replies[0].message.content
+            assert "世界:" in preset_list.replies[0].message.content
 
             switched = await dispatch(
                 client_id="small-command-player",
@@ -466,6 +469,7 @@ async def _main() -> None:
                 event_id="small-command-inscription-preview",
             )
             assert "铭刻预览" in preview.replies[0].message.content
+            assert "世界:" in preview.replies[0].message.content
             confirm_command = preview.replies[0].message.actions[0].data
             completed = await dispatch(
                 client_id="small-command-player",
@@ -475,6 +479,7 @@ async def _main() -> None:
             )
             assert "铭刻完成" in completed.replies[0].message.content
             assert "照夜" in completed.replies[0].message.content
+            assert "世界:" in completed.replies[0].message.content
 
             overview = services.load_character_overview(character).overview
             assert overview is not None

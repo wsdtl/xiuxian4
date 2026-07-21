@@ -1,4 +1,4 @@
-"""多次元灾厄二级组件命令和全服活动入口。"""
+"""跨界灾厄二级组件命令和公共活动入口。"""
 
 from __future__ import annotations
 
@@ -11,20 +11,20 @@ from . import jobs as jobs  # noqa: F401
 from . import service
 
 
-reply_intents.register_command(DIMENSIONAL_DISASTER_INTENT, "多次元灾厄")
+reply_intents.register_command(DIMENSIONAL_DISASTER_INTENT, "跨界灾厄")
 
 
 @GameCommand.handler(
-    cmd="多次元灾厄",
+    cmd="跨界灾厄",
     help=HelpSpec(
         category="战斗与社交",
-        summary="查看当前降临或最近一次多次元灾厄",
-        usage=("多次元灾厄",),
+        summary="查看当前降临或最近一次跨界灾厄",
+        usage=("跨界灾厄",),
         order=40,
     ),
 )
 async def view_disaster(current=Depends(current_character)) -> None:
-    """查看当前降临或最近一次多次元灾厄。"""
+    """查看当前降临或最近一次跨界灾厄。"""
 
     await service.view_disaster(current)
 

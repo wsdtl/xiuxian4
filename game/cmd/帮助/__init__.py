@@ -20,4 +20,18 @@ async def help_command(message: str = "") -> None:
     await service.show_help(message)
 
 
+@GameCommand.handler(
+    cmd="归航公约",
+    access="public",
+    help=HelpSpec(
+        category="世界",
+        summary="了解归航者共同归属的跨界公约",
+        usage=("归航公约",),
+        order=0,
+    ),
+)
+async def covenant_command() -> None:
+    await service.show_covenant()
+
+
 __all__ = []

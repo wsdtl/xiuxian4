@@ -1,4 +1,4 @@
-"""全服活动列表与详情的内部入口。"""
+"""活动列表与详情的隐藏入口。"""
 
 from __future__ import annotations
 

@@ -161,7 +161,9 @@ async def confirm_asset_inscription(
         await send_game_reply(_invalid(outcome.failure.message))
         return
     assert outcome.value is not None
-    await send_game_reply(_success(outcome.value))
+    await send_game_reply(
+        _success(outcome.value, current_game_services().world_view(overview.character_world))
+    )
 
 
 async def confirm_ability_inscription(
@@ -207,7 +209,9 @@ async def confirm_ability_inscription(
         await send_game_reply(_invalid(outcome.failure.message))
         return
     assert outcome.value is not None
-    await send_game_reply(_success(outcome.value))
+    await send_game_reply(
+        _success(outcome.value, current_game_services().world_view(overview.character_world))
+    )
 
 
 async def inscription_original_name(
@@ -268,7 +272,11 @@ def _inscription_home(inventory: InventoryState, preference, view) -> DocumentMe
         if _definition(value).tags.has("item.weapon")
         or _definition(value).tags.has("item.equipment")
     ]
-    builder = M.document().section("铭刻", icon="item")
+    builder = (
+        M.document()
+        .section("铭刻", icon="item")
+        .field("世界", view.skin.name)
+    )
     medium_name = view.projector.name(INSCRIPTION_FEATHER_ITEM_ID)
     if not mediums:
         builder.line(f"暂无{medium_name}")
@@ -311,6 +319,7 @@ def _asset_preview(
     return (
         M.document()
         .section("铭刻预览", icon="item")
+        .field("世界", view.skin.name)
         .field(medium_name, data.title)
         .field("原名", _asset_name(target, preference, view))
         .field("铭刻名", custom_name)
@@ -345,6 +354,7 @@ def _ability_preview(
     return (
         M.document()
         .section("能力铭刻预览", icon="skill")
+        .field("世界", view.skin.name)
         .field(medium_name, data.title)
         .field("武器", _asset_name(weapon, preference, view))
         .field("原能力名", _ability_name(weapon, ability_id, preference, view))
@@ -361,7 +371,11 @@ def _ability_home(inventory: InventoryState, preference, view) -> DocumentMessag
         for value in inventory.instances.values()
         if _definition(value).tags.has("item.weapon")
     ]
-    builder = M.document().section("铭刻能力", icon="skill")
+    builder = (
+        M.document()
+        .section("铭刻能力", icon="skill")
+        .field("世界", view.skin.name)
+    )
     if not weapons:
         return builder.line("当前没有可以铭刻能力的武器").build()
     for weapon in _sorted(inventory, weapons)[:_LIST_LIMIT]:
@@ -373,10 +387,11 @@ def _ability_home(inventory: InventoryState, preference, view) -> DocumentMessag
     return builder.note("发送: 铭刻能力 羽毛编号 武器编号 能力序号 新名称").build()
 
 
-def _success(receipt) -> DocumentMessage:
+def _success(receipt, view) -> DocumentMessage:
     return (
         M.document()
         .section("铭刻完成", icon="item")
+        .field("世界", view.skin.name)
         .field("铭刻名", receipt.custom_name)
         .line(receipt.medium_flavor_text)
         .build()

@@ -94,7 +94,7 @@ def main() -> None:
         WORLD_PACKAGE_ID,
     )
     assert str(CATALOG_PACKAGE.manifest.version) == "3.23.0"
-    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.19.0"
+    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.20.0"
     assert str(WORLD_PACKAGE.manifest.version) == "1.2.0"
     assert len(catalog.report.content_fingerprint) == 64
     assert catalog.report.display_content_ids == (
@@ -162,7 +162,7 @@ def main() -> None:
     stellar = select_world_skin(catalog, STELLAR_RING_SKIN_ID)
     assert cultivation.catalog is magic.catalog is stellar.catalog
     assert cultivation.skin.name == "太玄界"
-    assert cultivation.skin.version == 25
+    assert cultivation.skin.version == 26
     assert cultivation.skin.icon == "☯"
     assert cultivation.projector.name(PRIMARY_CURRENCY_ID) == "灵石"
     assert tuple(cultivation.projector.name(value) for value in QUALITY_IDS) == (
@@ -173,18 +173,19 @@ def main() -> None:
         "圣",
     )
     assert magic.skin.name == "魔法世界"
-    assert magic.skin.version == 24
+    assert magic.skin.version == 25
     assert magic.skin.icon == "✦"
     assert magic.projector.name(PRIMARY_CURRENCY_ID) == "魔晶"
     assert magic.projector.name(COMMON_QUALITY_ID) == "普通"
     assert stellar.skin.name == "星环界"
-    assert stellar.skin.version == 2
+    assert stellar.skin.version == 3
     assert stellar.skin.icon == "◎"
     assert stellar.projector.name(PRIMARY_CURRENCY_ID) == "星铢"
     assert cultivation.projector.name(INSCRIPTION_FEATHER_ITEM_ID) == "铭刻之羽"
     assert magic.projector.name(INSCRIPTION_FEATHER_ITEM_ID) == "铭刻之羽"
     assert cultivation.projector.name(DRAW_TICKET_ITEM_ID) == "流光签"
     assert magic.projector.name(DRAW_TICKET_ITEM_ID) == "星辉秘券"
+    assert stellar.projector.name(DRAW_TICKET_ITEM_ID) == "未定序列券"
     assert cultivation.projector.name(BREAKTHROUGH_TOKEN_ITEM_ID) == "问道玉契"
     assert magic.projector.name(BREAKTHROUGH_TOKEN_ITEM_ID) == "星界升格契印"
     assert cultivation.projector.name(DIMENSION_SHIFT_ITEM_ID) == "渡界玉符"

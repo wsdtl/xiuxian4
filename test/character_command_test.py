@@ -401,7 +401,7 @@ async def _main() -> None:
                 sender_name="平台昵称甲",
                 event_id="local-world-events-list",
             )
-            assert "当前没有开放的全服活动" in _content(activity_list)
+            assert "当前没有开放的活动" in _content(activity_list)
 
             activity_detail = await dispatch(
                 client_id="local-user-a",

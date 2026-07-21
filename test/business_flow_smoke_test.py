@@ -20,7 +20,7 @@ from game.cmd import 二手 as market_component  # noqa: E402,F401
 from game.cmd import 休息 as rest_component  # noqa: E402,F401
 from game.cmd import 切磋 as sparring_component  # noqa: E402,F401
 from game.cmd import 回收 as recycle_component  # noqa: E402,F401
-from game.cmd import 多次元灾厄 as disaster_component  # noqa: E402,F401
+from game.cmd import 跨界灾厄 as disaster_component  # noqa: E402,F401
 from game.cmd import 彩票 as lottery_component  # noqa: E402,F401
 from game.cmd import 抽奖 as draw_component  # noqa: E402,F401
 from game.cmd import 探险 as exploration_component  # noqa: E402,F401
@@ -69,14 +69,14 @@ async def _main() -> None:
                 ("探险", "flow-exploration", "探险"),
                 ("抽奖", "flow-draw", "抽奖"),
                 ("回收战利品", "flow-recycle", "战利品"),
-                ("二手", "flow-market", "二手"),
+                ("二手", "flow-market", "归航市场"),
                 ("彩票", "flow-lottery", "彩票"),
                 ("world_events", "flow-activities", "活动"),
                 ("notifications", "flow-notifications", "通知"),
                 ("pending_actions", "flow-pending", "待领取"),
                 ("休息", "flow-rest", "休息"),
                 ("切磋", "flow-sparring", "切磋"),
-                ("多次元灾厄", "flow-disaster", "多次元灾厄"),
+                ("跨界灾厄", "flow-disaster", "跨界灾厄"),
             )
             for command, event_id, expected in cases:
                 result = await _dispatch(command, event_id)

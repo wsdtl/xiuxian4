@@ -1,4 +1,4 @@
-"""系统回收参数解析、不可变报价和确认展示。"""
+"""归航回收参数解析、不可变报价和确认展示。"""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from game.app import CharacterOverview, CharacterOverviewResult, CurrentCharacterResult, current_game_services
 from game.content.catalog.foundation import PRIMARY_CURRENCY_ID, QUALITY_IDS
+from game.content.presentation import COVENANT_RECYCLING_NAME
 from game.core.gameplay import (
     STANDARD_LOADOUT_SLOT_ORDER,
     WEAPON_SLOT_ID,
@@ -184,7 +185,7 @@ async def recycle_trophies(current: CurrentCharacterResult) -> None:
             logical_time=_now(),
         )
         view = current_game_services().world_view(current.character_world)
-        builder = M.document().section("回收战利品", icon="trade")
+        builder = M.document().section(f"{COVENANT_RECYCLING_NAME}·战利品", icon="trade")
         if result.status == "empty":
             await send_game_reply(builder.line("背包中没有可回收的战利品").build())
             return
@@ -200,14 +201,16 @@ async def recycle_trophies(current: CurrentCharacterResult) -> None:
             builder.field(
                 "收入",
                 f"{result.quote.total_amount} {view.projector.name(result.quote.currency_id)}",
-            ).build()
+            )
+            .note("按名录固定价结算，不动用归航库，也不收交易税。")
+            .build()
         )
     except Exception as exc:
         await _failed("回收战利品失败", character.id, exc)
 
 
 def _quote_message(result, overview: CharacterOverview, command_prefix: str) -> DocumentMessage:
-    builder = M.document().section("回收报价", icon="trade")
+    builder = M.document().section(f"{COVENANT_RECYCLING_NAME}·报价", icon="trade")
     quote = result.quote
     if result.status != "quoted" or quote is None:
         return builder.line(result.failure_message or "没有符合条件的可回收物品").build()
@@ -225,6 +228,7 @@ def _quote_message(result, overview: CharacterOverview, command_prefix: str) -> 
         ("参考总价", quote.total_reference_price),
         ("回收所得", quote.total_amount),
     )
+    builder.note("确认后永久注销物品档案；本次结算不动用归航库，也不收交易税。")
     return builder.actions(
         (
             Action(
@@ -238,7 +242,7 @@ def _quote_message(result, overview: CharacterOverview, command_prefix: str) -> 
 
 
 def _result_message(result, overview: CharacterOverview) -> DocumentMessage:
-    builder = M.document().section("回收完成", icon="trade")
+    builder = M.document().section(f"{COVENANT_RECYCLING_NAME}·完成", icon="trade")
     if result.status != "recycled" or result.quote is None:
         return builder.line(result.failure_message or "本次回收没有完成").build()
     return builder.row(
@@ -252,7 +256,7 @@ def _result_message(result, overview: CharacterOverview) -> DocumentMessage:
 
 def _batch_slots(overview: CharacterOverview) -> DocumentMessage:
     view = _view(overview)
-    builder = M.document().section("批量回收", icon="trade")
+    builder = M.document().section(COVENANT_RECYCLING_NAME, icon="trade")
     return builder.actions(
         tuple(
             Action(
@@ -268,7 +272,7 @@ def _batch_slots(overview: CharacterOverview) -> DocumentMessage:
 def _batch_qualities(slot_id: str, overview: CharacterOverview) -> DocumentMessage:
     view = _view(overview)
     builder = M.document().section(
-        f"批量回收·{view.projector.name(slot_id)}",
+        f"{COVENANT_RECYCLING_NAME}·{view.projector.name(slot_id)}",
         icon="trade",
     )
     return builder.actions(
@@ -304,7 +308,7 @@ def _batch_levels(
         limits += (maximum_level,)
     quality_text = ",".join(sorted(view.projector.name(value) for value in quality_ids))
     builder = M.document().section(
-        f"批量回收·武器·{quality_text}",
+        f"{COVENANT_RECYCLING_NAME}·武器·{quality_text}",
         icon="trade",
     ).note("选择等级上限，回收该等级及以下的武器")
     return builder.actions(
@@ -391,7 +395,7 @@ async def _failed(title: str, character_id: str, exc: Exception) -> None:
 
 
 def _failure(message: str) -> DocumentMessage:
-    return M.document().section("系统回收", icon="notice").line(message).build()
+    return M.document().section(COVENANT_RECYCLING_NAME, icon="notice").line(message).build()
 
 
 __all__ = [

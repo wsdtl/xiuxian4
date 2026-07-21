@@ -35,7 +35,7 @@ MAGIC_ITEM_ENTRIES = {
     ),
     DRAW_TICKET_ITEM_ID: SkinEntry(
         name="星辉秘券",
-        description="凝结多次元战斗余辉的抽奖凭证。",
+        description="封存一束尚未坍缩的战斗可能；投入界门后会显化为一次确定收获。",
         icon="🎟️",
     ),
     INSCRIPTION_FEATHER_ITEM_ID: SkinEntry(

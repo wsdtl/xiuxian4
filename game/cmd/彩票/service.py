@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content.catalog.economy import LOTTERY_TICKET_PRICE
+from game.content.presentation import COVENANT_TREASURY_NAME
 from game.rules.lottery import pool_breakdown
 from launch import C, config, logger
 from message import M
@@ -47,7 +48,7 @@ async def lottery(current: CurrentCharacterResult) -> None:
             ("单人上限", "1 张"),
         )
         builder.row(
-            ("中央余额", view.tax_balance),
+            (COVENANT_TREASURY_NAME, view.tax_balance),
             ("基础奖池", base_pool),
         )
         builder.row(

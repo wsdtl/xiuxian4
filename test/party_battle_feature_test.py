@@ -88,6 +88,23 @@ def main() -> None:
                 logical_time=now,
             )
             assert prepared.status == "ready"
+        before = {
+            character.id: services.load_character_overview(character).overview
+            for character in characters
+        }
+        assert all(value is not None for value in before.values())
+        before_worlds = {
+            character_id: value.character_world
+            for character_id, value in before.items()
+        }
+        before_positions = {
+            character_id: next(
+                presence.position
+                for presence in value.world.presences.values()
+                if presence.owner_id == character_id
+            )
+            for character_id, value in before.items()
+        }
         with services.database.unit_of_work(write=False) as uow:
             prepared_party_state = services.party_battles.snapshots.require(
                 uow,
@@ -107,6 +124,18 @@ def main() -> None:
         )
         assert result.status in {"victory", "draw", "defeated"}
         assert result.report_id and result.share_id
+        assert result.challenge is not None
+        assert result.challenge.source_world_id in services.content.worlds.world_ids()
+        for character in characters:
+            after = services.load_character_overview(character).overview
+            assert after is not None
+            assert after.character_world == before_worlds[character.id]
+            after_position = next(
+                presence.position
+                for presence in after.world.presences.values()
+                if presence.owner_id == character.id
+            )
+            assert after_position == before_positions[character.id]
         replayed = services.party_battles.challenge(
             "party-battle-start",
             party.id,

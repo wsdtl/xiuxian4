@@ -61,10 +61,10 @@ from game.rules.disaster import (  # noqa: E402
     roll_draw_ticket_drop,
 )
 from game.cmd import 跃迁 as dimension_component  # noqa: E402,F401
-from game.cmd import 多次元灾厄 as disaster_component  # noqa: E402,F401
+from game.cmd import 跨界灾厄 as disaster_component  # noqa: E402,F401
 from game.cmd import 角色 as character_component  # noqa: E402,F401
 from game.cmd import 铭刻 as inscription_component  # noqa: E402,F401
-from game.cmd.多次元灾厄 import service as disaster_command_service  # noqa: E402
+from game.cmd.跨界灾厄 import service as disaster_command_service  # noqa: E402
 from game.features.dimensional_disaster import service as disaster_feature_service  # noqa: E402
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
@@ -106,7 +106,7 @@ async def _main() -> None:
     }
     assert all(value.documented == 7 and value.original == 3 for value in audit.sources)
 
-    for command in ("多次元灾厄", "讨伐灾厄", "灾厄排行"):
+    for command in ("跨界灾厄", "讨伐灾厄", "灾厄排行"):
         assert len(LocalEventHandler.exact_rules[command]) == 1
         assert len(QqEventHandler.exact_rules[command]) == 1
 
@@ -129,12 +129,12 @@ async def _main() -> None:
             first_character, second_character = _characters(services)
             _grant_dimension_shift_item(services, first_character.id)
 
-            status = await _dispatch("player-a", "多次元灾厄", "status-a")
+            status = await _dispatch("player-a", "跨界灾厄", "status-a")
             content = status.replies[0].message.content
             event = _event(services)
             assert event.source_world_id in set(PLAYABLE_WORLD_IDS)
             assert event.narrative.name in content
-            assert "多次元灾厄" in content and "今日讨伐: _0/2_" in content
+            assert "跨界灾厄" in content and "今日讨伐: _0/2_" in content
             assert services.global_activities.active(
                 services.activities.load(GLOBAL_ACTIVITY_SCOPE_ID),
                 logical_time=TIME,
@@ -146,7 +146,7 @@ async def _main() -> None:
                 if value != initial_dimension.world_id
             )
             await _dispatch("player-a", f"跃迁 {target_world}", "shift-a")
-            shifted = await _dispatch("player-a", "多次元灾厄", "status-shifted")
+            shifted = await _dispatch("player-a", "跨界灾厄", "status-shifted")
             assert event.narrative.name in shifted.replies[0].message.content
 
             first = await _dispatch("player-a", "讨伐灾厄", "challenge-a-1")
@@ -184,7 +184,7 @@ async def _main() -> None:
             _set_event_health(services, event.event_id, 1)
             _restore_combat_resources(services, second_character.id, attack=10_000)
             defeated = await _dispatch("player-b", "讨伐灾厄", "challenge-b-1")
-            assert "全服击破" in defeated.replies[0].message.content
+            assert "跨界灾厄已经被击破" in defeated.replies[0].message.content
             assert _event(services).outcome is DimensionalDisasterOutcome.DEFEATED
 
             ranking = await _dispatch("player-a", "灾厄排行", "ranking-a")
@@ -217,7 +217,7 @@ async def _main() -> None:
             assert isinstance(medium, InscriptionMediumData)
             assert medium.title == f"{closed.narrative.name}遗羽"
             assert "2026-07-13" in medium.flavor_text
-            assert "2 位登录者" in medium.flavor_text
+            assert "2 位归航者" in medium.flavor_text
 
             services.dimensional_disasters.maintain(
                 logical_time=event.closes_at + timedelta(minutes=2)

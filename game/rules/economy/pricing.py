@@ -36,7 +36,7 @@ class GearPriceService:
         if definition.tags.has("item.weapon"):
             state = weapon_state_from_instance(instance)
             if state.roll is None:
-                raise ValueError("固定新手武器不能回收或进入二手市场")
+                raise ValueError("固定新手武器不能回收或进入归航市场")
             score = state.roll.intrinsic_value.total
             price = _score_price(score)
             price = _scale_bps(
@@ -64,7 +64,7 @@ class GearPriceService:
         if definition.tags.has("item.equipment"):
             state = equipment_state_from_instance(instance)
             if state.roll is None:
-                raise ValueError("固定装备不能回收或进入二手市场")
+                raise ValueError("固定装备不能回收或进入归航市场")
             score = state.roll.intrinsic_value.total
             price = _score_price(score)
             if state.set_id is not None:

@@ -66,7 +66,7 @@ async def move(message: str, current: CurrentCharacterResult) -> None:
             M.document()
             .section("前往", icon="world")
             .line("没有找到这个地点")
-            .note("发送: 探险 查看地点")
+            .note("发送：地图 地点名称")
             .build()
         )
         return
@@ -172,8 +172,9 @@ def _exploration_message(result, overview, view) -> DocumentMessage:
             if anchor_id is not None
             else None
         )
-    builder = M.document().section("探险", icon="world")
+    builder = M.document().section(f"探险·{view.skin.name}", icon="world")
     builder.row(
+        ("世界", view.skin.name),
         ("位置", projector.name(location_id) if location_id else "未知"),
         ("状态", _status_text(result)),
     )
@@ -233,7 +234,7 @@ def _exploration_message(result, overview, view) -> DocumentMessage:
 
 
 def _movement_message(result: WorldTravelResult, view) -> DocumentMessage:
-    builder = M.document().section("前往", icon="world")
+    builder = M.document().section(f"前往·{view.skin.name}", icon="world")
     if result.status == "moved":
         return builder.field("抵达", _anchor_name(result.anchor_id, view)).build()
     if result.status == "already_there":
@@ -300,6 +301,7 @@ def _summary_message(
     builder = (
         M.document()
         .section("探险总结", icon="combat")
+        .field("世界", view.skin.name)
         .row(("区域", _name(state.location_id, view)), ("状态", _status_text(result)))
         .row(("批次", state.completed_batches), ("胜负", f"{state.victories}胜 {state.defeats}负"))
         .row(("经验", f"+{state.character_experience}"), ("武器经验", f"+{state.weapon_experience}"))

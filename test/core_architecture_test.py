@@ -44,7 +44,7 @@ def _assert_product_identity() -> None:
     background = ROOT / "design" / "万象行纪世界设定.md"
     assert background.is_file()
     source = background.read_text(encoding="utf-8")
-    for required in ("无穷界海", "唯一化身", "多次元灾厄", "铭刻之羽"):
+    for required in ("无穷界海", "唯一化身", "跨界灾厄", "铭刻之羽"):
         assert required in source, f"正式背景缺少主轴：{required}"
 
 

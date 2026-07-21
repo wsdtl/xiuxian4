@@ -285,11 +285,11 @@ async def select_party_battle(message: str, current: CurrentCharacterResult) -> 
             level,
             logical_time=_now(),
         )
-        await send_game_reply(
-            _success("组队挑战", "已锁定组队首领，所有成员发送“准备”后由队长发起挑战")
-            if result.status in {"selected", "replayed"}
-            else _failure(result.failure_message or "组队首领选择没有完成")
-        )
+        if result.status in {"selected", "replayed"}:
+            reply = _success("组队挑战", _selection_text(result.challenge))
+        else:
+            reply = _failure(result.failure_message or "组队首领选择没有完成")
+        await send_game_reply(reply)
     except Exception as exc:
         await _failed("选择组队首领失败", character.id, exc)
 
@@ -317,6 +317,8 @@ async def start_party_battle(current: CurrentCharacterResult) -> None:
         )
         if result.status in {"victory", "draw", "defeated", "replayed"}:
             builder = M.document().section("组队战报", icon="combat")
+            if result.challenge is not None:
+                builder.field("来源世界", _source_world_name(result.challenge.source_world_id))
             builder.row(
                 ("首领", result.enemy_name),
                 ("结果", "胜利" if result.victory else "平局" if result.draw else "战败"),
@@ -430,6 +432,7 @@ def _party_battle_message(party: Party, challenge, character_id: str) -> Documen
         return builder.build()
     view = current_game_services().world_views.require(challenge.source_world_id)
     enemy = view.enemy_projector.enemy(challenge.encounter.enemies[0])
+    builder.field("来源世界", view.skin.name)
     builder.row(("首领", enemy.name), ("等级", str(challenge.level)))
     builder.line("状态", FieldSeparator(), "待挑战" if challenge.status == "selected" else "已完成")
     builder.line("挑战次数", FieldSeparator(), str(challenge.attempt_count))
@@ -475,6 +478,21 @@ def _resolve_target(external_id: str):
 def _character_name(character_id: str) -> str:
     character = current_game_services().characters.load_character(character_id)
     return character.name if character is not None else character_id
+
+
+def _source_world_name(world_id: str) -> str:
+    """把临时挑战的来源世界投影为玩家可读名称。"""
+
+    return current_game_services().world_views.require(world_id).skin.name
+
+
+def _selection_text(challenge) -> str:
+    if challenge is None:
+        return "已锁定组队首领，所有成员发送“准备”后由队长发起挑战"
+    return (
+        f"已锁定组队首领，来源世界：{_source_world_name(challenge.source_world_id)}。"
+        "所有成员发送“准备”后由队长发起挑战"
+    )
 
 
 def _character(current: CurrentCharacterResult):

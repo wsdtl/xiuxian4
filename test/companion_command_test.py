@@ -102,7 +102,9 @@ async def _main() -> None:
             }
 
             sanctuary = await _dispatch("宠物秘境", "companion-sanctuary")
-            assert "等待选择" in sanctuary.replies[0].message.content
+            sanctuary_content = sanctuary.replies[0].message.content
+            assert "等待选择" in sanctuary_content
+            assert "来源世界:" in sanctuary_content
 
             hunted = await _dispatch("秘境追踪 1", "companion-hunt")
             hunted_message = hunted.replies[0].message
@@ -111,7 +113,9 @@ async def _main() -> None:
             assert hunted_message.actions[0].data == "伙伴出战 C1"
 
             roster = await _dispatch("伙伴", "companion-roster")
-            assert "C1" in roster.replies[0].message.content
+            roster_content = roster.replies[0].message.content
+            assert "C1" in roster_content
+            assert "世界:" in roster_content
             detail = await _dispatch("伙伴 C1", "companion-detail")
             assert "资质" in detail.replies[0].message.content
             assert "主动行动" in detail.replies[0].message.content
@@ -144,7 +148,9 @@ async def _main() -> None:
                 overview.character_world.world_id
             )[0]
             people = await _dispatch("人物", "companion-people")
-            assert person.name in people.replies[0].message.content
+            people_content = people.replies[0].message.content
+            assert person.name in people_content
+            assert "世界:" in people_content
             move_action = next(
                 action
                 for action in people.replies[0].message.actions

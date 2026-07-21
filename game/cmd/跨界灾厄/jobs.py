@@ -1,4 +1,4 @@
-"""多次元灾厄组件的周期维护触发器。"""
+"""跨界灾厄组件的周期维护触发器。"""
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -22,7 +22,7 @@ def maintain_dimensional_disasters() -> None:
             logical_time=datetime.now(ZoneInfo(config.project.timezone))
         )
     except Exception as exc:
-        logger.opt(colors=True, exception=exc).error(C.fail("多次元灾厄维护失败"))
+        logger.opt(colors=True, exception=exc).error(C.fail("跨界灾厄维护失败"))
 
 
 __all__ = ["maintain_dimensional_disasters"]

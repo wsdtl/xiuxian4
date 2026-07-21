@@ -70,10 +70,13 @@ async def _main() -> None:
             inventory = _inventory(services, seller.id)
             reference = asset_reference(inventory, recycle_asset, services.content.catalog.items)
             quoted = await _dispatch("seller", f"回收 {reference}", "economy-recycle-quote")
+            assert "归航回收·报价" in quoted.replies[0].message.content
             assert "回收所得" in quoted.replies[0].message.content
+            assert "永久注销物品档案" in quoted.replies[0].message.content
+            assert "不动用归航库" in quoted.replies[0].message.content
             confirm = quoted.replies[0].message.actions[0].data
             recycled = await _dispatch("seller", confirm, "economy-recycle-confirm")
-            assert "回收完成" in recycled.replies[0].message.content
+            assert "归航回收·完成" in recycled.replies[0].message.content
 
             batch = await _dispatch("seller", "批量回收", "economy-batch-home")
             assert len(batch.replies[0].message.actions) == 7
@@ -135,7 +138,7 @@ async def _main() -> None:
                 listing_quote.replies[0].message.actions[0].data,
                 "economy-list-confirm",
             )
-            assert "M1 已进入二手市场" in listed.replies[0].message.content
+            assert "M1 已进入归航市场" in listed.replies[0].message.content
 
             detail = await _dispatch("buyer", "二手 M1", "economy-market-detail")
             assert detail.replies[0].message.actions[0].data == "购买 M1"
@@ -147,11 +150,12 @@ async def _main() -> None:
                 purchase_quote.replies[0].message.actions[0].data,
                 "economy-buy-confirm",
             )
-            assert "二手成交" in purchased.replies[0].message.content
+            assert "归航成交" in purchased.replies[0].message.content
             assert market_asset.id in _inventory(services, buyer.id).instances
 
             tax = await _dispatch("buyer", "税务", "economy-tax")
-            assert "中央税库" in tax.replies[0].message.content
+            assert "归航公约·税务" in tax.replies[0].message.content
+            assert "归航库" in tax.replies[0].message.content
             assert "近七日税收" in tax.replies[0].message.content
 
             empty_trophies = await _dispatch(
@@ -159,6 +163,7 @@ async def _main() -> None:
                 "回收战利品",
                 "economy-empty-trophies",
             )
+            assert "归航回收·战利品" in empty_trophies.replies[0].message.content
             assert "没有可回收的战利品" in empty_trophies.replies[0].message.content
         finally:
             restore_game_services(previous)

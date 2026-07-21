@@ -100,7 +100,7 @@ async def presets(message: str, current: CurrentCharacterResult) -> None:
     character, loadout, inventory, preference, view = state
     requested = str(message or "").strip()
     if not requested:
-        await send_game_reply(_preset_message(loadout))
+        await send_game_reply(_preset_message(loadout, view))
         return
     try:
         index = int(requested)
@@ -199,6 +199,7 @@ def _loadout_message(
     builder = (
         M.document()
         .section("当前装配", icon="equipment")
+        .field("世界", view.skin.name)
         .field("当前配装", active if active is not None else "未绑定")
     )
     for slot_id in STANDARD_LOADOUT_SLOT_ORDER:
@@ -233,8 +234,12 @@ def _loadout_message(
     return builder.build()
 
 
-def _preset_message(loadout: LoadoutState) -> DocumentMessage:
-    builder = M.document().section("六套配装", icon="equipment")
+def _preset_message(loadout: LoadoutState, view) -> DocumentMessage:
+    builder = (
+        M.document()
+        .section("六套配装", icon="equipment")
+        .field("世界", view.skin.name)
+    )
     for index, preset_id in enumerate(LOADOUT_PRESET_IDS):
         preset = loadout.presets[preset_id]
         label = f"配装 {index}"

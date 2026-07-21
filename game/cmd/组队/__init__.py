@@ -28,7 +28,7 @@ async def view(current=Depends(current_character)) -> None:
         category="战斗与社交",
         summary="创建一支最多三人的轻量队伍",
         usage=("创建队伍",),
-        side_effect="创建者成为队长；队伍暂不参与任何多人战斗",
+        side_effect="创建者成为队长；队伍可参与跨界协同挑战",
         order=50,
     ),
 )
@@ -181,7 +181,7 @@ async def party_battle_view(current=Depends(current_character)) -> None:
     cmd="选择组队挑战",
     help=HelpSpec(
         category="战斗与社交",
-        summary="由队长锁定一个等级的世界专属组队首领",
+        summary="由队长锁定一个等级的跨界组队首领",
         usage=("选择组队挑战 等级",),
         order=160,
     ),

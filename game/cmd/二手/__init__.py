@@ -1,4 +1,4 @@
-"""二手市场与税务查询二级组件命令。"""
+"""归航市场与税务查询二级组件命令。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from . import service
     cmd="二手",
     help=HelpSpec(
         category="资产",
-        summary="浏览二手市场或查看指定挂单",
+        summary="浏览归航市场或查看指定挂单",
         usage=("二手", "二手 页码", "二手 挂单编号"),
         order=150,
     ),
@@ -81,7 +81,7 @@ async def my_listings(message: str = "", overview=Depends(current_character_over
     cmd="税务",
     help=HelpSpec(
         category="资产",
-        summary="查看当前二手交易税率和税务规则",
+        summary="查看归航公约的交易税务和归航库",
         usage=("税务",),
         order=200,
     ),

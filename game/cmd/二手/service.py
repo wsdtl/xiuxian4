@@ -1,4 +1,4 @@
-"""二手市场列表、上架购买报价和税务展示。"""
+"""归航市场列表、上架购买报价和税务展示。"""
 
 from __future__ import annotations
 
@@ -9,6 +9,11 @@ from zoneinfo import ZoneInfo
 
 from game.app import CharacterOverview, CharacterOverviewResult, current_game_services
 from game.content.catalog.foundation import PRIMARY_CURRENCY_ID
+from game.content.presentation import (
+    COVENANT_MARKET_NAME,
+    COVENANT_NAME,
+    COVENANT_TREASURY_NAME,
+)
 from game.core.gameplay import (
     STANDARD_LOADOUT_SLOT_ORDER,
     ItemInstance,
@@ -49,7 +54,7 @@ async def market(message: str, result: CharacterOverviewResult) -> None:
             logical_time=_now(),
             slot_id=slot_id,
         )
-        await send_game_reply(_listing_page("二手市场", listings, page, overview))
+        await send_game_reply(_listing_page(COVENANT_MARKET_NAME, listings, page, overview))
     except ValueError as exc:
         await send_game_reply(_failure(str(exc)))
 
@@ -137,7 +142,7 @@ async def confirm_listing(message: str, result: CharacterOverviewResult) -> None
         )
         builder = M.document().section("上架", icon="trade")
         if opened.status == "listed" and opened.listing is not None:
-            builder.line(f"{opened.listing.id} 已进入二手市场")
+            builder.line(f"{opened.listing.id} 已进入{COVENANT_MARKET_NAME}")
             builder.row(
                 ("物品", _gear_name(opened.listing.asset, overview)),
                 ("价格", opened.listing.list_price),
@@ -220,7 +225,7 @@ async def confirm_purchase(message: str, result: CharacterOverviewResult) -> Non
             quoted.quote,
             logical_time=_now(),
         )
-        builder = M.document().section("二手成交", icon="trade")
+        builder = M.document().section("归航成交", icon="trade")
         if purchased.status == "purchased" and purchased.quote is not None:
             builder.line(_gear_name(purchased.quote.listing.asset, overview))
             builder.row(
@@ -248,8 +253,9 @@ async def tax(result: CharacterOverviewResult) -> None:
     currency = _view(overview).projector.name(PRIMARY_CURRENCY_ID)
     await send_game_reply(
         M.document()
-        .section("中央税库", icon="trade")
-        .field("余额", f"{summary.balance} {currency}")
+        .section(f"{COVENANT_NAME}·税务", icon="trade")
+        .field("税务主体", COVENANT_NAME)
+        .field(COVENANT_TREASURY_NAME, f"{summary.balance} {currency}")
         .row(("近七日税收", summary.recent_tax), ("成交", summary.recent_trades))
         .build()
     )
@@ -262,11 +268,11 @@ async def _listing_detail(listing_id: str, overview: CharacterOverview) -> None:
     )
     listing = next((value for value in listings if value.id == listing_id.upper()), None)
     if listing is None:
-        await send_game_reply(_failure("找不到这份二手挂单"))
+        await send_game_reply(_failure("找不到这份归航挂单"))
         return
     builder = (
         M.document()
-        .section(f"二手·{listing.id}", icon="trade")
+        .section(f"归航·{listing.id}", icon="trade")
         .line(_gear_name(listing.asset, overview))
         .row(("售价", listing.list_price), ("参考价", listing.price.reference_price))
         .field("卖方", listing.seller_name)
@@ -333,7 +339,7 @@ def _listing_page(title, listings, page, overview) -> DocumentMessage:
     builder = M.document().section(title, icon="trade")
     current = listings[start : start + PAGE_SIZE]
     if not current:
-        return builder.line("当前没有符合条件的二手挂单").build()
+        return builder.line("当前没有符合条件的归航挂单").build()
     for index, listing in enumerate(current, start=start + 1):
         builder.item(
             index,
@@ -401,7 +407,7 @@ async def _failed(title: str, character_id: str, exc: Exception) -> None:
 
 
 def _failure(message: str) -> DocumentMessage:
-    return M.document().section("二手市场", icon="notice").line(message).build()
+    return M.document().section(COVENANT_MARKET_NAME, icon="notice").line(message).build()
 
 
 __all__ = [

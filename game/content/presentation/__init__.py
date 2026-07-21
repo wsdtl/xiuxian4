@@ -1,6 +1,15 @@
 """正式内容的跨世界展示组合工具。"""
 
-from .branding import GAME_NAME, GAME_TAGLINE, GAME_TITLE
+from .branding import (
+    COVENANT_MARKET_NAME,
+    COVENANT_MEMBER_NAME,
+    COVENANT_NAME,
+    COVENANT_RECYCLING_NAME,
+    COVENANT_TREASURY_NAME,
+    GAME_NAME,
+    GAME_TAGLINE,
+    GAME_TITLE,
+)
 from .gear import GearDisplay, GearPresentationStyle, GearProjector
 from .enemy import EnemyDisplay, EnemyNameProjector, EnemyPresentationStyle
 
@@ -12,6 +21,11 @@ __all__ = [
     "GearDisplay",
     "GearPresentationStyle",
     "GearProjector",
+    "COVENANT_MARKET_NAME",
+    "COVENANT_MEMBER_NAME",
+    "COVENANT_NAME",
+    "COVENANT_RECYCLING_NAME",
+    "COVENANT_TREASURY_NAME",
     "GAME_NAME",
     "GAME_TAGLINE",
     "GAME_TITLE",

@@ -81,7 +81,7 @@ def _map_overview(overview: CharacterOverview, roster, view, progress_by_region)
     current = _current_location(overview)
     builder = (
         M.document()
-        .section("地图", icon="world")
+        .section(f"地图·{view.skin.name}", icon="world")
         .row(
             ("世界", view.skin.name),
             ("当前位置", _location_name(current, view)),
@@ -169,6 +169,7 @@ def _location_detail(
     builder = (
         M.document()
         .section(entry.name, icon="world")
+        .field("世界", view.skin.name)
         .line(entry.description or "这里尚无更多记载。")
         .row(("坐标", _coordinates(resolved)), ("类型", _location_type(binding.function_id)))
     )

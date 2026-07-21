@@ -1,4 +1,4 @@
-"""世界行纪与永久排行命令。"""
+"""行纪查询与永久排行命令。"""
 
 from __future__ import annotations
 

@@ -85,6 +85,7 @@ async def _main() -> None:
                 event_id="draw-pool",
             )
             assert "持有: _11 张_" in pool.replies[0].message.content
+            assert "每张抽奖签封存一次未定结果" in pool.replies[0].message.content
             assert "常规 77%" in pool.replies[0].message.content
             assert "珍稀 20%" in pool.replies[0].message.content
             assert "特殊 2%" in pool.replies[0].message.content
@@ -101,7 +102,7 @@ async def _main() -> None:
             message = result.replies[0].message
             assert message.kind == "markdown"
             assert "![抽奖演出 #360px #203px]" in message.content
-            assert "抽奖结果" in message.content and "剩余: _10 张_" in message.content
+            assert "抽奖·显化结果" in message.content and "剩余: _10 张_" in message.content
             assert [value.data for value in message.actions] == ["抽奖", "十连抽奖", "抽奖奖池"]
 
             history = await dispatch(
@@ -110,7 +111,7 @@ async def _main() -> None:
                 sender_name="逐光客",
                 event_id="draw-history",
             )
-            assert "抽奖记录" in history.replies[0].message.content
+            assert "抽奖·显化记录" in history.replies[0].message.content
             assert "1 抽" in history.replies[0].message.content
 
             original_file = draw_command_service.DRAW_ANIMATION_FILES[(1, "low")]

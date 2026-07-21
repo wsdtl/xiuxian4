@@ -96,6 +96,7 @@ async def _main() -> None:
                 "party-battle-select",
             )
             assert "已锁定组队首领" in selected.replies[0].message.content
+            assert "来源世界" in selected.replies[0].message.content
 
             for client in ("party-a", "party-b", "party-c"):
                 ready = await _dispatch(client, "准备", f"party-ready-{client}")
@@ -105,6 +106,7 @@ async def _main() -> None:
             assert "人数: _3/3_" in content
             assert content.count("已准备") == 3
             challenge = await _dispatch("party-a", "组队挑战", "party-battle-view")
+            assert "来源世界" in challenge.replies[0].message.content
             assert challenge.replies[0].message.content.count("已准备") == 3
             started = await _dispatch(
                 "party-a",
@@ -112,6 +114,7 @@ async def _main() -> None:
                 "party-battle-start",
             )
             assert "组队战报" in started.replies[0].message.content
+            assert "来源世界" in started.replies[0].message.content
             assert "查看完整战报" in started.replies[0].message.content
             after_battle = await _dispatch("party-a", "组队", "party-after-battle")
             assert after_battle.replies[0].message.content.count("未准备") == 3

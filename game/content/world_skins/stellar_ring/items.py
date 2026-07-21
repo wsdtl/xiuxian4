@@ -34,8 +34,8 @@ STELLAR_RING_ITEM_ENTRIES = {
         icon="✦",
     ),
     DRAW_TICKET_ITEM_ID: SkinEntry(
-        name="回收序列券",
-        description="记录多次元战斗贡献的抽奖凭证。",
+        name="未定序列券",
+        description="封存一段等待执行的战斗可能；接入界门后会解析为一次确定收获。",
         icon="🎟️",
     ),
     INSCRIPTION_FEATHER_ITEM_ID: SkinEntry(

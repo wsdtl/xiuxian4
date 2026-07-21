@@ -30,6 +30,7 @@ async def _main() -> None:
     create_app()
     assert help_registry.categories() == HELP_CATEGORY_ORDER
     assert help_registry.find("帮助") is not None
+    assert help_registry.find("归航公约") is not None
     assert help_registry.find("探险") is not None
     assert help_registry.find("突破") is not None
     assert help_registry.find("world_events") is None
@@ -91,6 +92,14 @@ async def _main() -> None:
             missing = await _dispatch("帮助 不存在", "help-missing")
             assert "没有找到帮助" in _content(missing)
             assert missing.replies[0].message.actions[0].data == "帮助"
+
+            covenant = await _dispatch("归航公约", "covenant")
+            covenant_content = _content(covenant)
+            assert "归航者" in covenant_content
+            assert "归航回收" in covenant_content
+            assert "归航市场" in covenant_content
+            assert "归航库" in covenant_content
+            assert "不增加第二套成长" in covenant_content
         finally:
             restore_game_services(previous)
 

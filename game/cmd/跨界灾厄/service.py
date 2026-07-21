@@ -1,4 +1,4 @@
-"""多次元灾厄命令调用、固定叙事展示和排行排版。"""
+"""跨界灾厄命令调用、固定叙事展示和排行排版。"""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ register_global_activity(
     priority=100,
     entry_intent_id=DIMENSIONAL_DISASTER_INTENT,
     presentation=GlobalActivityPresentation(
-        "多次元灾厄",
+        "跨界灾厄",
         "灾厄",
         "能够突破世界边界并同时影响多个世界的公共灾难。",
     ),
@@ -56,7 +56,7 @@ async def view_disaster(current: CurrentCharacterResult) -> None:
         )
         await send_game_reply(_status_message(result, character, logical_time))
     except Exception as exc:
-        await _failed("多次元灾厄查询失败", character.id, exc)
+        await _failed("跨界灾厄查询失败", character.id, exc)
 
 
 async def challenge_disaster(current: CurrentCharacterResult) -> None:
@@ -109,7 +109,7 @@ def _status_message(
     if result.event is None:
         return (
             M.document()
-            .section("多次元灾厄", icon="combat")
+            .section("跨界灾厄", icon="combat")
             .line("当前没有灾厄降临")
             .note("灾厄每周降临两次，每次持续 48 小时。")
             .build()
@@ -117,7 +117,7 @@ def _status_message(
     event = result.event
     activity = result.activity
     builder = M.document().section(
-        f"多次元灾厄·{event.narrative.name}",
+        f"跨界灾厄·{event.narrative.name}",
         icon="combat",
     )
     builder.line(event.narrative.title)
@@ -182,7 +182,7 @@ def _challenge_message(result: DimensionalDisasterChallengeResult, projector) ->
                 ),
             )
         if result.status == "defeated":
-            builder.line("灾厄已经被全服击破，活动结束时将封榜并产生唯一遗羽。")
+            builder.line("跨界灾厄已经被击破，活动结束时将封榜并产生本期唯一遗羽。")
         elif result.status == "replayed":
             builder.note("本次为重复消息，已经返回原挑战结果。")
         actions = [Action("disaster.ranking", "排行", "灾厄排行", behavior="send")]
@@ -286,14 +286,14 @@ async def _failed(message: str, character_id: str, exc: Exception) -> None:
     )
     await send_game_reply(
         M.document()
-        .section("多次元灾厄", icon="combat")
+        .section("跨界灾厄", icon="combat")
         .line("当前操作没有完成，请稍后重试")
         .build()
     )
 
 
 def _unavailable() -> DocumentMessage:
-    return M.document().section("多次元灾厄", icon="combat").line("当前没有可用角色").build()
+    return M.document().section("跨界灾厄", icon="combat").line("当前没有可用角色").build()
 
 
 __all__ = ["challenge_disaster", "disaster_ranking", "view_disaster"]

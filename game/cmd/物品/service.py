@@ -94,7 +94,7 @@ _GEAR_SOURCE_NAMES = {
     "source.exploration": "探险",
     "reward.party_battle": "组队挑战",
     "source.draw": "抽奖",
-    "source.dimensional_disaster": "多次元灾厄",
+    "source.dimensional_disaster": "跨界灾厄",
     "source.breakthrough": "境界突破",
 }
 

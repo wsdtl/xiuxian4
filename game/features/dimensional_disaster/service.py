@@ -1039,7 +1039,7 @@ class DimensionalDisasterFeature:
         return (
             f"{event.narrative.feather_text}\n"
             f"万象行纪记载：{date_text}，"
-            f"{len(activity.participants)} 位登录者共同迎战 {event.narrative.name}。"
+            f"{len(activity.participants)} 位归航者共同迎战 {event.narrative.name}。"
             f"最初持有者贡献 {entry.contribution / event.maximum_health:.1%}，"
             f"位列第 {entry.rank}。"
         )

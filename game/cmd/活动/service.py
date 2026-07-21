@@ -1,4 +1,4 @@
-"""全服活动组件的只读查询与协议中立展示。"""
+"""活动组件的只读查询与协议中立展示。"""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ async def _load_activities(
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
-            C.join(C.fail("全服活动查询失败"), C.kv("character", current.character.id))
+            C.join(C.fail("公共活动查询失败"), C.kv("character", current.character.id))
         )
         return GlobalActivityViewsResult("failed")
 
@@ -75,9 +75,9 @@ def _activity_list_message(
     activities: tuple[GlobalActivityView, ...],
     world_view,
 ) -> DocumentMessage:
-    builder = M.document().section("全服活动", icon="system")
+    builder = M.document().section("活动", icon="system")
     if not activities:
-        return builder.line("当前没有开放的全服活动").build()
+        return builder.line("当前没有开放的活动").build()
     projector = world_view.projector
     builder.field("数量", len(activities))
     for index, view in enumerate(activities, start=1):
@@ -142,7 +142,7 @@ def _activity_detail_message(
 def _unavailable_message() -> DocumentMessage:
     return (
         M.document()
-        .section("全服活动", icon="system")
+        .section("活动", icon="system")
         .line("当前没有读取到活动状态，请稍后重试")
         .build()
     )

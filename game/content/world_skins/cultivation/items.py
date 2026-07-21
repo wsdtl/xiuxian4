@@ -35,7 +35,7 @@ CULTIVATION_ITEM_ENTRIES = {
     ),
     DRAW_TICKET_ITEM_ID: SkinEntry(
         name="流光签",
-        description="承接多次元战斗余辉的抽奖凭证。",
+        description="封存一缕尚未定形的战斗余响；投入界门后会显化为一次确定收获。",
         icon="🎟️",
     ),
     INSCRIPTION_FEATHER_ITEM_ID: SkinEntry(

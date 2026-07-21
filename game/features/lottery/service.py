@@ -1,4 +1,4 @@
-"""彩票玩法：购票、环形开奖和中央资金原子结算。"""
+"""彩票玩法：购票、环形开奖和归航库原子结算。"""
 
 from __future__ import annotations
 
@@ -268,7 +268,7 @@ class LotteryFeature:
             round_day = pending[0].round_day
             summary = self._draw_round(round_day, logical_time)
             completed.append(summary)
-            if summary.endswith("中央资金不足，等待补开"):
+            if summary.endswith("归航库余额不足，等待补开"):
                 break
         return tuple(completed)
 
@@ -301,7 +301,7 @@ class LotteryFeature:
             )
             if len(current.tickets) < DRAW_MIN_PARTICIPANTS:
                 if tax is None:
-                    return f"{round_day}: 中央资金不足，等待补开"
+                    return f"{round_day}: 归航库余额不足，等待补开"
                 return self._refund_underfilled_round(
                     uow,
                     state,
@@ -315,7 +315,7 @@ class LotteryFeature:
                 len(current.tickets),
             )
             if tax is None or available_balance < min(base_pool, DRAW_POOL_MAX):
-                return f"{round_day}: 中央资金不足，等待补开"
+                return f"{round_day}: 归航库余额不足，等待补开"
             winning_number = f"{secrets.randbelow(1_000_000):06d}"
             ranked = sorted(
                 current.tickets.values(),
@@ -459,7 +459,7 @@ class LotteryFeature:
             expected[wallet.id] = wallet.revision
         refund_amount = len(operations) * LOTTERY_TICKET_PRICE
         if ledger.available_balance(tax.id, logical_time=logical_time) < refund_amount:
-            return f"{current.round_day}: 中央资金不足，等待补开"
+            return f"{current.round_day}: 归航库余额不足，等待补开"
         outcome = self.ledger_engine.execute(
             LedgerTransaction(
                 f"lottery:refund:{current.round_day}",

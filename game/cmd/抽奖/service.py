@@ -96,6 +96,7 @@ async def pool(current: CurrentCharacterResult) -> None:
         builder = (
             M.document()
             .section("抽奖奖池", icon="reward")
+            .line("每张抽奖签封存一次未定结果，使用后由界门正式显化。")
             .row(
                 ("持有", f"{status.ticket_count} 张"),
                 ("珍稀", f"{status.pity_count}/{DRAW_MID_PITY_THRESHOLD}"),
@@ -138,7 +139,7 @@ async def history(current: CurrentCharacterResult) -> None:
         services = current_game_services()
         status = await asyncio.to_thread(services.draw.status, character.id, history_limit=10)
         projector = services.world_view(current.character_world).projector
-        builder = M.document().section("抽奖记录", icon="history")
+        builder = M.document().section("抽奖·显化记录", icon="history")
         if not status.records:
             builder.line("暂无抽奖记录")
         for index, record in enumerate(status.records, start=1):
@@ -163,7 +164,7 @@ def _result_message(result: DrawOperationResult, projector, rolls: int) -> Docum
             .section("抽奖", icon="notice")
             .line(result.failure_message)
             .field("持有", f"{result.ticket_count} 张")
-            .note("抽奖签会从探险和多次元灾厄战斗中掉落")
+            .note("抽奖签由战斗余响凝成，会从探险、组队首领和跨界灾厄中掉落")
             .build()
         )
     if result.status not in {"drawn", "replayed"} or result.record is None:
@@ -175,7 +176,7 @@ def _result_message(result: DrawOperationResult, projector, rolls: int) -> Docum
     animation = _animation_url(rolls, tier)
     if animation:
         builder.image(animation, alt="抽奖演出", width=360, height=203)
-    builder.section("抽奖结果", icon="reward").row(
+    builder.section("抽奖·显化结果", icon="reward").row(
         ("消耗", f"{record.receipt.rolls} 张"),
         ("最高", TIER_LABELS[tier]),
     )

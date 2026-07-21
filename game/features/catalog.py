@@ -60,7 +60,7 @@ ACTIVE_BUSINESS_FEATURES = (
         "dimensional_disaster",
         "dimensional_disaster",
         "协调全服灾厄战斗、贡献、周期和唯一遗羽结算",
-        ("多次元灾厄",),
+        ("跨界灾厄",),
         ("game_dimensional_disaster_maintenance",),
     ),
     BusinessFeaturePlan(
@@ -105,7 +105,7 @@ ACTIVE_BUSINESS_FEATURES = (
     BusinessFeaturePlan(
         "party_battle",
         "party_battle",
-        "协调世界专属组队首领、准备指纹、多人战斗、原子奖励与公开战报",
+        "协调跨界组队首领、准备指纹、临时战斗投影、原子奖励与公开战报",
         ("组队",),
     ),
     BusinessFeaturePlan(

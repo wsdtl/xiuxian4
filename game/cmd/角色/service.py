@@ -33,6 +33,7 @@ from game.content.catalog.combat import (
     COMBAT_RATE_PENETRATION,
     COMBAT_TENACITY,
 )
+from game.content.presentation import COVENANT_NAME
 from game.core.account import IdentityEvidence
 from game.core.gameplay import (
     COMBAT_ATTACK,
@@ -317,7 +318,7 @@ def _created_message(receipt: CharacterCreationReceipt) -> DocumentMessage:
     return (
         M.document()
         .section("行纪开篇", icon="world")
-        .line("源印建立完成，界门已经记住了你的名字。")
+        .line(f"源印建立完成，{COVENANT_NAME}已经收录了你的名字。")
         .field("首次降临", f"{view.skin.name}·{starting_location}")
         .row(
             ("种族", projector.name(ORIGIN_HUMAN_FEATURE_ID)),
@@ -566,7 +567,7 @@ def _character_overview_message(overview: CharacterOverview) -> DocumentMessage:
         )
     return (
         builder.section("当前状态", icon="world")
-        .field("世界", view.skin.name)
+        .row(("世界", view.skin.name), ("归属", COVENANT_NAME))
         .row(("位置", location), (projector.name(PRIMARY_CURRENCY_ID), wallet.balance if wallet else 0))
         .field("行动", _action_text(overview, view))
         .actions(

@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from game.content.presentation import GAME_NAME
+from game.content.presentation import (
+    COVENANT_MARKET_NAME,
+    COVENANT_MEMBER_NAME,
+    COVENANT_NAME,
+    COVENANT_RECYCLING_NAME,
+    COVENANT_TREASURY_NAME,
+    GAME_NAME,
+)
 from message import Action, DocumentMessage, M
 
 from ..help_registry import CommandHelpEntry, help_registry
@@ -22,6 +29,23 @@ async def show_help(query: str = "") -> None:
     else:
         message = _not_found_message(normalized)
     await send_game_reply(message)
+
+
+async def show_covenant() -> None:
+    """展示不依赖角色状态的归航公约背景摘要。"""
+
+    await send_game_reply(
+        M.document()
+        .header(GAME_NAME)
+        .section(COVENANT_NAME, icon="world")
+        .line("它不统治诸界，只保证你跨越世界后仍被承认为同一个人。")
+        .row(("成员", COVENANT_MEMBER_NAME), ("公共资金", COVENANT_TREASURY_NAME))
+        .section("公约职责")
+        .line(f"身份互认 · 资产确权 · {COVENANT_MARKET_NAME}清算")
+        .line(f"{COVENANT_RECYCLING_NAME} · 灾厄征召 · 公共行纪")
+        .note("建立唯一化身时自动登记；不增加第二套成长，也不占用玩家共同体归属。")
+        .build()
+    )
 
 
 def _home_message() -> DocumentMessage:
@@ -109,4 +133,4 @@ def _home_action() -> Action:
     )
 
 
-__all__ = ["show_help"]
+__all__ = ["show_covenant", "show_help"]

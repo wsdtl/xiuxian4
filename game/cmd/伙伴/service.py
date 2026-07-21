@@ -413,9 +413,14 @@ def _people_message(roster, overview: CharacterOverview) -> DocumentMessage:
         if anchor_id is not None
         else None
     )
-    builder = M.document().section("人物", icon="world").field(
-        "当前位置",
-        projector.name(current_location.display_id) if current_location is not None else "未知",
+    builder = (
+        M.document()
+        .section("人物", icon="world")
+        .field("世界", _world_name(overview))
+        .field(
+            "当前位置",
+            projector.name(current_location.display_id) if current_location is not None else "未知",
+        )
     )
     actions = []
     for person in people:
@@ -531,8 +536,14 @@ def _join_result(outcome, overview: CharacterOverview) -> DocumentMessage:
 
 def _companion_list(roster, overview: CharacterOverview) -> DocumentMessage:
     term = _projector(overview).name("term.companion")
-    builder = M.document().section(f"{term}名册", icon="player").field(
-        "数量", f"{len(roster.instances)}/{current_game_services().content.companions.balance.roster_capacity}"
+    builder = (
+        M.document()
+        .section(f"{term}名册", icon="player")
+        .field("世界", _world_name(overview))
+        .field(
+            "数量",
+            f"{len(roster.instances)}/{current_game_services().content.companions.balance.roster_capacity}",
+        )
     )
     if not roster.instances:
         builder.line("当前还没有伙伴")
@@ -593,6 +604,7 @@ def _sanctuary_message(sanctuary, overview: CharacterOverview) -> DocumentMessag
         return (
             M.document()
             .section(title, icon="explore")
+            .field("世界", _world_name(overview))
             .line("当前没有已开启的宠物秘境")
             .note("使用万灵引可在当前世界开启一次秘境。")
             .build()
@@ -604,9 +616,14 @@ def _sanctuary_message(sanctuary, overview: CharacterOverview) -> DocumentMessag
         CompanionSanctuaryStatus.ABANDONED: "已放弃",
         CompanionSanctuaryStatus.EXPIRED: "已过期",
     }
-    builder = M.document().section(title, icon="explore").row(
-        ("状态", status_names[sanctuary.status]),
-        ("有效期", sanctuary.expires_at.strftime("%m-%d %H:%M")),
+    builder = (
+        M.document()
+        .section(title, icon="explore")
+        .field("来源世界", _world_name_by_id(sanctuary.world_id))
+        .row(
+            ("状态", status_names[sanctuary.status]),
+            ("有效期", sanctuary.expires_at.strftime("%m-%d %H:%M")),
+        )
     )
     actions = []
     if sanctuary.active:
@@ -634,6 +651,7 @@ def _hunt_result(outcome, overview: CharacterOverview) -> DocumentMessage:
         builder = (
             M.document()
             .section("捕获成功", icon="reward")
+            .field("世界", _world_name(overview))
             .field("宠物", f"{companion.reference} {_companion_name(companion)}")
             .row(("品阶", _projector(overview).name(companion.quality_id)), ("等级", f"Lv{companion.level}"))
         )
@@ -678,6 +696,14 @@ def _companion_definition(companion):
 
 def _companion_name(companion) -> str:
     return _companion_definition(companion).name
+
+
+def _world_name(overview: CharacterOverview) -> str:
+    return current_game_services().world_view(overview.character_world).skin.name
+
+
+def _world_name_by_id(world_id: str) -> str:
+    return current_game_services().world_views.require(world_id).skin.name
 
 
 def _outcome_companion_name(outcome) -> str:

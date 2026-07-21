@@ -1,4 +1,4 @@
-"""统一回收、二手市场和中央税库的跨领域原子协调。"""
+"""统一回收、归航市场和归航库的跨领域原子协调。"""
 
 from __future__ import annotations
 
@@ -769,7 +769,7 @@ class EconomyFeature:
         inventory, loadout = self._inventory_loadout(uow, seller_id)
         instance = inventory.instances.get(asset_id)
         if instance is None:
-            raise ValueError("只有武器和装备实例可以进入二手市场")
+            raise ValueError("只有武器和装备实例可以进入归航市场")
         self._require_available_unassigned(inventory, loadout, instance.id)
         price = self.prices.quote(instance)
         ledger = self.snapshots.require(
