@@ -799,7 +799,10 @@ def _action_text(overview: CharacterOverview, view) -> str:
 
 
 def _number(value: float) -> str:
-    return str(int(value)) if float(value).is_integer() else f"{value:g}"
+    number = float(value)
+    if abs(number) < 0.005:
+        return "0"
+    return str(int(number)) if number.is_integer() else f"{number:.2f}".rstrip("0").rstrip(".")
 
 
 def _resource_name(projector, resource_id: str) -> str:

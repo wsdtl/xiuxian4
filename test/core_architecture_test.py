@@ -170,6 +170,7 @@ def _assert_physical_layout() -> None:
             "trophies.py",
         },
         "social": {"__init__.py"},
+        "trial": {"__init__.py", "definitions.py", "models.py"},
         "weapon": {
             "__init__.py",
             "balance.py",
@@ -184,7 +185,13 @@ def _assert_physical_layout() -> None:
             "definitions.py",
             "properties.py",
         },
-        "economy": {"__init__.py", "lottery.py", "policy.py"},
+        "economy": {
+            "__init__.py",
+            "audit.py",
+            "lottery.py",
+            "market_items.py",
+            "policy.py",
+        },
         "world": {"__init__.py", "definitions.py"},
         "world_progress": {"__init__.py", "definitions.py"},
     }

@@ -73,6 +73,7 @@ ROUTER_ENV_KEYS = {
 # 持久化基础设施配置；具体仓储仍由业务组合根显式组装。
 DATABASE_ENV_KEYS = {
     "DATABASE_PATH",
+    "MESSAGE_CONSOLE_DATABASE_PATH",
     "DATABASE_BUSY_TIMEOUT_MS",
 }
 
@@ -275,9 +276,10 @@ class RouterConfig:
 
 @dataclass(frozen=True)
 class DatabaseConfig:
-    """SQLite 数据文件和锁等待配置。"""
+    """正式游戏、短期消息流水的 SQLite 路径和统一锁等待配置。"""
 
     path: Path
+    message_console_path: Path
     busy_timeout_ms: int
 
 
@@ -394,6 +396,10 @@ def load_config() -> Config:
 
     database = DatabaseConfig(
         path=env.get_path("DATABASE_PATH", BASE_DIR / "data" / "xiuxian4.db"),
+        message_console_path=env.get_path(
+            "MESSAGE_CONSOLE_DATABASE_PATH",
+            BASE_DIR / "data" / "message_console.db",
+        ),
         busy_timeout_ms=int(env.get("DATABASE_BUSY_TIMEOUT_MS", "5000") or "5000"),
     )
     if database.busy_timeout_ms < 1:

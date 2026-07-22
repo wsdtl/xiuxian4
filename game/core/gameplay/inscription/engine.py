@@ -125,13 +125,14 @@ class InscriptionEngine:
             instances = dict(paid.value.state.instances)
             instances[target.id] = changed_target
             changed_inventory = InventoryState(
-                paid.value.state.containers,
-                paid.value.state.stacks,
-                instances,
-                paid.value.state.reservations,
-                paid.value.state.revision,
-                paid.value.state.asset_references,
-                paid.value.state.next_reference_number,
+                containers=paid.value.state.containers,
+                stacks=paid.value.state.stacks,
+                instances=instances,
+                reservations=paid.value.state.reservations,
+                revision=paid.value.state.revision,
+                asset_references=paid.value.state.asset_references,
+                next_reference_number=paid.value.state.next_reference_number,
+                protected_asset_ids=paid.value.state.protected_asset_ids,
             )
             receipt = InscriptionReceipt(
                 command.id,

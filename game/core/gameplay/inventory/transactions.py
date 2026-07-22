@@ -78,6 +78,16 @@ class DestroyAsset:
 
 
 @dataclass(frozen=True)
+class ProtectAsset:
+    asset_id: str
+
+
+@dataclass(frozen=True)
+class UnprotectAsset:
+    asset_id: str
+
+
+@dataclass(frozen=True)
 class MoveAsset:
     asset_id: str
     destination_container_id: str
@@ -182,6 +192,7 @@ class _Draft:
     reservations: dict[str, AssetReservation]
     asset_references: dict[str, int]
     next_reference_number: int
+    protected_asset_ids: set[str]
     events: list[RuleEvent]
 
 
@@ -208,6 +219,7 @@ class InventoryEngine:
             reservations=dict(state.reservations),
             asset_references=dict(state.asset_references),
             next_reference_number=state.next_reference_number,
+            protected_asset_ids=set(state.protected_asset_ids),
             events=[],
         )
         try:
@@ -222,8 +234,11 @@ class InventoryEngine:
                 revision=state.revision + 1,
                 asset_references=draft.asset_references,
                 next_reference_number=draft.next_reference_number,
+                protected_asset_ids=frozenset(draft.protected_asset_ids),
             )
             self._validate_state(result)
+            if replace(result, revision=state.revision) == state:
+                result = state
             return RuleOutcome.success(
                 InventoryExecution(transaction.id, result, tuple(draft.events))
             )
@@ -245,6 +260,8 @@ class InventoryEngine:
             ConsumeStack: self._consume_stack,
             ConsumeInstance: self._consume_instance,
             DestroyAsset: self._destroy_asset,
+            ProtectAsset: self._protect_asset,
+            UnprotectAsset: self._unprotect_asset,
             MoveAsset: self._move_asset,
             UpdateInstance: self._update_instance,
             IncreaseContainerSpace: self._increase_container_space,
@@ -426,6 +443,7 @@ class InventoryEngine:
         context: RuleContext,
     ) -> None:
         asset = self._require_asset(operation.asset_id, draft)
+        self._require_unprotected(asset.id, draft)
         quantity = asset.quantity if isinstance(asset, ItemStack) else 1
         self._authorize_quantity(asset.id, quantity, operation.reservation_id, draft)
         owner_id = draft.containers[asset.container_id].owner_id
@@ -460,6 +478,7 @@ class InventoryEngine:
                 "找不到独立实例物品",
                 {"asset_id": operation.asset_id},
             )
+        self._require_unprotected(instance.id, draft)
         self._authorize_quantity(instance.id, 1, operation.reservation_id, draft)
         owner_id = draft.containers[instance.container_id].owner_id
         del draft.instances[instance.id]
@@ -494,6 +513,8 @@ class InventoryEngine:
         if source.id == destination.id:
             self._fail("inventory.same_container", "物品已经位于目标容器")
         quantity = asset.quantity if isinstance(asset, ItemStack) else 1
+        if source.owner_id != destination.owner_id:
+            self._require_unprotected(asset.id, draft)
         self._authorize_quantity(asset.id, quantity, operation.reservation_id, draft)
         definition = self.catalog.require(asset.definition_id)
         kind = ItemAssetKind.STACK if isinstance(asset, ItemStack) else ItemAssetKind.INSTANCE
@@ -676,6 +697,9 @@ class InventoryEngine:
             self._fail("inventory.asset_reserved", "存在预约的物品不能交换容器")
         first_source = draft.containers[first.container_id]
         second_source = draft.containers[second.container_id]
+        if first_source.owner_id != second_source.owner_id:
+            self._require_unprotected(first.id, draft)
+            self._require_unprotected(second.id, draft)
         first_definition = self.catalog.require(first.definition_id)
         second_definition = self.catalog.require(second.definition_id)
         first_kind = ItemAssetKind.STACK if isinstance(first, ItemStack) else ItemAssetKind.INSTANCE
@@ -781,6 +805,8 @@ class InventoryEngine:
         if operation.reservation_id in draft.reservations:
             self._fail("inventory.reservation_exists", "预约 id 已经存在")
         asset = self._require_asset(operation.asset_id, draft)
+        if operation.mode is ReservationMode.ESCROWED:
+            self._require_unprotected(asset.id, draft)
         available = (
             asset.quantity if isinstance(asset, ItemStack) else 1
         ) - self._reserved_quantity(asset.id, draft)
@@ -818,6 +844,65 @@ class InventoryEngine:
                 "business_id": reservation.business_id,
                 "expires_at": reservation.expires_at.isoformat() if reservation.expires_at else None,
             },
+        )
+
+    def _protect_asset(
+        self,
+        operation: ProtectAsset,
+        draft: _Draft,
+        transaction: InventoryTransaction,
+        context: RuleContext,
+    ) -> None:
+        instance = self._require_instance(operation.asset_id, draft)
+        definition = self.catalog.require(instance.definition_id)
+        if not (
+            definition.tags.has("item.weapon")
+            or definition.tags.has("item.equipment")
+        ):
+            self._fail(
+                "inventory.protection_kind_invalid",
+                "只有武器和装备可以加入珍藏",
+            )
+        owner_id = draft.containers[instance.container_id].owner_id
+        if owner_id != transaction.actor_id:
+            self._fail("inventory.asset_not_owned", "只能珍藏自己持有的物品")
+        if instance.id in draft.protected_asset_ids:
+            return
+        if self._reserved_quantity(instance.id, draft):
+            self._fail("inventory.asset_reserved", "被其他业务占用的物品不能加入珍藏")
+        draft.protected_asset_ids.add(instance.id)
+        self._event(
+            draft,
+            transaction,
+            context,
+            "inventory.item.protected",
+            instance.definition_id,
+            owner_id,
+            {"asset_id": instance.id},
+        )
+
+    def _unprotect_asset(
+        self,
+        operation: UnprotectAsset,
+        draft: _Draft,
+        transaction: InventoryTransaction,
+        context: RuleContext,
+    ) -> None:
+        instance = self._require_instance(operation.asset_id, draft)
+        owner_id = draft.containers[instance.container_id].owner_id
+        if owner_id != transaction.actor_id:
+            self._fail("inventory.asset_not_owned", "只能取消自己持有物品的珍藏")
+        if instance.id not in draft.protected_asset_ids:
+            return
+        draft.protected_asset_ids.remove(instance.id)
+        self._event(
+            draft,
+            transaction,
+            context,
+            "inventory.item.unprotected",
+            instance.definition_id,
+            owner_id,
+            {"asset_id": instance.id},
         )
 
     def _release_reservation(
@@ -893,7 +978,7 @@ class InventoryEngine:
             self._check_container(container, definition, kind, _Draft(
                 dict(state.containers), dict(state.stacks), dict(state.instances),
                 dict(state.reservations), dict(state.asset_references),
-                state.next_reference_number, []
+                state.next_reference_number, set(state.protected_asset_ids), []
             ), adding=False)
             counts[container.id] = counts.get(container.id, 0) + 1
             if container.maximum_space is not None:
@@ -1007,6 +1092,17 @@ class InventoryEngine:
             )
 
     @staticmethod
+    def _require_instance(asset_id: str, draft: _Draft) -> ItemInstance:
+        try:
+            return draft.instances[asset_id]
+        except KeyError:
+            InventoryEngine._fail(
+                "inventory.instance_unknown",
+                "只有独立实例物品可以设置珍藏",
+                {"asset_id": asset_id},
+            )
+
+    @staticmethod
     def _require_asset(asset_id: str, draft: _Draft) -> ItemStack | ItemInstance:
         if asset_id in draft.stacks:
             return draft.stacks[asset_id]
@@ -1016,6 +1112,15 @@ class InventoryEngine:
             InventoryEngine._fail(
                 "inventory.asset_unknown",
                 "找不到物品资产",
+                {"asset_id": asset_id},
+            )
+
+    @staticmethod
+    def _require_unprotected(asset_id: str, draft: _Draft) -> None:
+        if asset_id in draft.protected_asset_ids:
+            InventoryEngine._fail(
+                "inventory.asset_protected",
+                "珍藏物品不能被回收、消耗、托管或转移所有权",
                 {"asset_id": asset_id},
             )
 
@@ -1187,8 +1292,10 @@ __all__ = [
     "InventoryTransaction",
     "MergeStacks",
     "MoveAsset",
+    "ProtectAsset",
     "ReleaseReservation",
     "ReserveAsset",
     "SplitStack",
     "SwapAssetContainers",
+    "UnprotectAsset",
 ]

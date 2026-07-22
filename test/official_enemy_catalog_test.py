@@ -21,6 +21,9 @@ from game.content.catalog.enemy import (  # noqa: E402
     REGULAR_ENEMIES,
 )
 from game.content.catalog.disaster.combat import DISASTER_ENEMY_DEFINITIONS  # noqa: E402
+from game.content.catalog.trial import (  # noqa: E402
+    BUILD_TRIAL_TARGETS,
+)
 from game.core.gameplay import (  # noqa: E402
     BATTLE_AI_FOUNDATION_VERSION,
     COMBAT_SPEED,
@@ -53,12 +56,26 @@ def main() -> None:
     assert len(PERSONAL_BOSS_ENEMIES) == 30
     assert len(PARTY_BOSS_ENEMIES) == 30
     assert len(DISASTER_ENEMY_DEFINITIONS) == 30
-    assert len(catalog.enemies.definitions.ids()) == 150
+    assert len(BUILD_TRIAL_TARGETS) == 3
+    assert len(catalog.enemies.definitions.ids()) == 153
     assert len(catalog.enemies.behaviors.ids()) == 32
     assert len(catalog.enemies.encounters.ids()) == 4
     personal_ids = {value.id for value in PERSONAL_BOSS_ENEMIES}
     party_ids = {value.id for value in PARTY_BOSS_ENEMIES}
     disaster_ids = {value.id for value in DISASTER_ENEMY_DEFINITIONS}
+    trial_ids = {value.id for value in BUILD_TRIAL_TARGETS}
+    gameplay_ids = {
+        *(value.id for value in REGULAR_ENEMIES),
+        *personal_ids,
+        *party_ids,
+        *disaster_ids,
+    }
+    assert not gameplay_ids & trial_ids
+    assert not any(
+        trial_ids & set(spawn.enemy_ids)
+        for encounter in catalog.enemies.encounters
+        for spawn in encounter.spawns
+    )
     assert not personal_ids & party_ids
     assert not personal_ids & disaster_ids
     assert not party_ids & disaster_ids
@@ -113,6 +130,12 @@ def main() -> None:
     assert reward.weapon_experience > 0
     assert reward.threat_score > 0
     assert reward.loot and reward.loot[0].table_id == "loot.enemy.elite"
+
+    trial_reward = catalog.enemies.reward_profiles.require("enemy.reward.build_trial")
+    assert trial_reward.character_experience_per_level == 0
+    assert trial_reward.weapon_experience_per_level == 0
+    assert trial_reward.base_loot_rolls == 0
+    assert trial_reward.loot_table_id is None
 
     _assert_ai_executes(cultivation)
     _assert_all_behavior_abilities_execute(cultivation)

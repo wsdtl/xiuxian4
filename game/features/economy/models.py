@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from game.rules.economy import (
     GearPriceQuote,
     MarketListing,
+    MarketPriceQuote,
     MarketTaxQuote,
     RecycleQuote,
 )
@@ -42,8 +43,9 @@ class MarketListingQuote:
     seller_wallet_account_id: str
     inventory_revision: int
     asset_id: str
-    price: GearPriceQuote
+    price: MarketPriceQuote
     list_price: int
+    quantity: int = 1
 
 
 @dataclass(frozen=True)

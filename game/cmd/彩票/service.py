@@ -11,7 +11,7 @@ from game.content.catalog.economy import LOTTERY_TICKET_PRICE
 from game.content.presentation import COVENANT_TREASURY_NAME
 from game.rules.lottery import pool_breakdown
 from launch import C, config, logger
-from message import M
+from message import Action, M
 
 from ..reply import send_game_reply
 
@@ -57,6 +57,23 @@ async def lottery(current: CurrentCharacterResult) -> None:
         )
         builder.note("至少 2 人开奖；不足自动退票，按开奖号环形距离排名")
         _append_due_result(builder, view)
+        if view.current_ticket is None:
+            builder.action(
+                Action(
+                    "lottery.purchase",
+                    "购票",
+                    "购票 ",
+                    behavior="fill",
+                )
+            )
+        builder.action(
+            Action(
+                "lottery.history",
+                "中奖记录",
+                "中奖记录",
+                style="secondary",
+            )
+        )
         await send_game_reply(builder.build())
     except (KeyError, TypeError, ValueError) as exc:
         await send_game_reply(

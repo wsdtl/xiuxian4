@@ -65,6 +65,7 @@ def main() -> None:
     _assert_instance_generation(catalog)
     _assert_six_piece_contribution(catalog)
     _assert_real_trigger_execution(catalog)
+    _assert_reactive_trigger_caps(catalog)
     _assert_every_equipment_trigger_executes(catalog)
     _assert_balance(catalog)
     print("official equipment catalog test passed")
@@ -350,6 +351,65 @@ def _assert_every_equipment_trigger_executes(catalog) -> None:
             str(value.kind)
             for value in activated.events
             if str(value.kind).startswith(
+                ("ability.", "combat.", "effect.", "resource.", "trigger.")
+            )
+        } - KNOWN_BATTLE_EVENT_KINDS
+        assert not unknown, (trigger_id, unknown)
+
+
+def _assert_reactive_trigger_caps(catalog) -> None:
+    for property_key in ("thorns", "damaged_shield"):
+        trigger_id = equipment_trigger_id(property_key, 2)
+        actor = _combatant("actor")
+        target = _combatant("target", trigger_id=trigger_id)
+        context = _context(f"equipment-cap:{property_key}", 9_000)
+        direct_damage = RuleEvent.from_context(
+            context,
+            kind="combat.damage.dealt",
+            source_id=actor.id,
+            target_id=target.id,
+            subject_id="damage.physical",
+            values={
+                "is_proc": 0.0,
+                "damage_type": "damage.physical",
+                "effective_damage": 100.0,
+                "health_damage": 100.0,
+                "shield_damage": 0.0,
+            },
+        )
+        periodic_damage = RuleEvent.from_context(
+            context,
+            kind="combat.damage.dealt",
+            source_id=actor.id,
+            target_id=target.id,
+            subject_id="damage.bleed",
+            values={
+                "is_proc": 0.0,
+                "damage_type": "damage.physical",
+                "effective_damage": 100.0,
+                "health_damage": 100.0,
+                "shield_damage": 0.0,
+            },
+        )
+        session = catalog.trigger_engine.session(context)
+        first_batch = session.process(
+            (direct_damage,),
+            {actor.id: actor, target.id: target},
+        )
+        second_batch = session.process((periodic_damage,), first_batch.entities)
+        all_events = (*first_batch.events, *second_batch.events)
+        assert sum(
+            event.kind == "trigger.activated" and event.subject_id == trigger_id
+            for event in all_events
+        ) == 1
+        assert not any(
+            event.kind == "trigger.activated" and event.subject_id == trigger_id
+            for event in second_batch.events
+        )
+        unknown = {
+            str(event.kind)
+            for event in all_events
+            if str(event.kind).startswith(
                 ("ability.", "combat.", "effect.", "resource.", "trigger.")
             )
         } - KNOWN_BATTLE_EVENT_KINDS

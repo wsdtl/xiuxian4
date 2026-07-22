@@ -39,6 +39,8 @@ from game.core.gameplay.inventory import (  # noqa: E402
     AppendStack,
     AssetAvailability,
     ConsumeStack,
+    ConsumeInstance,
+    DestroyAsset,
     GrantInstance,
     GrantStack,
     INVENTORY_FOUNDATION_VERSION,
@@ -56,11 +58,14 @@ from game.core.gameplay.inventory import (  # noqa: E402
     ItemStorageComponent,
     MergeStacks,
     MoveAsset,
+    ProtectAsset,
     ReleaseReservation,
     ReservationMode,
     ReserveAsset,
     SourceReceipt,
     SplitStack,
+    UnprotectAsset,
+    UpdateInstance,
     register_item_ability_component,
     register_item_storage_component,
 )
@@ -73,6 +78,7 @@ def main() -> None:
     _assert_definition_and_container_boundaries()
     _assert_append_stack()
     _assert_asset_transactions_and_provenance()
+    _assert_asset_protection()
     _assert_reservations_and_escrow()
     _assert_atomic_cross_owner_failure()
     _assert_expiration()
@@ -202,7 +208,7 @@ def _assert_definition_and_container_boundaries() -> None:
     catalog = _catalog()
     engine = InventoryEngine(catalog)
     assert catalog.finalized
-    assert INVENTORY_FOUNDATION_VERSION == "inventory.foundation.v5"
+    assert INVENTORY_FOUNDATION_VERSION == "inventory.foundation.v6"
     state = InventoryState(containers=_containers())
     rejected = engine.execute(
         InventoryTransaction(
@@ -275,6 +281,109 @@ def _assert_append_stack() -> None:
         ("receipt-appended", 5),
     ]
     assert appended.state.reference_number("ore-a") == 1
+
+
+def _assert_asset_protection() -> None:
+    engine, state = _base_assets()
+    protected = _execute(
+        engine,
+        state,
+        "protect-sword",
+        ProtectAsset("sword-a"),
+    )
+    assert protected.state.is_protected("sword-a")
+    assert protected.state.revision == state.revision + 1
+    assert protected.events[-1].kind == "inventory.item.protected"
+
+    repeated = _execute(
+        engine,
+        protected.state,
+        "protect-sword-again",
+        ProtectAsset("sword-a"),
+    )
+    assert repeated.state is protected.state
+    assert repeated.state.revision == protected.state.revision
+    assert not repeated.events
+
+    moved = _execute(
+        engine,
+        protected.state,
+        "equip-protected-sword",
+        MoveAsset("sword-a", "equipment-a"),
+    ).state
+    assert moved.is_protected("sword-a")
+    assert moved.instances["sword-a"].container_id == "equipment-a"
+    current_sword = moved.instances["sword-a"]
+    updated = _execute(
+        engine,
+        moved,
+        "update-protected-sword",
+        UpdateInstance(
+            replace(current_sword, data={"quality_seed": 18}),
+            current_sword.revision,
+        ),
+    ).state
+    assert updated.is_protected("sword-a")
+    assert updated.instances["sword-a"].data["quality_seed"] == 18
+    moved = updated
+
+    for operation in (
+        DestroyAsset("sword-a"),
+        ConsumeInstance("sword-a"),
+        MoveAsset("sword-a", "bag-b"),
+        ReserveAsset(
+            "protected-escrow",
+            "sword-a",
+            ReservationMode.ESCROWED,
+            "business.market_order",
+            "protected-order",
+        ),
+    ):
+        rejected = engine.execute(
+            InventoryTransaction(
+                f"reject-protected-{type(operation).__name__}",
+                "player-a",
+                "inventory.test_operation",
+                (operation,),
+            ),
+            state=moved,
+            context=_context(),
+        )
+        assert rejected.failure and rejected.failure.code == "inventory.asset_protected"
+
+    stack_rejected = engine.execute(
+        InventoryTransaction(
+            "reject-stack-protection",
+            "player-a",
+            "inventory.test_operation",
+            (ProtectAsset("ore-a"),),
+        ),
+        state=moved,
+        context=_context(),
+    )
+    assert stack_rejected.failure and stack_rejected.failure.code == "inventory.instance_unknown"
+
+    unprotected = _execute(
+        engine,
+        moved,
+        "unprotect-sword",
+        UnprotectAsset("sword-a"),
+    )
+    assert not unprotected.state.is_protected("sword-a")
+    repeated_unprotect = _execute(
+        engine,
+        unprotected.state,
+        "unprotect-sword-again",
+        UnprotectAsset("sword-a"),
+    )
+    assert repeated_unprotect.state.revision == unprotected.state.revision
+    transferred = _execute(
+        engine,
+        repeated_unprotect.state,
+        "transfer-unprotected-sword",
+        MoveAsset("sword-a", "bag-b"),
+    ).state
+    assert transferred.owner_of("sword-a") == "player-b"
 
 
 def _assert_asset_transactions_and_provenance() -> None:

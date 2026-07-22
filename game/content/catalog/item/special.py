@@ -9,17 +9,19 @@ from game.core.gameplay import (
     ITEM_STORAGE_COMPONENT_ID,
     ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
     ContainerCapacityItemComponent,
-    EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
-    EquipmentSetGuaranteeItemComponent,
+    CHARACTER_EXPERIENCE_ITEM_COMPONENT_ID,
+    CharacterExperienceItemComponent,
+    COMPANION_EXPERIENCE_ITEM_COMPONENT_ID,
+    CompanionExperienceItemComponent,
     ItemAssetKind,
     ItemDefinition,
     ItemComponentType,
     ItemStorageComponent,
     StableId,
     TagSet,
-    WEAPON_LEVEL_ITEM_COMPONENT_ID,
+    WEAPON_EXPERIENCE_ITEM_COMPONENT_ID,
     WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
-    WeaponLevelItemComponent,
+    WeaponExperienceItemComponent,
     WeaponMaximumLevelItemComponent,
     stable_id,
 )
@@ -35,9 +37,10 @@ from .classification import (
 
 INSCRIPTION_FEATHER_ITEM_ID = "item.inscription.feather"
 WEAPON_MAXIMUM_LEVEL_ITEM_ID = "item.special.weapon_maximum_level"
-WEAPON_LEVEL_ITEM_ID = "item.special.weapon_level"
+CHARACTER_EXPERIENCE_ITEM_ID = "item.special.character_experience"
+WEAPON_EXPERIENCE_ITEM_ID = "item.special.weapon_experience"
+COMPANION_EXPERIENCE_ITEM_ID = "item.special.companion_experience"
 BACKPACK_CAPACITY_ITEM_ID = "item.special.backpack_capacity"
-EQUIPMENT_SET_GUARANTEE_ITEM_ID = "item.special.equipment_set_guarantee"
 DIMENSION_SHIFT_ITEM_ID = "item.special.dimension_shift"
 DIMENSION_SHIFT_ITEM_COMPONENT_ID = "item_component.use_dimension_shift"
 COMPANION_SANCTUARY_ITEM_ID = "item.special.companion_sanctuary"
@@ -45,6 +48,15 @@ COMPANION_SANCTUARY_ITEM_COMPONENT_ID = "item_component.use_companion_sanctuary"
 BACKPACK_CAPACITY_INCREMENT = 5
 BACKPACK_CAPACITY_MAXIMUM = 140
 SPECIAL_ITEM_STACK_LIMIT = 99
+
+CHARACTER_EXPERIENCE_ITEM_COMPONENT_TYPE = ItemComponentType(
+    CHARACTER_EXPERIENCE_ITEM_COMPONENT_ID,
+    CharacterExperienceItemComponent,
+)
+COMPANION_EXPERIENCE_ITEM_COMPONENT_TYPE = ItemComponentType(
+    COMPANION_EXPERIENCE_ITEM_COMPONENT_ID,
+    CompanionExperienceItemComponent,
+)
 
 
 @dataclass(frozen=True)
@@ -128,10 +140,22 @@ WEAPON_MAXIMUM_LEVEL_ITEM = special_item_definition(
         WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID: WeaponMaximumLevelItemComponent(),
     },
 )
-WEAPON_LEVEL_ITEM = special_item_definition(
-    WEAPON_LEVEL_ITEM_ID,
+CHARACTER_EXPERIENCE_ITEM = special_item_definition(
+    CHARACTER_EXPERIENCE_ITEM_ID,
     use_components={
-        WEAPON_LEVEL_ITEM_COMPONENT_ID: WeaponLevelItemComponent(),
+        CHARACTER_EXPERIENCE_ITEM_COMPONENT_ID: CharacterExperienceItemComponent(),
+    },
+)
+WEAPON_EXPERIENCE_ITEM = special_item_definition(
+    WEAPON_EXPERIENCE_ITEM_ID,
+    use_components={
+        WEAPON_EXPERIENCE_ITEM_COMPONENT_ID: WeaponExperienceItemComponent(),
+    },
+)
+COMPANION_EXPERIENCE_ITEM = special_item_definition(
+    COMPANION_EXPERIENCE_ITEM_ID,
+    use_components={
+        COMPANION_EXPERIENCE_ITEM_COMPONENT_ID: CompanionExperienceItemComponent(),
     },
 )
 BACKPACK_CAPACITY_ITEM = special_item_definition(
@@ -142,12 +166,6 @@ BACKPACK_CAPACITY_ITEM = special_item_definition(
             BACKPACK_CAPACITY_INCREMENT,
             BACKPACK_CAPACITY_MAXIMUM,
         ),
-    },
-)
-EQUIPMENT_SET_GUARANTEE_ITEM = special_item_definition(
-    EQUIPMENT_SET_GUARANTEE_ITEM_ID,
-    use_components={
-        EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID: EquipmentSetGuaranteeItemComponent(),
     },
 )
 DIMENSION_SHIFT_ITEM = special_item_definition(
@@ -164,9 +182,10 @@ COMPANION_SANCTUARY_ITEM = special_item_definition(
 )
 SPECIAL_ITEMS: tuple[ItemDefinition, ...] = (
     WEAPON_MAXIMUM_LEVEL_ITEM,
-    WEAPON_LEVEL_ITEM,
+    CHARACTER_EXPERIENCE_ITEM,
+    WEAPON_EXPERIENCE_ITEM,
+    COMPANION_EXPERIENCE_ITEM,
     BACKPACK_CAPACITY_ITEM,
-    EQUIPMENT_SET_GUARANTEE_ITEM,
     DIMENSION_SHIFT_ITEM,
     COMPANION_SANCTUARY_ITEM,
 )
@@ -183,8 +202,6 @@ __all__ = [
     "BACKPACK_CAPACITY_ITEM",
     "BACKPACK_CAPACITY_ITEM_ID",
     "BACKPACK_CAPACITY_MAXIMUM",
-    "EQUIPMENT_SET_GUARANTEE_ITEM",
-    "EQUIPMENT_SET_GUARANTEE_ITEM_ID",
     "DIMENSION_SHIFT_ITEM",
     "DIMENSION_SHIFT_ITEM_COMPONENT_ID",
     "DIMENSION_SHIFT_ITEM_COMPONENT_TYPE",
@@ -199,8 +216,14 @@ __all__ = [
     "SPECIAL_ITEMS",
     "SPECIAL_ITEM_TAG",
     "SPECIAL_STORAGE_TAG",
-    "WEAPON_LEVEL_ITEM",
-    "WEAPON_LEVEL_ITEM_ID",
+    "CHARACTER_EXPERIENCE_ITEM_ID",
+    "CHARACTER_EXPERIENCE_ITEM_COMPONENT_TYPE",
+    "CHARACTER_EXPERIENCE_ITEM",
+    "COMPANION_EXPERIENCE_ITEM_ID",
+    "COMPANION_EXPERIENCE_ITEM_COMPONENT_TYPE",
+    "COMPANION_EXPERIENCE_ITEM",
+    "WEAPON_EXPERIENCE_ITEM",
+    "WEAPON_EXPERIENCE_ITEM_ID",
     "WEAPON_MAXIMUM_LEVEL_ITEM",
     "WEAPON_MAXIMUM_LEVEL_ITEM_ID",
     "special_item_definition",

@@ -111,6 +111,7 @@ class DimensionalDisasterFeature:
         battle_reports,
         storage: DimensionalDisasterStorageKinds,
         reward_keys_factory,
+        companion_growth,
         *,
         maximum_battle_rounds: int,
         timezone: str,
@@ -123,6 +124,7 @@ class DimensionalDisasterFeature:
         self.snapshots = snapshots
         self.rewards = rewards
         self.battle_reports = battle_reports
+        self.companion_growth = companion_growth
         self.storage = storage
         self.reward_keys_factory = reward_keys_factory
         self.timezone = ZoneInfo(timezone)
@@ -295,6 +297,24 @@ class DimensionalDisasterFeature:
                 effective_damage=damage,
                 available_capacity=ticket_capacity,
             )
+            companion_amount = self.companion_growth.engine.disaster_experience(
+                event.combat.level,
+                damage,
+                event.maximum_health,
+            )
+            companion_growth = self.companion_growth.grant_in_uow(
+                uow,
+                normalized_character_id,
+                battle.player_companion_id,
+                companion_amount,
+                character_level=character.progressions[
+                    CHARACTER_LEVEL_PROGRESSION_ID
+                ].level,
+                logical_time=logical_time,
+            )
+            companion_experience = (
+                companion_growth.accepted if companion_growth is not None else 0
+            )
             receipt = DisasterChallengeReceipt(
                 normalized_operation_id,
                 normalized_character_id,
@@ -310,6 +330,8 @@ class DimensionalDisasterFeature:
                 battle.player_victory,
                 logical_time,
                 draw_ticket_drops,
+                battle.player_companion_id,
+                companion_experience,
             )
             next_event = record_disaster_challenge(event, receipt)
             next_activity_state = activity_state

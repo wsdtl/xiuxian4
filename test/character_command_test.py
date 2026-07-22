@@ -47,6 +47,7 @@ from game.cmd.reply_intents import (  # noqa: E402
     ReplyIntentRegistry,
     reply_intents,
 )
+from game.cmd.角色.service import _number  # noqa: E402
 from launch.adapter import Depends  # noqa: E402
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
@@ -79,6 +80,8 @@ def main() -> None:
 
 
 async def _main() -> None:
+    assert _number(55.448) == "55.45"
+    assert _number(40.0) == "40"
     assert tuple(inspect.signature(character_component.create_character).parameters) == (
         "message",
     )

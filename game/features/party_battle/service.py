@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 from zoneinfo import ZoneInfo
 
-from game.content.catalog import CHARACTER_MAXIMUM_LEVEL
+from game.content.catalog import CHARACTER_LEVEL_PROGRESSION_ID, CHARACTER_MAXIMUM_LEVEL
 from game.content.catalog.enemy import PARTY_BOSS_ENCOUNTER_ID, PARTY_BOSS_LOOT_TABLE_ID
 from game.content.catalog.social import (
     PARTY_BATTLE_DAY_RESET_HOUR,
@@ -90,6 +90,7 @@ class PartyBattleFeature:
         player_lineup,
         storage: PartyBattleStorageKinds,
         reward_keys_factory,
+        companion_growth,
         *,
         party_scope_id: str,
         timezone: str,
@@ -102,6 +103,7 @@ class PartyBattleFeature:
         self.battle_reports = battle_reports
         self.storage = storage
         self.reward_keys_factory = reward_keys_factory
+        self.companion_growth = companion_growth
         self.party_scope_id = party_scope_id
         self.timezone = ZoneInfo(timezone)
         self.encounters = EnemyEncounterGenerator(
@@ -321,7 +323,7 @@ class PartyBattleFeature:
             reward_summaries: dict[str, tuple[str, ...]] = {}
             if battle.victory:
                 quote = self.content.catalog.enemy_threat.reward_quote(enemy)
-                for character, (inventory, loadout, _roster) in zip(members, bundles):
+                for character, (inventory, loadout, roster) in zip(members, bundles):
                     daily = self._daily_state(uow, character.id, logical_time)
                     if daily.reward_wins >= PARTY_BATTLE_DAILY_WINS:
                         reward_summaries[character.id] = ("助战完成，本次没有奖励",)
@@ -385,6 +387,25 @@ class PartyBattleFeature:
                     )
                     if reward_outcome.failure:
                         raise RuntimeError(reward_outcome.failure.message)
+                    active_companion = roster.companion_for_preset(loadout.active_preset_id)
+                    companion_amount = (
+                        self.companion_growth.engine.party_boss_experience(enemy.level)
+                        if active_companion is not None
+                        else 0
+                    )
+                    companion_growth = self.companion_growth.grant_in_uow(
+                        uow,
+                        character.id,
+                        active_companion.id if active_companion is not None else None,
+                        companion_amount,
+                        character_level=character.progressions[
+                            CHARACTER_LEVEL_PROGRESSION_ID
+                        ].level,
+                        logical_time=logical_time,
+                    )
+                    companion_experience = (
+                        companion_growth.accepted if companion_growth is not None else 0
+                    )
                     next_daily = PartyBattleDailyState(
                         character.id,
                         daily.business_day,
@@ -396,6 +417,7 @@ class PartyBattleFeature:
                     reward_summaries[character.id] = (
                         f"角色经验 +{quote.character_experience}",
                         f"武器经验 +{quote.weapon_experience}" if loadout.weapon_asset_id else "未装备武器，无武器经验",
+                        f"伙伴经验 +{companion_experience}" if active_companion is not None else "未配置伙伴，无伙伴经验",
                         *(
                             f"{value.kind}:{value.definition_id} x{value.quantity}"
                             for value in reward_build.references

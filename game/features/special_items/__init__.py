@@ -4,14 +4,12 @@ from .codec import special_item_codec_registrations
 from .models import SpecialItemUseCommand, SpecialItemUseReceipt
 from .service import (
     BACKPACK_CAPACITY_EFFECT_KIND,
-    EQUIPMENT_SET_GUARANTEE_EFFECT_KIND,
     SpecialItemUseService,
 )
 
 
 __all__ = [
     "BACKPACK_CAPACITY_EFFECT_KIND",
-    "EQUIPMENT_SET_GUARANTEE_EFFECT_KIND",
     "SpecialItemUseCommand",
     "SpecialItemUseReceipt",
     "SpecialItemUseService",

@@ -47,6 +47,7 @@ class ExplorationFeature:
         battle_reports,
         storage: ExplorationStorageKinds,
         reward_keys_factory,
+        companion_growth,
         settlement_observer=None,
     ) -> None:
         self.database = database
@@ -64,6 +65,7 @@ class ExplorationFeature:
             battle_reports,
             storage,
             reward_keys_factory,
+            companion_growth,
             settlement_observer,
         )
 

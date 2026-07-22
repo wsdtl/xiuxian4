@@ -53,6 +53,7 @@ from ..gameplay.actions import (
     StartAction,
 )
 from ..gameplay.character import (
+    CharacterItemUseReceipt,
     CharacterRosterState,
     CharacterState,
     CharacterStatus,
@@ -384,6 +385,7 @@ def gameplay_snapshot_codec(
         ("character.progression_state", ProgressionState),
         ("character.roster_state", CharacterRosterState),
         ("character.state", CharacterState),
+        ("character.item_use_receipt", CharacterItemUseReceipt),
         ("character.unlock_progression_cap", UnlockProgressionCap),
         ("weapon.state", WeaponState),
         ("weapon.maximum_level_roll", WeaponMaximumLevelRoll),

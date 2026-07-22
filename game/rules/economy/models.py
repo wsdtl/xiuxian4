@@ -7,7 +7,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Mapping
 
-from game.core.gameplay import ItemInstance, StableId, stable_id
+from game.core.gameplay import ItemInstance, ItemStack, StableId, stable_id
 
 
 ECONOMY_RULESET_VERSION = "rules.economy.v1"
@@ -41,6 +41,55 @@ class GearPriceQuote:
             )
         if self.value_score <= 0 or self.reference_price < 1 or self.policy_version < 1:
             raise ValueError("装备参考价值必须大于 0")
+
+
+@dataclass(frozen=True)
+class MarketPriceQuote:
+    """市场统一核算价；实例和堆叠物品共用同一种成交报价。"""
+
+    asset_id: str
+    definition_id: StableId
+    asset_kind: str
+    category: str
+    quantity: int
+    unit_reference_price: int
+    reference_price: int
+    currency_id: StableId
+    minimum_price_bps: int
+    maximum_price_bps: int
+    policy_id: StableId
+    policy_version: int
+    slot_id: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.asset_id.strip() or self.asset_kind not in {"instance", "stack"}:
+            raise ValueError("市场参考价缺少资产身份或类型")
+        if not self.category.strip():
+            raise ValueError("市场参考价缺少分类")
+        for field_name in ("definition_id", "currency_id", "policy_id"):
+            object.__setattr__(
+                self,
+                field_name,
+                stable_id(getattr(self, field_name), field=field_name),
+            )
+        integers = (
+            self.quantity,
+            self.unit_reference_price,
+            self.reference_price,
+            self.minimum_price_bps,
+            self.maximum_price_bps,
+            self.policy_version,
+        )
+        if any(isinstance(value, bool) or not isinstance(value, int) for value in integers):
+            raise TypeError("市场参考价数值必须是整数")
+        if min(self.quantity, self.unit_reference_price, self.reference_price) < 1:
+            raise ValueError("市场参考价数量和金额必须大于 0")
+        if self.reference_price != self.unit_reference_price * self.quantity:
+            raise ValueError("市场参考总价与单价、数量不一致")
+        if not 1 <= self.minimum_price_bps <= 10_000:
+            raise ValueError("市场最低正常价格比例无效")
+        if self.maximum_price_bps < 10_000 or self.policy_version < 1:
+            raise ValueError("市场最高正常价格比例或政策版本无效")
 
 
 @dataclass(frozen=True)
@@ -140,8 +189,8 @@ class MarketListing:
     seller_id: str
     seller_name: str
     seller_wallet_account_id: str
-    asset: ItemInstance
-    price: GearPriceQuote
+    asset: ItemInstance | ItemStack
+    price: MarketPriceQuote | GearPriceQuote
     list_price: int
     reservation_id: str
     opened_at: datetime
@@ -179,6 +228,9 @@ class MarketTradeRecord:
     seller_proceeds: int
     tax_amount: int
     settled_at: datetime
+    definition_id: str = ""
+    asset_kind: str = "instance"
+    quantity: int = 1
 
     def __post_init__(self) -> None:
         if not all(
@@ -194,6 +246,8 @@ class MarketTradeRecord:
         _aware(self.settled_at, "MarketTradeRecord.settled_at")
         if self.buyer_total != self.seller_proceeds + self.tax_amount:
             raise ValueError("二手成交记录拆账不守恒")
+        if self.asset_kind not in {"instance", "stack"} or self.quantity < 1:
+            raise ValueError("二手成交记录资产类型或数量无效")
 
 
 @dataclass(frozen=True)
@@ -228,6 +282,7 @@ __all__ = [
     "PRIMARY_TAX_ACCOUNT_ID",
     "PRIMARY_TAX_OWNER_ID",
     "GearPriceQuote",
+    "MarketPriceQuote",
     "MarketListing",
     "MarketState",
     "MarketTaxQuote",

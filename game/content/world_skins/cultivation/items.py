@@ -8,7 +8,6 @@ from ...catalog import (
     BACKPACK_CAPACITY_ITEM_ID,
     COMPANION_SANCTUARY_ITEM_ID,
     DIMENSION_SHIFT_ITEM_ID,
-    EQUIPMENT_SET_GUARANTEE_ITEM_ID,
     INSCRIPTION_FEATHER_ITEM_ID,
     LARGE_HEALTH_MEDICINE_ABILITY_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
@@ -22,7 +21,9 @@ from ...catalog import (
     SMALL_HEALTH_MEDICINE_ITEM_ID,
     SMALL_SPIRIT_MEDICINE_ABILITY_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
-    WEAPON_LEVEL_ITEM_ID,
+    CHARACTER_EXPERIENCE_ITEM_ID,
+    COMPANION_EXPERIENCE_ITEM_ID,
+    WEAPON_EXPERIENCE_ITEM_ID,
     WEAPON_MAXIMUM_LEVEL_ITEM_ID,
 )
 
@@ -58,20 +59,25 @@ CULTIVATION_ITEM_ENTRIES = {
         description="登录另一世界时自动消耗一枚；查看界门或跃迁失败不会消耗。",
         icon="🧿",
     ),
-    EQUIPMENT_SET_GUARANTEE_ITEM_ID: SkinEntry(
-        name="合道玉契",
-        description="激活后，下一件实际掉落的装备必定拥有随机套装身份。",
-        icon="📜",
-    ),
     WEAPON_MAXIMUM_LEVEL_ITEM_ID: SkinEntry(
         name="淬锋丹",
         description="为一把未臻极限的武器淬炼根基，使其等级上限提升 1 级，最高 100 级。",
         icon="⚗️",
     ),
-    WEAPON_LEVEL_ITEM_ID: SkinEntry(
+    CHARACTER_EXPERIENCE_ITEM_ID: SkinEntry(
+        name="悟道玉简",
+        description="为角色补充人物经验，单次最多增加 1,000,000 点。",
+        icon="📖",
+    ),
+    WEAPON_EXPERIENCE_ITEM_ID: SkinEntry(
         name="岁华玉髓",
-        description="补足一把武器当前等级所缺的全部经验，使其直接提升 1 级。",
+        description="为指定武器补充成长经验，单次最多增加 40,000 点，无法超过武器等级上限。",
         icon="💠",
+    ),
+    COMPANION_EXPERIENCE_ITEM_ID: SkinEntry(
+        name="同契灵简",
+        description="为指定伙伴补充成长经验，单次最多增加 30,000 点。",
+        icon="🪶",
     ),
     SMALL_HEALTH_MEDICINE_ABILITY_ID: SkinEntry(name="服用小还丹"),
     MEDIUM_HEALTH_MEDICINE_ABILITY_ID: SkinEntry(name="服用中还丹"),

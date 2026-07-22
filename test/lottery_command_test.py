@@ -47,6 +47,11 @@ async def _main() -> None:
             assert "彩票系统" in status.replies[0].message.content, status.replies[0].message.content
             assert "尚未购票" in status.replies[0].message.content, status.replies[0].message.content
             assert "至少 2 人开奖" in status.replies[0].message.content
+            assert [action.label for action in status.replies[0].message.actions] == [
+                "购票",
+                "中奖记录",
+            ]
+            assert status.replies[0].message.actions[0].behavior == "fill"
             chosen = await _dispatch(
                 "player",
                 "购票 123456",
@@ -65,6 +70,7 @@ async def _main() -> None:
             status = await _dispatch("player", "彩票", "lottery-status-after")
             assert "123456" in status.replies[0].message.content
             assert "654321" not in status.replies[0].message.content
+            assert [action.label for action in status.replies[0].message.actions] == ["中奖记录"]
             invalid = await _dispatch("player", "购票 123", "lottery-invalid")
             assert "六位数字" in invalid.replies[0].message.content
             history = await _dispatch("player", "中奖记录", "lottery-history")

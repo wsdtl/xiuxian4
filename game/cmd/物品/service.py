@@ -44,6 +44,9 @@ from game.core.gameplay import (
     AbilityUse,
     AssetAvailability,
     CharacterItemUse,
+    CharacterItemUseCommand,
+    CHARACTER_EXPERIENCE_ITEM_COMPONENT_ID,
+    COMPANION_EXPERIENCE_ITEM_COMPONENT_ID,
     EquipmentState,
     InscriptionMediumData,
     InscriptionProjector,
@@ -56,9 +59,8 @@ from game.core.gameplay import (
     WeaponContributionProvider,
     WeaponItemUseCommand,
     WeaponState,
-    WEAPON_LEVEL_ITEM_COMPONENT_ID,
+    WEAPON_EXPERIENCE_ITEM_COMPONENT_ID,
     WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
-    EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
     equipment_state_from_instance,
     weapon_state_from_instance,
 )
@@ -68,7 +70,6 @@ from game.rules.character import equipped_character_contributions
 from game.rules.item import asset_reference, resolve_asset_reference
 from game.features.special_items import (
     BACKPACK_CAPACITY_EFFECT_KIND,
-    EQUIPMENT_SET_GUARANTEE_EFFECT_KIND,
     SpecialItemUseCommand,
 )
 from launch import C, config, logger
@@ -197,6 +198,79 @@ async def inspect(message: str, result: CharacterOverviewResult) -> None:
     await send_game_reply(message_value)
 
 
+async def protect_asset(message: str, result: CharacterOverviewResult) -> None:
+    await _set_asset_protection(message, result, protected=True)
+
+
+async def unprotect_asset(message: str, result: CharacterOverviewResult) -> None:
+    await _set_asset_protection(message, result, protected=False)
+
+
+async def _set_asset_protection(
+    message: str,
+    result: CharacterOverviewResult,
+    *,
+    protected: bool,
+) -> None:
+    title = "珍藏" if protected else "取消珍藏"
+    overview = _overview(result)
+    if overview is None:
+        await send_game_reply(_unavailable(title))
+        return
+    token = str(message or "").strip()
+    if not token:
+        await send_game_reply(_invalid(title, f"发送: {title} 物品编号"))
+        return
+    services = current_game_services()
+    try:
+        asset = resolve_asset_reference(
+            overview.inventory,
+            token,
+            services.content.catalog.items,
+        )
+        if not isinstance(asset, ItemInstance):
+            raise ValueError("只有武器和装备可以加入珍藏")
+        definition = services.content.catalog.items.require(asset.definition_id)
+        if not (
+            definition.tags.has("item.weapon")
+            or definition.tags.has("item.equipment")
+        ):
+            raise ValueError("只有武器和装备可以加入珍藏")
+    except (KeyError, TypeError, ValueError) as exc:
+        await send_game_reply(_invalid(title, str(exc)))
+        return
+
+    transaction_id = f"inventory-protection:{_evidence_id()}:{int(protected)}"
+    try:
+        outcome = await asyncio.to_thread(
+            services.inventory_protection.set_protected,
+            overview.character.id,
+            asset.id,
+            protected,
+            context=game_operation_context(transaction_id, logical_time=_now()),
+        )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("珍藏状态更新失败"), C.kv("character", overview.character.id))
+        )
+        await send_game_reply(_invalid(title, "珍藏状态没有更新，请稍后重试"))
+        return
+    if outcome.failure:
+        await send_game_reply(_invalid(title, outcome.failure.message))
+        return
+    assert outcome.value is not None
+    state_text = "已加入珍藏" if protected else "已取消珍藏"
+    if not outcome.value.changed:
+        state_text = "已经处于珍藏状态" if protected else "当前没有珍藏"
+    await send_game_reply(
+        M.document()
+        .section(title, icon="item")
+        .field("物品", _asset_name(asset, overview))
+        .field("状态", state_text)
+        .build()
+    )
+
+
 async def use_item(message: str, current: CurrentCharacterResult) -> None:
     character = current.character if current.status == "ok" else None
     if character is None:
@@ -230,10 +304,21 @@ async def use_item(message: str, current: CurrentCharacterResult) -> None:
         component_id in definition.components
         for component_id in (
             WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
-            WEAPON_LEVEL_ITEM_COMPONENT_ID,
+            WEAPON_EXPERIENCE_ITEM_COMPONENT_ID,
         )
     ):
         await _use_weapon_growth_item(parts, asset, initial)
+        return
+
+    if CHARACTER_EXPERIENCE_ITEM_COMPONENT_ID in definition.components:
+        if len(parts) != 1:
+            await send_game_reply(_invalid("使用", "人物经验物品不需要指定目标"))
+            return
+        await _use_character_experience_item(asset, initial)
+        return
+
+    if COMPANION_EXPERIENCE_ITEM_COMPONENT_ID in definition.components:
+        await _use_companion_experience_item(parts, asset, initial)
         return
 
     if COMPANION_SANCTUARY_ITEM_COMPONENT_ID in definition.components:
@@ -247,7 +332,6 @@ async def use_item(message: str, current: CurrentCharacterResult) -> None:
         component_id in definition.components
         for component_id in (
             ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
-            EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
         )
     ):
         if len(parts) != 1:
@@ -405,6 +489,86 @@ async def _use_weapon_growth_item(parts, item_asset, overview: CharacterOverview
         )
     if receipt.level_after != receipt.level_before:
         builder.field("等级", f"Lv{receipt.level_before} -> Lv{receipt.level_after}")
+    if receipt.experience_granted:
+        builder.field("武器经验", f"+{receipt.experience_granted}")
+        builder.field(
+            "当前经验",
+            f"{receipt.experience_before} -> {receipt.experience_after}",
+        )
+    await send_game_reply(builder.build())
+
+
+async def _use_character_experience_item(item_asset, overview: CharacterOverview) -> None:
+    services = current_game_services()
+    transaction_id = f"character-item-use:{_evidence_id()}"
+    try:
+        outcome = await asyncio.to_thread(
+            services.character_item_use.use,
+            CharacterItemUseCommand(
+                transaction_id,
+                overview.character.id,
+                item_asset.id,
+            ),
+            inventory_id=overview.character.id,
+            context=game_operation_context(transaction_id, logical_time=_now()),
+        )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("人物经验物品使用失败"), C.kv("character", overview.character.id))
+        )
+        await send_game_reply(_invalid("使用", "物品使用没有完成"))
+        return
+    if outcome.failure:
+        await send_game_reply(_invalid("使用", outcome.failure.message))
+        return
+    receipt = outcome.unwrap()
+    builder = (
+        M.document()
+        .section("使用完成", icon="item")
+        .field("物品", _view(overview).projector.name(receipt.item_definition_id))
+        .field("人物经验", f"+{receipt.experience_granted}")
+        .field("等级", f"Lv{receipt.level_before} -> Lv{receipt.level_after}")
+        .field("当前经验", f"{receipt.experience_before} -> {receipt.experience_after}")
+    )
+    await send_game_reply(builder.build())
+
+
+async def _use_companion_experience_item(parts, item_asset, overview: CharacterOverview) -> None:
+    services = current_game_services()
+    reference = parts[1].upper() if len(parts) == 2 else None
+    if reference is not None and (not reference.startswith("C") or not reference[1:].isdigit()):
+        await send_game_reply(_invalid("使用", "伙伴编号必须使用 C数字"))
+        return
+    transaction_id = f"companion-item-use:{_evidence_id()}"
+    try:
+        result = await asyncio.to_thread(
+            services.companions.use_experience_item,
+            transaction_id,
+            overview.character.id,
+            item_asset.id,
+            reference,
+            logical_time=_now(),
+        )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("伙伴经验物品使用失败"), C.kv("character", overview.character.id))
+        )
+        await send_game_reply(_invalid("使用", "物品使用没有完成"))
+        return
+    if result.status != "used" or result.receipt is None or result.companion is None:
+        await send_game_reply(_invalid("使用", result.failure_message or "伙伴经验物品没有生效"))
+        return
+    receipt = result.receipt
+    definition = services.content.companions.require_definition(result.companion.definition_id)
+    builder = (
+        M.document()
+        .section("使用完成", icon="item")
+        .field("物品", _view(overview).projector.name(receipt.item_definition_id))
+        .field("伙伴", f"{result.companion.reference} {definition.name}")
+        .field("伙伴经验", f"+{receipt.experience_granted}")
+        .field("等级", f"Lv{receipt.level_before} -> Lv{receipt.level_after}")
+        .field("当前经验", f"{receipt.experience_before} -> {receipt.experience_after}")
+    )
     await send_game_reply(builder.build())
 
 
@@ -441,8 +605,6 @@ async def _use_specialized_item(item_asset, overview: CharacterOverview) -> None
     )
     if receipt.effect_kind == BACKPACK_CAPACITY_EFFECT_KIND:
         builder.field("背包空间", f"{receipt.value_before} -> {receipt.value_after}")
-    elif receipt.effect_kind == EQUIPMENT_SET_GUARANTEE_EFFECT_KIND:
-        builder.field("套装保证", "已生效").note("下一件实际掉落的装备必定拥有套装身份。")
     await send_game_reply(builder.build())
 
 
@@ -562,6 +724,8 @@ def _asset_page(
             _asset_name(asset, overview),
             FieldSeparator(),
             _compact_meta(asset, overview),
+            " ",
+            _protection_control(asset, overview),
         )
     if pages > 1:
         builder.field("页码", f"{page}/{pages}")
@@ -646,10 +810,11 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
             component_id in definition.components
             for component_id in (
                 ITEM_ABILITY_COMPONENT_ID,
+                CHARACTER_EXPERIENCE_ITEM_COMPONENT_ID,
+                COMPANION_EXPERIENCE_ITEM_COMPONENT_ID,
                 WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
-                WEAPON_LEVEL_ITEM_COMPONENT_ID,
+                WEAPON_EXPERIENCE_ITEM_COMPONENT_ID,
                 ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
-                EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
                 COMPANION_SANCTUARY_ITEM_COMPONENT_ID,
             )
         ):
@@ -761,6 +926,7 @@ def _append_roll(
 
 def _append_gear_status(builder, asset: ItemInstance, overview: CharacterOverview) -> None:
     builder.field("归属", _compact_status(asset, overview))
+    builder.field("珍藏", "是" if overview.inventory.is_protected(asset.id) else "否")
 
 
 def _gear_actions(asset: ItemInstance, overview: CharacterOverview) -> list[Action]:
@@ -773,13 +939,25 @@ def _gear_actions(asset: ItemInstance, overview: CharacterOverview) -> list[Acti
         equip_action = Action("item.unequip", "卸下", f"卸下 {slot_id}", behavior="fill")
     else:
         equip_action = Action("item.equip", "装备", f"装备 {reference}", behavior="fill")
-    actions = [equip_action, Action("item.inscribe", "铭刻", "铭刻")]
+    protected = overview.inventory.is_protected(asset.id)
+    actions = [
+        equip_action,
+        Action("item.inscribe", "铭刻", "铭刻"),
+        Action(
+            "item.unprotect" if protected else "item.protect",
+            "取消珍藏" if protected else "珍藏",
+            f"取消珍藏 {reference}" if protected else f"珍藏 {reference}",
+            behavior="send",
+            style="secondary",
+        ),
+    ]
     assigned = any(
         asset.id in preset.slots.values()
         for preset in overview.loadout.presets.values()
     )
     if (
         not assigned
+        and not protected
         and overview.inventory.availability(asset.id) is AssetAvailability.AVAILABLE
     ):
         actions.append(
@@ -1079,8 +1257,25 @@ def _compact_meta(asset, overview: CharacterOverview) -> str:
     status = _compact_status(asset, overview)
     if isinstance(asset, ItemInstance) and definition.tags.has("item.weapon"):
         state = weapon_state_from_instance(asset)
-        return f"Lv{state.level}/{state.maximum_level} | {status}"
+        suffix = " | 珍藏" if overview.inventory.is_protected(asset.id) else ""
+        return f"Lv{state.level}/{state.maximum_level} | {status}{suffix}"
+    if isinstance(asset, ItemInstance) and overview.inventory.is_protected(asset.id):
+        return f"{status} | 珍藏"
     return status
+
+
+def _protection_control(asset, overview: CharacterOverview):
+    if not isinstance(asset, ItemInstance):
+        return None
+    definition = current_game_services().content.catalog.items.require(asset.definition_id)
+    if not (definition.tags.has("item.weapon") or definition.tags.has("item.equipment")):
+        return None
+    reference = _reference(overview.inventory, asset)
+    protected = overview.inventory.is_protected(asset.id)
+    return M.command(
+        "取消珍藏" if protected else "加入珍藏",
+        f"取消珍藏 {reference}" if protected else f"珍藏 {reference}",
+    )
 
 
 def _availability_name(value: AssetAvailability) -> str:
@@ -1179,4 +1374,13 @@ def _unavailable(title: str) -> DocumentMessage:
     ).build()
 
 
-__all__ = ["PAGE_SIZE", "armory", "backpack", "inspect", "nacre", "use_item"]
+__all__ = [
+    "PAGE_SIZE",
+    "armory",
+    "backpack",
+    "inspect",
+    "nacre",
+    "protect_asset",
+    "unprotect_asset",
+    "use_item",
+]

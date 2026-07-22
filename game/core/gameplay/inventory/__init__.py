@@ -1,6 +1,6 @@
 """协议、数据库与具体玩法无关的物品资产底座。"""
 
-INVENTORY_FOUNDATION_VERSION = "inventory.foundation.v5"
+INVENTORY_FOUNDATION_VERSION = "inventory.foundation.v6"
 
 from .components import (
     ITEM_STORAGE_COMPONENT_ID,
@@ -53,12 +53,14 @@ from .transactions import (
     InventoryTransaction,
     MergeStacks,
     MoveAsset,
+    ProtectAsset,
     UpdateInstance,
     IncreaseContainerSpace,
     ReleaseReservation,
     ReserveAsset,
     SplitStack,
     SwapAssetContainers,
+    UnprotectAsset,
 )
 
 __all__ = [
@@ -100,6 +102,7 @@ __all__ = [
     "ItemUseReceipt",
     "MergeStacks",
     "MoveAsset",
+    "ProtectAsset",
     "UpdateInstance",
     "IncreaseContainerSpace",
     "ProvenanceLot",
@@ -109,6 +112,7 @@ __all__ = [
     "SourceReceipt",
     "SplitStack",
     "SwapAssetContainers",
+    "UnprotectAsset",
     "item_use_fingerprint",
     "register_item_ability_component",
     "register_item_storage_component",

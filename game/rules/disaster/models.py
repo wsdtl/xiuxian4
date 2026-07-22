@@ -94,6 +94,8 @@ class DisasterChallengeReceipt:
     player_victory: bool
     resolved_at: datetime
     draw_ticket_drops: int = 0
+    companion_id: str | None = None
+    companion_experience: int = 0
     replayed: bool = False
 
     def __post_init__(self) -> None:
@@ -107,11 +109,14 @@ class DisasterChallengeReceipt:
             self.attempts_today,
             self.turns,
             self.draw_ticket_drops,
+            self.companion_experience,
         ) < 0:
             raise ValueError("灾厄挑战回执包含负数")
         if self.shared_health_after > self.shared_health_before:
             raise ValueError("灾厄挑战不能恢复共享血量")
         _aware(self.resolved_at, "DisasterChallengeReceipt.resolved_at")
+        if self.companion_id is not None and not self.companion_id.strip():
+            raise ValueError("灾厄挑战伙伴 ID 不能为空")
 
     def as_replay(self) -> "DisasterChallengeReceipt":
         return DisasterChallengeReceipt(
@@ -129,6 +134,8 @@ class DisasterChallengeReceipt:
             self.player_victory,
             self.resolved_at,
             self.draw_ticket_drops,
+            self.companion_id,
+            self.companion_experience,
             True,
         )
 

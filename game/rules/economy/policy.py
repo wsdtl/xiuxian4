@@ -27,13 +27,17 @@ def quote_market_tax(
     *,
     repeated_pair_trades: int = 0,
     repeated_asset_trades: int = 0,
+    minimum_price_bps: int = MARKET_MIN_PRICE_BPS,
+    maximum_price_bps: int = MARKET_MAX_SELLER_PRICE_BPS,
 ) -> MarketTaxQuote:
     if reference_price < 1 or list_price < 1:
         raise ValueError("二手参考价和上架价必须大于 0")
     if repeated_pair_trades < 0 or repeated_asset_trades < 0:
         raise ValueError("二手风险成交次数不能小于 0")
-    minimum_buyer_total = _ceil_bps(reference_price, MARKET_MIN_PRICE_BPS)
-    seller_gross_cap = reference_price * MARKET_MAX_SELLER_PRICE_BPS // 10_000
+    if not 1 <= minimum_price_bps <= 10_000 or maximum_price_bps < 10_000:
+        raise ValueError("二手正常价格区间无效")
+    minimum_buyer_total = _ceil_bps(reference_price, minimum_price_bps)
+    seller_gross_cap = reference_price * maximum_price_bps // 10_000
     recognized_gross = min(list_price, max(1, seller_gross_cap))
     low_surcharge = max(0, minimum_buyer_total - list_price)
     high_tax = max(0, list_price - recognized_gross)

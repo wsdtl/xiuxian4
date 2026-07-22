@@ -17,6 +17,7 @@ from game.content.presentation import (
 from game.core.gameplay import (
     STANDARD_LOADOUT_SLOT_ORDER,
     ItemInstance,
+    ItemStack,
     equipment_state_from_instance,
     weapon_state_from_instance,
 )
@@ -41,18 +42,24 @@ async def market(message: str, result: CharacterOverviewResult) -> None:
         await _listing_detail(parts[0], overview)
         return
     slot_id = None
+    category = None
     page = 1
     try:
         if parts:
             slot_id = _slot_id(parts[0], overview)
             if slot_id is None:
-                page = _page(parts[0])
+                category = _category_id(parts[0])
+                if category is None:
+                    page = _page(parts[0])
             elif len(parts) > 1:
+                page = _page(parts[1])
+            if category is not None and len(parts) > 1:
                 page = _page(parts[1])
         listings = await asyncio.to_thread(
             current_game_services().economy.listings,
             logical_time=_now(),
             slot_id=slot_id,
+            category=category,
         )
         await send_game_reply(_listing_page(COVENANT_MARKET_NAME, listings, page, overview))
     except ValueError as exc:
@@ -82,8 +89,8 @@ async def list_item(message: str, result: CharacterOverviewResult) -> None:
         await send_game_reply(_failure("当前没有可用角色"))
         return
     parts = str(message or "").strip().split()
-    if len(parts) != 2:
-        await send_game_reply(_failure("上架需要物品编号和整数价格"))
+    if len(parts) not in {2, 3}:
+        await send_game_reply(_failure("上架格式：上架 物品编号 价格，堆叠物品可填写数量"))
         return
     try:
         asset = resolve_asset_reference(
@@ -91,9 +98,8 @@ async def list_item(message: str, result: CharacterOverviewResult) -> None:
             parts[0],
             current_game_services().content.catalog.items,
         )
-        if not isinstance(asset, ItemInstance):
-            raise ValueError("只有武器和装备可以上架")
-        price = int(parts[1])
+        quantity = 1 if len(parts) == 2 else int(parts[1])
+        price = int(parts[1] if len(parts) == 2 else parts[2])
         if price < 1:
             raise ValueError("上架价格必须大于 0")
         quoted = await asyncio.to_thread(
@@ -102,6 +108,7 @@ async def list_item(message: str, result: CharacterOverviewResult) -> None:
             overview.character.name,
             asset.id,
             price,
+            quantity,
         )
         await send_game_reply(_listing_quote_message(quoted, overview, parts[0]))
     except (KeyError, TypeError, ValueError) as exc:
@@ -114,7 +121,7 @@ async def confirm_listing(message: str, result: CharacterOverviewResult) -> None
         await send_game_reply(_failure("当前没有可用角色"))
         return
     parts = str(message or "").strip().split()
-    if len(parts) != 3:
+    if len(parts) not in {3, 4}:
         await send_game_reply(_failure("上架确认已经失效"))
         return
     services = current_game_services()
@@ -129,9 +136,10 @@ async def confirm_listing(message: str, result: CharacterOverviewResult) -> None
             overview.character.id,
             overview.character.name,
             asset.id,
-            int(parts[1]),
+            int(parts[1] if len(parts) == 3 else parts[2]),
+            1 if len(parts) == 3 else int(parts[1]),
         )
-        if quoted.quote is None or quoted.quote.id != parts[2]:
+        if quoted.quote is None or quoted.quote.id != parts[-1]:
             await send_game_reply(_failure("上架报价已经变化，请重新上架"))
             return
         opened = await asyncio.to_thread(
@@ -144,8 +152,9 @@ async def confirm_listing(message: str, result: CharacterOverviewResult) -> None
         if opened.status == "listed" and opened.listing is not None:
             builder.line(f"{opened.listing.id} 已进入{COVENANT_MARKET_NAME}")
             builder.row(
-                ("物品", _gear_name(opened.listing.asset, overview)),
+                ("物品", _market_asset_name(opened.listing.asset, overview)),
                 ("价格", opened.listing.list_price),
+                ("数量", _listing_quantity(opened.listing)),
             )
         else:
             builder.line(opened.failure_message or "本次上架没有完成")
@@ -227,7 +236,8 @@ async def confirm_purchase(message: str, result: CharacterOverviewResult) -> Non
         )
         builder = M.document().section("归航成交", icon="trade")
         if purchased.status == "purchased" and purchased.quote is not None:
-            builder.line(_gear_name(purchased.quote.listing.asset, overview))
+            builder.line(_market_asset_name(purchased.quote.listing.asset, overview))
+            builder.field("数量", _listing_quantity(purchased.quote.listing))
             builder.row(
                 ("支付", purchased.quote.tax.buyer_total),
                 ("税金", purchased.quote.tax.tax_amount),
@@ -273,7 +283,8 @@ async def _listing_detail(listing_id: str, overview: CharacterOverview) -> None:
     builder = (
         M.document()
         .section(f"归航·{listing.id}", icon="trade")
-        .line(_gear_name(listing.asset, overview))
+        .line(_market_asset_name(listing.asset, overview))
+        .field("数量", _listing_quantity(listing))
         .row(("售价", listing.list_price), ("参考价", listing.price.reference_price))
         .field("卖方", listing.seller_name)
     )
@@ -289,8 +300,14 @@ def _listing_quote_message(result, overview, reference) -> DocumentMessage:
     quote = result.quote
     if result.status != "quoted" or quote is None:
         return builder.line(result.failure_message or "本次上架报价没有生成").build()
-    tax = quote_market_tax(quote.price.reference_price, quote.list_price)
-    builder.line(_gear_name(overview.inventory.instances[quote.asset_id], overview))
+    tax = quote_market_tax(
+        quote.price.reference_price,
+        quote.list_price,
+        minimum_price_bps=quote.price.minimum_price_bps,
+        maximum_price_bps=quote.price.maximum_price_bps,
+    )
+    builder.line(_market_asset_name(overview.inventory.asset(quote.asset_id), overview))
+    builder.field("数量", quote.quantity)
     builder.row(("参考价", quote.price.reference_price), ("上架价", quote.list_price))
     builder.row(("预计到手", tax.seller_proceeds), ("基础税", tax.tax_amount))
     return builder.actions(
@@ -298,7 +315,7 @@ def _listing_quote_message(result, overview, reference) -> DocumentMessage:
             Action(
                 "market.list.confirm",
                 "确认上架",
-                f"economy_market_list_confirm {reference} {quote.list_price} {quote.id}",
+                f"economy_market_list_confirm {reference} {quote.quantity} {quote.list_price} {quote.id}",
             ),
         )
     ).build()
@@ -309,7 +326,8 @@ def _purchase_quote_message(result, overview) -> DocumentMessage:
     quote = result.quote
     if result.status != "quoted" or quote is None:
         return builder.line(result.failure_message or "本次购买报价没有生成").build()
-    builder.line(_gear_name(quote.listing.asset, overview))
+    builder.line(_market_asset_name(quote.listing.asset, overview))
+    builder.field("数量", _listing_quantity(quote.listing))
     builder.row(("售价", quote.tax.list_price), ("参考价", quote.tax.reference_price))
     builder.row(("实际支付", quote.tax.buyer_total), ("税金", quote.tax.tax_amount))
     if quote.tax.low_price_surcharge:
@@ -343,26 +361,44 @@ def _listing_page(title, listings, page, overview) -> DocumentMessage:
     for index, listing in enumerate(current, start=start + 1):
         builder.item(
             index,
-            f"[{listing.id}] {_gear_name(listing.asset, overview)} | {listing.list_price}",
+            f"[{listing.id}] {_market_asset_name(listing.asset, overview)} x{_listing_quantity(listing)} | {listing.list_price}",
         )
     builder.field("页码", f"{page}/{total_pages}")
     return builder.build()
 
 
-def _gear_name(instance: ItemInstance, overview: CharacterOverview) -> str:
+def _market_asset_name(asset, overview: CharacterOverview) -> str:
     view = _view(overview)
-    definition = current_game_services().content.catalog.items.require(instance.definition_id)
-    if definition.tags.has("item.weapon"):
+    definition = current_game_services().content.catalog.items.require(asset.definition_id)
+    if isinstance(asset, ItemInstance) and definition.tags.has("item.weapon"):
         return view.gear_projector.weapon(
-            weapon_state_from_instance(instance),
-            instance,
+            weapon_state_from_instance(asset),
+            asset,
             inscription_preference=overview.inscription_preference,
         ).name
-    return view.gear_projector.equipment(
-        equipment_state_from_instance(instance),
-        instance,
-        inscription_preference=overview.inscription_preference,
-    ).name
+    if isinstance(asset, ItemInstance) and definition.tags.has("item.equipment"):
+        return view.gear_projector.equipment(
+            equipment_state_from_instance(asset),
+            asset,
+            inscription_preference=overview.inscription_preference,
+        ).name
+    return view.projector.name(definition.id)
+
+
+def _listing_quantity(listing) -> int:
+    return int(getattr(listing.price, "quantity", 1))
+
+
+def _category_id(value: str) -> str | None:
+    return {
+        "药品": "medicine",
+        "特殊": "special_all",
+        "成长": "growth",
+        "永久": "permanent",
+        "铭刻": "inscription",
+        "抽奖签": "draw",
+        "凭证": "breakthrough",
+    }.get(str(value).strip())
 
 
 def _slot_id(value: str, overview: CharacterOverview) -> str | None:

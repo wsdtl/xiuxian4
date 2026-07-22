@@ -18,6 +18,7 @@ from launch.adapter import current_message_context
 from message import Action, DocumentMessage, M
 
 from ..reply import send_game_reply
+from ..presentation import current_action_action
 
 
 async def start(current: CurrentCharacterResult) -> None:
@@ -71,9 +72,17 @@ def _start_message(result, view) -> DocumentMessage:
     if result.status == "full":
         return builder.line("当前状态已经完全恢复").build()
     if result.status == "exploring":
-        return builder.line("探险进行中，停止探险后才能休息").build()
+        return (
+            builder.line("探险进行中，停止探险后才能休息")
+            .action(Action("rest.stop_exploration", "停止探险", "停止探险"))
+            .build()
+        )
     if result.status == "main_action_occupied":
-        return builder.line("当前正在进行其他主要行动").build()
+        return (
+            builder.line("当前正在进行其他主要行动")
+            .action(current_action_action())
+            .build()
+        )
     return builder.line(result.failure_message or "休息没有开始").build()
 
 

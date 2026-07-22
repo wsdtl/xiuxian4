@@ -117,6 +117,7 @@ class LocalEventHandler(BaseMessageHandler):
                     request_id=event.event_id,
                     message_type="text",
                     content=event.raw_message,
+                    sender_name=event.sender_name,
                 )
             )
             matched = await LocalEventHandler._match_event(event)

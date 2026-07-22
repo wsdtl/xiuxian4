@@ -7,17 +7,23 @@ from .models import (
     CompanionOperationResult,
     CompanionStorageKinds,
     CompanionView,
+    CompanionExperienceItemReceipt,
+    CompanionExperienceItemResult,
 )
 from .service import CompanionFeature
+from .growth import CompanionGrowthSettlement
 
 
 __all__ = [
     "CompanionFeature",
+    "CompanionGrowthSettlement",
     "CompanionOperationReceipt",
     "CompanionOperationResult",
     "CompanionSanctuaryBattleOutcome",
     "CompanionSanctuaryBattleSimulator",
     "CompanionStorageKinds",
     "CompanionView",
+    "CompanionExperienceItemReceipt",
+    "CompanionExperienceItemResult",
     "companion_codec_registrations",
 ]

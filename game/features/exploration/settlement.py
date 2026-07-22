@@ -31,11 +31,6 @@ from game.rules.character import (
 )
 from game.rules.companion import CompanionRosterState
 from game.rules.encounter import EnemyEncounterGenerator
-from game.rules.equipment import (
-    EQUIPMENT_SET_GUARANTEE_AGGREGATE,
-    EquipmentSetGuaranteeState,
-    consume_equipment_set_guarantee,
-)
 from game.rules.exploration import (
     EXPLORATION_AGGREGATE,
     EXPLORATION_RULESET_VERSION,
@@ -87,6 +82,7 @@ class ExplorationSettlementService:
         battle_reports,
         storage: ExplorationStorageKinds,
         reward_keys_factory,
+        companion_growth,
         settlement_observer=None,
     ) -> None:
         self.database = database
@@ -97,6 +93,7 @@ class ExplorationSettlementService:
         self.battle_reports = battle_reports
         self.storage = storage
         self.reward_keys_factory = reward_keys_factory
+        self.companion_growth = companion_growth
         self.settlement_observer = settlement_observer
         catalog = content.catalog
         encounters = EnemyEncounterGenerator(
@@ -265,6 +262,7 @@ class ExplorationSettlementService:
 
             character_experience = 0
             weapon_experience = 0
+            companion_experience = 0
             weapon_drops = 0
             equipment_drops = 0
             trophy_drops = 0
@@ -280,6 +278,11 @@ class ExplorationSettlementService:
                 )
                 character_experience = sum(value.character_experience for value in quotes)
                 weapon_experience = sum(value.weapon_experience for value in quotes)
+                if battle is not None and battle.player_companion_id is not None:
+                    companion_experience = self.companion_growth.engine.exploration_experience(
+                        plan.encounter_kind.value,
+                        tuple(enemy.level for enemy in plan.encounter.enemies),
+                    )
                 rolls = sum(value.loot_rolls for value in quotes)
                 loot_state = self.snapshots.require(
                     uow, self.storage.loot, character_id, LootState
@@ -301,12 +304,6 @@ class ExplorationSettlementService:
                     raise RuntimeError(
                         loot_outcome.failure.message if loot_outcome.failure else "探险掉落失败"
                     )
-                equipment_set_guarantee = self.snapshots.load(
-                    uow,
-                    EQUIPMENT_SET_GUARANTEE_AGGREGATE,
-                    character_id,
-                    EquipmentSetGuaranteeState,
-                )
                 reward_build = self.reward_factory.build(
                     loot_outcome.value.receipt.awards,
                     plan=plan,
@@ -315,11 +312,6 @@ class ExplorationSettlementService:
                     loadout=loadout,
                     character_experience=character_experience,
                     weapon_experience=weapon_experience,
-                    equipment_set_guarantee_charges=(
-                        equipment_set_guarantee.charges
-                        if equipment_set_guarantee is not None
-                        else 0
-                    ),
                     context=context,
                 )
                 remaining_space = available_backpack_space(
@@ -403,21 +395,17 @@ class ExplorationSettlementService:
                 )
                 if reward_outcome.failure:
                     raise RuntimeError(reward_outcome.failure.message)
-                if reward_build.equipment_set_guarantees_consumed:
-                    if equipment_set_guarantee is None:
-                        raise RuntimeError("装备套装保证状态缺失")
-                    next_guarantee = consume_equipment_set_guarantee(
-                        equipment_set_guarantee,
-                        reward_build.equipment_set_guarantees_consumed,
-                    )
-                    self.snapshots.update(
-                        uow,
-                        EQUIPMENT_SET_GUARANTEE_AGGREGATE,
-                        character_id,
-                        equipment_set_guarantee,
-                        next_guarantee,
-                        resolved_at,
-                    )
+                companion_growth = self.companion_growth.grant_in_uow(
+                    uow,
+                    character_id,
+                    battle.player_companion_id if battle is not None else None,
+                    companion_experience,
+                    character_level=level,
+                    logical_time=resolved_at,
+                )
+                companion_experience = (
+                    companion_growth.accepted if companion_growth is not None else 0
+                )
 
             current_character = self.snapshots.require(
                 uow, self.storage.character, character_id, CharacterState
@@ -458,6 +446,7 @@ class ExplorationSettlementService:
                 spirit_after=after_battle.resources[SPIRIT_CURRENT],
                 character_experience=character_experience if victory else 0,
                 weapon_experience=weapon_experience if victory else 0,
+                companion_experience=companion_experience if victory else 0,
                 weapon_drops=weapon_drops,
                 equipment_drops=equipment_drops,
                 trophy_drops=trophy_drops,
@@ -604,6 +593,7 @@ class ExplorationSettlementService:
                 (
                     f"完成批次: {next_state.completed_batches}",
                     f"累计经验: +{next_state.character_experience}",
+                    f"伙伴经验: +{next_state.companion_experience}",
                     f"累计掉落: 武器 {next_state.weapon_drops}, 装备 {next_state.equipment_drops}",
                 ),
             ),

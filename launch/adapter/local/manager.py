@@ -104,7 +104,7 @@ class LocalReplyManager:
                 adapter="local",
                 client_id=reply.client_id,
                 request_id=reply_request_id,
-                message=reply.message,
+                message=request.message,
             )
         )
         return True

@@ -7,7 +7,14 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from game.app import CharacterOverview, CharacterOverviewResult, current_game_services
-from game.content import LOADOUT_PRESET_IDS
+from game.content import CHARACTER_LEVEL_PROGRESSION_ID, LOADOUT_PRESET_IDS
+from game.core.gameplay import (
+    COMBAT_ATTACK,
+    COMBAT_DEFENSE,
+    COMBAT_SPEED,
+    HEALTH_MAXIMUM,
+    SPIRIT_MAXIMUM,
+)
 from game.features.world_travel import WorldLocationIntent
 from game.rules.companion import CompanionKind, CompanionSanctuaryStatus
 from game.rules.item import resolve_asset_reference
@@ -559,6 +566,8 @@ def _companion_list(roster, overview: CharacterOverview) -> DocumentMessage:
             FieldSeparator(),
             _projector(overview).name(companion.quality_id),
             FieldSeparator(),
+            f"Lv{companion.level}",
+            FieldSeparator(),
             status,
         )
     builder.actions((
@@ -575,6 +584,20 @@ def _companion_detail(roster, reference: str, overview: CharacterOverview) -> Do
     definition = _companion_definition(companion)
     origin = current_game_services().world_views.require(companion.origin_world_id).skin.name
     preset = roster.preset_for_companion(companion.id)
+    character_level = overview.character.progressions[CHARACTER_LEVEL_PROGRESSION_ID].level
+    required = current_game_services().content.companions.growth.required_for_next_level(
+        companion.level
+    )
+    if companion.level >= 100:
+        experience_text = "已满级"
+    elif companion.level >= character_level:
+        experience_text = f"{companion.experience}/{required}（人物等级限制）"
+    else:
+        experience_text = f"{companion.experience}/{required}"
+    combat = current_game_services().player_lineup.companion_combat.project(companion)
+    attributes = combat.entity.snapshot(
+        current_game_services().player_lineup.companion_combat.attributes
+    )
     builder = (
         M.document()
         .section(f"{companion.reference} {definition.name}", icon="player")
@@ -582,10 +605,21 @@ def _companion_detail(roster, reference: str, overview: CharacterOverview) -> Do
         .row(("类型", "人物" if companion.kind is CompanionKind.PERSON else "宠物"), ("定位", _ROLE_NAMES[definition.role]))
         .field("来源", origin)
         .field("状态", f"配装 {_preset_index(preset)}" if preset is not None else "休战")
+        .field("经验", experience_text)
         .line(definition.description)
         .section("资质", icon="status")
     )
     builder.row(*((_APTITUDE_NAMES[str(key)], value) for key, value in companion.aptitudes.items()))
+    builder.section("战斗属性", icon="combat")
+    builder.row(
+        ("血气", _number(attributes.value(HEALTH_MAXIMUM))),
+        ("灵力", _number(attributes.value(SPIRIT_MAXIMUM))),
+    )
+    builder.row(
+        ("攻击", _number(attributes.value(COMBAT_ATTACK))),
+        ("防御", _number(attributes.value(COMBAT_DEFENSE))),
+        ("速度", _number(attributes.value(COMBAT_SPEED))),
+    )
     builder.section("战斗机制", icon="combat")
     builder.field("主动行动", _projector(overview).name(definition.core_behavior_id))
     builder.field("特色效果", _projector(overview).name(companion.trait_behavior_id))
@@ -788,6 +822,10 @@ def _unavailable() -> DocumentMessage:
 
 def _now() -> datetime:
     return datetime.now(ZoneInfo(config.project.timezone))
+
+
+def _number(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
 
 
 __all__ = [

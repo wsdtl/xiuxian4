@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from game.content import (  # noqa: E402
     COMPANION_CATALOG,
+    COMPANION_EXPERIENCE_REQUIREMENTS,
     CULTIVATION_SKIN_ID,
     TAIXUAN_WORLD_ID,
     LOADOUT_PRESET_IDS,
@@ -25,6 +26,7 @@ from game.rules.companion import (  # noqa: E402
     CompanionCombatProjector,
     CompanionEngine,
     CompanionKind,
+    CompanionGrowthEngine,
     CompanionRosterState,
     CompanionRuleError,
     CompanionSanctuaryStatus,
@@ -70,7 +72,7 @@ def main() -> None:
     assert first == replay
     assert len(first.traces) == 3
     assert len({value.definition_id for value in first.traces}) == 3
-    assert all(value.level == 37 for value in first.traces)
+    assert all(value.battle_level == 37 for value in first.traces)
     for trace in first.traces:
         assert set(trace.aptitudes) == set(COMPANION_APTITUDE_IDS)
         assert sum(trace.aptitudes.values()) == COMPANION_CATALOG.balance.aptitude_budgets[
@@ -109,6 +111,22 @@ def main() -> None:
     assert captured.status is CompanionSanctuaryStatus.CAPTURED
     assert next_roster.by_reference("c1") == companion
     assert companion.definition_id in next_roster.captured_definition_ids
+    assert companion.level == 1 and companion.experience == 0
+    assert len(COMPANION_EXPERIENCE_REQUIREMENTS) == 99
+    assert COMPANION_EXPERIENCE_REQUIREMENTS[0] == 83
+    assert COMPANION_EXPERIENCE_REQUIREMENTS[9] == 380
+    assert COMPANION_EXPERIENCE_REQUIREMENTS[49] == 7_580
+    assert COMPANION_EXPERIENCE_REQUIREMENTS[98] == 29_483
+    growth_engine = CompanionGrowthEngine(COMPANION_CATALOG)
+    next_roster, growth = growth_engine.grant_experience(
+        next_roster,
+        companion.id,
+        30_000,
+        character_level=37,
+    )
+    companion = next_roster.instances[companion.id]
+    assert growth.accepted == 30_000 and growth.level_after > 1
+    assert companion.total_experience == 30_000
 
     bound = engine.bind(next_roster, companion.id, LOADOUT_PRESET_IDS[0])
     assert bound.companion_for_preset(LOADOUT_PRESET_IDS[0]) == companion
@@ -145,6 +163,7 @@ def main() -> None:
     )
     assert not restored
     assert person_instance.kind is CompanionKind.PERSON
+    assert person_instance.level == 1
     assert person_instance.aptitudes == person.aptitudes
     person_projection = CompanionCombatProjector(
         content.catalog,

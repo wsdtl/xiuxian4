@@ -11,6 +11,8 @@ from .lottery import (
 
 from .policy import *
 from .policy import __all__ as _policy_exports
+from .market_items import MARKET_ITEM_POLICIES, MarketItemPolicy
+from .audit import MarketPriceAuditReport, audit_market_prices
 
 
 __all__ = [
@@ -21,4 +23,8 @@ __all__ = [
     "LOTTERY_MIN_PARTICIPANTS",
     "LOTTERY_POOL_MAX",
     "LOTTERY_TICKET_PRICE",
+    "MARKET_ITEM_POLICIES",
+    "MarketItemPolicy",
+    "MarketPriceAuditReport",
+    "audit_market_prices",
 ]

@@ -1,6 +1,6 @@
 """单武器槽的品质、等级、经验和核心战斗贡献。"""
 
-WEAPON_FOUNDATION_VERSION = "weapon.foundation.v4"
+WEAPON_FOUNDATION_VERSION = "weapon.foundation.v5"
 
 from .models import (
     WeaponCatalog,
@@ -26,11 +26,11 @@ from .runtime import (
     WeaponMaximumLevelTransaction,
 )
 from .items import (
-    WEAPON_LEVEL_ITEM_COMPONENT_ID,
-    WEAPON_LEVEL_ITEM_COMPONENT_TYPE,
+    WEAPON_EXPERIENCE_ITEM_COMPONENT_ID,
+    WEAPON_EXPERIENCE_ITEM_COMPONENT_TYPE,
     WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
     WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_TYPE,
-    WeaponLevelItemComponent,
+    WeaponExperienceItemComponent,
     WeaponMaximumLevelItemComponent,
     WeaponItemUseCommand,
     WeaponItemUseReceipt,
@@ -53,12 +53,12 @@ __all__ = [
     "WeaponQualityProfile",
     "WeaponState",
     "WEAPON_ABSOLUTE_MAXIMUM_LEVEL",
-    "WEAPON_LEVEL_ITEM_COMPONENT_ID",
-    "WEAPON_LEVEL_ITEM_COMPONENT_TYPE",
+    "WEAPON_EXPERIENCE_ITEM_COMPONENT_ID",
+    "WEAPON_EXPERIENCE_ITEM_COMPONENT_TYPE",
     "WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID",
     "WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_TYPE",
     "WEAPON_STATE_DATA_KEY",
-    "WeaponLevelItemComponent",
+    "WeaponExperienceItemComponent",
     "WeaponMaximumLevelItemComponent",
     "WeaponItemUseCommand",
     "WeaponItemUseReceipt",

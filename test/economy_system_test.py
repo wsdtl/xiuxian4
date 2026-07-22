@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from game.app import build_game_services  # noqa: E402
 from game.content.catalog.foundation import PRIMARY_CURRENCY_ID  # noqa: E402
+from game.content.catalog.item import SMALL_HEALTH_MEDICINE_ITEM_ID  # noqa: E402
 from game.content.catalog.weapon.mechanics import WEAPON_MAXIMUM_LEVEL_TABLE  # noqa: E402
 from game.core.account import ExternalIdentity, IdentityEvidence  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
@@ -56,8 +57,9 @@ TIME = datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc)
 def main() -> None:
     _assert_tax_policy()
     with TemporaryDirectory() as directory:
+        database_path = Path(directory) / "economy.db"
         services = build_game_services(
-            database_path=Path(directory) / "economy.db",
+            database_path=database_path,
             identity_secret="economy-system-secret",
         )
         services.database.initialize()
@@ -68,7 +70,67 @@ def main() -> None:
         second = _grant_equipment(services, seller.id, "gear-market", seed=23)
         third = _grant_equipment(services, seller.id, "gear-cancel", seed=37)
         protected = _grant_equipment(services, seller.id, "gear-protected", seed=51)
+        cherished = _grant_equipment(services, seller.id, "gear-cherished", seed=51)
         batch_candidate = _grant_equipment(services, seller.id, "gear-batch", seed=51)
+        old_recycle_quote = services.economy.quote_recycle_assets(
+            seller.id,
+            (cherished.id,),
+        )
+        old_listing_quote = services.economy.quote_listing(
+            seller.id,
+            seller.name,
+            cherished.id,
+            2_000,
+        )
+        assert old_recycle_quote.quote is not None
+        assert old_listing_quote.quote is not None
+        revision_before = _inventory(services, seller.id).revision
+        protected_result = services.inventory_protection.set_protected(
+            seller.id,
+            cherished.id,
+            True,
+            context=_context("protect:gear-cherished", 52),
+        )
+        assert protected_result.ok and protected_result.value is not None
+        assert protected_result.value.changed
+        protected_revision = _inventory(services, seller.id).revision
+        assert protected_revision == revision_before + 1
+        repeated = services.inventory_protection.set_protected(
+            seller.id,
+            cherished.id,
+            True,
+            context=_context("protect:gear-cherished-again", 53),
+        )
+        assert repeated.ok and repeated.value is not None
+        assert not repeated.value.changed
+        assert _inventory(services, seller.id).revision == protected_revision
+
+        reloaded = build_game_services(
+            database_path=database_path,
+            identity_secret="economy-system-secret",
+        )
+        reloaded.database.initialize()
+        assert _inventory(reloaded, seller.id).is_protected(cherished.id)
+        assert services.economy.quote_recycle_assets(
+            seller.id,
+            (cherished.id,),
+        ).status == "rejected"
+        assert services.economy.quote_listing(
+            seller.id,
+            seller.name,
+            cherished.id,
+            2_000,
+        ).status == "rejected"
+        assert services.economy.execute_recycle(
+            seller.id,
+            old_recycle_quote.quote,
+            logical_time=TIME,
+        ).status == "stale"
+        assert services.economy.open_listing(
+            seller.id,
+            old_listing_quote.quote,
+            logical_time=TIME,
+        ).status == "stale"
         protected_price = services.economy.prices.quote(protected)
         _protect_in_inactive_preset(
             services,
@@ -85,6 +147,26 @@ def main() -> None:
         batch_ids = {line.asset_id for line in batch_quote.quote.lines}
         assert batch_candidate.id in batch_ids
         assert protected.id not in batch_ids
+        assert cherished.id not in batch_ids
+
+        unprotected_result = services.inventory_protection.set_protected(
+            seller.id,
+            cherished.id,
+            False,
+            context=_context("unprotect:gear-cherished", 54),
+        )
+        assert unprotected_result.ok and unprotected_result.value is not None
+        assert unprotected_result.value.changed
+        assert services.economy.quote_recycle_assets(
+            seller.id,
+            (cherished.id,),
+        ).status == "quoted"
+        assert services.economy.quote_listing(
+            seller.id,
+            seller.name,
+            cherished.id,
+            2_000,
+        ).status == "quoted"
         weapon = _grant_weapon(services, seller.id, "weapon-batch", seed=61, level=10)
         weapon_price = services.economy.prices.quote(weapon)
         weapon_state = weapon.data["weapon.state"]
@@ -177,6 +259,51 @@ def main() -> None:
         summary = services.economy.tax_summary(logical_time=TIME)
         assert summary.balance == purchase_quote.quote.tax.tax_amount
         assert summary.recent_tax == summary.balance and summary.recent_trades == 1
+
+        seller_inventory = _inventory(services, seller.id)
+        medicine = next(
+            value
+            for value in seller_inventory.stacks.values()
+            if value.definition_id == SMALL_HEALTH_MEDICINE_ITEM_ID
+        )
+        medicine_quote = services.economy.quote_listing(
+            seller.id,
+            seller.name,
+            medicine.id,
+            30,
+            2,
+        )
+        assert medicine_quote.status == "quoted" and medicine_quote.quote is not None
+        assert medicine_quote.quote.price.reference_price == 24
+        medicine_listing = services.economy.open_listing(
+            seller.id,
+            medicine_quote.quote,
+            logical_time=TIME,
+        )
+        assert medicine_listing.status == "listed" and medicine_listing.listing is not None
+        reservation = _inventory(services, seller.id).reservations_for(medicine.id)
+        assert len(reservation) == 1 and reservation[0].quantity == 2
+        medicine_purchase = services.economy.quote_purchase(
+            buyer.id,
+            medicine_listing.listing.id,
+            logical_time=TIME,
+        )
+        assert medicine_purchase.quote is not None
+        medicine_result = services.economy.purchase(
+            buyer.id,
+            medicine_purchase.quote,
+            logical_time=TIME,
+        )
+        assert medicine_result.status == "purchased"
+        assert medicine.id not in _inventory(services, seller.id).stacks
+        transferred_stack = next(
+            value
+            for value in _inventory(services, buyer.id).stacks.values()
+            if value.id == f"market-stack:{medicine_listing.listing.id}:{buyer.id}"
+        )
+        assert transferred_stack.quantity == 2
+        assert transferred_stack.lots == medicine.lots
+        assert _inventory(services, buyer.id).containers[transferred_stack.container_id].kind == "container.special"
 
         cancel_quote = services.economy.quote_listing(
             seller.id,

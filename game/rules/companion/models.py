@@ -13,7 +13,7 @@ from game.core.gameplay import StableId, stable_id
 
 COMPANION_ROSTER_AGGREGATE = "game.companion.roster"
 COMPANION_SANCTUARY_AGGREGATE = "game.companion.sanctuary"
-COMPANION_RULESET_VERSION = "ruleset.companion.v2"
+COMPANION_RULESET_VERSION = "ruleset.companion.v3"
 
 APTITUDE_VITALITY = "companion.aptitude.vitality"
 APTITUDE_OFFENSE = "companion.aptitude.offense"
@@ -157,6 +157,12 @@ class CompanionTrace:
         object.__setattr__(self, "quality_id", stable_id(self.quality_id))
         object.__setattr__(self, "trait_behavior_id", stable_id(self.trait_behavior_id))
         object.__setattr__(self, "aptitudes", MappingProxyType(aptitudes))
+
+    @property
+    def battle_level(self) -> int:
+        """秘境对手的战斗等级；与入册后的伙伴成长等级分开读取。"""
+
+        return self.level
 
 
 @dataclass(frozen=True)

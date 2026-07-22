@@ -27,6 +27,7 @@ from launch.paths import public_url
 from message import Action, DocumentMessage, M
 
 from ..reply import send_game_reply
+from ..presentation import current_action_action
 
 
 async def view_exploration(current: CurrentCharacterResult) -> None:
@@ -241,7 +242,11 @@ def _movement_message(result: WorldTravelResult, view) -> DocumentMessage:
     if result.status == "already_there":
         return builder.field("位置", _anchor_name(result.anchor_id, view)).line("已经在这里").build()
     if result.status == "main_action_occupied":
-        return builder.line("当前主要行动进行中，结束后才能移动").build()
+        return (
+            builder.line("当前主要行动进行中，结束后才能移动")
+            .action(current_action_action())
+            .build()
+        )
     if result.status in {"stale_world", "stale_binding"}:
         return builder.line("这条地点按钮已经失效，请重新打开当前世界页面").build()
     if result.status == "unavailable":
@@ -262,11 +267,28 @@ def _start_message(result: ExplorationOperationResult, view) -> DocumentMessage:
     if result.status == "already_running":
         return builder.line("当前已经在探险").build()
     if result.status == "health_depleted":
-        return builder.line("血气已经归零，恢复后才能开始探险").build()
+        return (
+            builder.line("血气已经归零，恢复后才能开始探险")
+            .actions(
+                (
+                    Action("exploration.inventory", "查看纳戒", "纳戒", style="secondary"),
+                    Action("exploration.rest", "休息", "休息"),
+                )
+            )
+            .build()
+        )
     if result.status == "main_action_occupied":
-        return builder.line("当前正在进行其他主要行动").build()
+        return (
+            builder.line("当前正在进行其他主要行动")
+            .action(current_action_action())
+            .build()
+        )
     if result.status == "not_in_region":
-        return builder.line("当前位置不是探险区域").note("发送: 探险 查看区域").build()
+        return (
+            builder.line("当前位置不是探险区域")
+            .action(Action("exploration.regions", "查看区域", "探险", style="secondary"))
+            .build()
+        )
     return builder.line("本次探险没有开始").build()
 
 
@@ -306,8 +328,9 @@ def _summary_message(
         .row(("区域", _name(state.location_id, view)), ("状态", _status_text(result)))
         .row(("批次", state.completed_batches), ("胜负", f"{state.victories}胜 {state.defeats}负"))
         .row(("经验", f"+{state.character_experience}"), ("武器经验", f"+{state.weapon_experience}"))
+        .field("伙伴经验", f"+{state.companion_experience}")
         .row(("武器", state.weapon_drops), ("装备", state.equipment_drops))
-        .row(("战利品", state.trophy_drops), ("药物", state.medicine_drops))
+        .row(("战利品", state.trophy_drops), ("药物掉落", state.medicine_drops))
         .field("抽奖签", state.draw_ticket_drops)
         .field("战利品估价", f"{state.trophy_value} {_name(PRIMARY_CURRENCY_ID, view)}")
     )
@@ -348,6 +371,8 @@ def _summary_message(
                         for reference in last.medicines_used
                     ),
                 )
+    if state.medicine_drops:
+        builder.note("药物数量为累计掉落；开启自动用药时，批次间消耗后可能不再留存在纳戒。")
     return builder.actions(
         (Action("exploration.recycle_trophies", "回收", "回收战利品", behavior="send"),)
     ).build()

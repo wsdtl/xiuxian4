@@ -93,7 +93,7 @@ def main() -> None:
         WORLD_SKIN_PACKAGE_ID,
         WORLD_PACKAGE_ID,
     )
-    assert str(CATALOG_PACKAGE.manifest.version) == "3.23.0"
+    assert str(CATALOG_PACKAGE.manifest.version) == "3.25.0"
     assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.20.0"
     assert str(WORLD_PACKAGE.manifest.version) == "1.2.0"
     assert len(catalog.report.content_fingerprint) == 64

@@ -11,7 +11,7 @@ from game.rules.companion import (
     PersonBondState,
 )
 
-from .models import CompanionOperationReceipt
+from .models import CompanionExperienceItemReceipt, CompanionOperationReceipt
 
 
 def companion_codec_registrations() -> tuple[tuple[str, type[object]], ...]:
@@ -25,6 +25,7 @@ def companion_codec_registrations() -> tuple[tuple[str, type[object]], ...]:
         ("game.companion.roster_state.v2", CompanionRosterState),
         ("game.companion.sanctuary_state.v1", CompanionSanctuaryState),
         ("game.companion.operation_receipt.v1", CompanionOperationReceipt),
+        ("game.companion.experience_item_receipt.v1", CompanionExperienceItemReceipt),
     )
 
 

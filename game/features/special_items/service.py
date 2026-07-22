@@ -1,14 +1,12 @@
-"""背包扩容与装备套装保证物品的原子使用服务。"""
+"""背包扩容类特殊物品的原子使用服务。"""
 
 from dataclasses import replace
 from hashlib import sha256
 
 from game.core.gameplay import (
-    EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID,
     ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
     ConsumeStack,
     ContainerCapacityItemComponent,
-    EquipmentSetGuaranteeItemComponent,
     IncreaseContainerSpace,
     InventoryEngine,
     InventoryState,
@@ -19,12 +17,6 @@ from game.core.gameplay import (
     RuleOutcome,
     RuleViolation,
 )
-from game.rules.equipment import (
-    EQUIPMENT_SET_GUARANTEE_AGGREGATE,
-    EquipmentSetGuaranteeState,
-    activate_equipment_set_guarantee,
-)
-
 from .models import (
     SpecialItemUseCommand,
     SpecialItemUseReceipt,
@@ -33,7 +25,6 @@ from .models import (
 
 
 BACKPACK_CAPACITY_EFFECT_KIND = "special_item.backpack_capacity"
-EQUIPMENT_SET_GUARANTEE_EFFECT_KIND = "special_item.equipment_set_guarantee"
 
 
 class SpecialItemUseService:
@@ -91,7 +82,7 @@ class SpecialItemUseService:
                     InventoryState,
                 )
                 try:
-                    next_inventory, previous_guarantee, next_guarantee, receipt, events = (
+                    next_inventory, receipt, events = (
                         self._execute(command, inventory, uow, context)
                     )
                 except RuleViolation as exc:
@@ -106,24 +97,6 @@ class SpecialItemUseService:
                     next_inventory,
                     context.logical_time,
                 )
-                if next_guarantee is not None:
-                    if previous_guarantee is None:
-                        self.snapshots.insert(
-                            uow,
-                            EQUIPMENT_SET_GUARANTEE_AGGREGATE,
-                            command.actor_id,
-                            next_guarantee,
-                            context.logical_time,
-                        )
-                    else:
-                        self.snapshots.update(
-                            uow,
-                            EQUIPMENT_SET_GUARANTEE_AGGREGATE,
-                            command.actor_id,
-                            previous_guarantee,
-                            next_guarantee,
-                            context.logical_time,
-                        )
                 timestamp = context.logical_time.isoformat()
                 uow.insert_transaction(
                     command.id,
@@ -159,10 +132,6 @@ class SpecialItemUseService:
             self._fail("special_item.item_unavailable", "特殊物品当前被其他流程占用")
         definition = self.items.require(item_asset.definition_id)
         capacity = definition.components.get(ITEM_CONTAINER_CAPACITY_COMPONENT_ID)
-        guarantee = definition.components.get(EQUIPMENT_SET_GUARANTEE_ITEM_COMPONENT_ID)
-        previous_guarantee = None
-        next_guarantee = None
-
         if isinstance(capacity, ContainerCapacityItemComponent):
             try:
                 container = next(
@@ -186,40 +155,6 @@ class SpecialItemUseService:
             effect_kind = BACKPACK_CAPACITY_EFFECT_KIND
             value_after = min(value_before + capacity.amount, capacity.maximum_space)
             extra_events = ()
-        elif isinstance(guarantee, EquipmentSetGuaranteeItemComponent):
-            previous_guarantee = self.snapshots.load(
-                uow,
-                EQUIPMENT_SET_GUARANTEE_AGGREGATE,
-                command.actor_id,
-                EquipmentSetGuaranteeState,
-            )
-            current_guarantee = previous_guarantee or EquipmentSetGuaranteeState(
-                command.actor_id
-            )
-            try:
-                next_guarantee = activate_equipment_set_guarantee(
-                    current_guarantee,
-                    guarantee,
-                )
-            except ValueError as exc:
-                raise RuleViolation("special_item.guarantee_already_active", str(exc)) from exc
-            value_before = current_guarantee.charges
-            value_after = next_guarantee.charges
-            operations = (ConsumeStack(item_asset.id, 1),)
-            effect_kind = EQUIPMENT_SET_GUARANTEE_EFFECT_KIND
-            extra_events = (
-                RuleEvent.from_context(
-                    context,
-                    kind="equipment.set_guarantee.activated",
-                    source_id=item_asset.id,
-                    target_id=command.actor_id,
-                    subject_id=definition.id,
-                    values={
-                        "charges_before": value_before,
-                        "charges_after": value_after,
-                    },
-                ),
-            )
         else:
             self._fail("special_item.component_missing", "物品不是可由该服务使用的特殊物品")
 
@@ -251,8 +186,6 @@ class SpecialItemUseService:
         )
         return (
             inventory_outcome.value.state,
-            previous_guarantee,
-            next_guarantee,
             receipt,
             (*inventory_outcome.value.events, *extra_events),
         )
@@ -269,6 +202,5 @@ def _persistence_fingerprint(command: SpecialItemUseCommand, inventory_id: str) 
 
 __all__ = [
     "BACKPACK_CAPACITY_EFFECT_KIND",
-    "EQUIPMENT_SET_GUARANTEE_EFFECT_KIND",
     "SpecialItemUseService",
 ]

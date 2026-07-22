@@ -1,6 +1,7 @@
 """伙伴具体游戏纯规则。"""
 
 from .engine import CompanionEngine, CompanionRuleError
+from .growth import CompanionExperienceResult, CompanionGrowthEngine
 from .lineup import (
     PlayerBattleLineup,
     PlayerBattleLineupProjector,
@@ -15,6 +16,8 @@ __all__ = [
     "CompanionCombatProjection",
     "CompanionCombatProjector",
     "CompanionEngine",
+    "CompanionExperienceResult",
+    "CompanionGrowthEngine",
     "CompanionRuleError",
     "PlayerBattleLineup",
     "PlayerBattleLineupProjector",

@@ -28,11 +28,11 @@
 - 任意数量、多历史版本的世界构筑投影目录
 - 随机降临、跨世界角色档案与不复制资产的即时跃迁
 - 战斗底座 `combat.foundation.v5`，由核心会话自动产生完整结构化轨迹
-- 已封板的物品与物资底座 `inventory.foundation.v5`
+- 已封板的物品与物资底座 `inventory.foundation.v6`
 - 已封板的角色、成长与等级关隘底座 `character.foundation.v5`
 - 已封板的原子装配底座 `loadout.foundation.v2`
 - 已封板的武器底座 `weapon.foundation.v4`
-- 已封板的装备底座 `equipment.foundation.v3`
+- 已封板的装备底座 `equipment.foundation.v4`
 - 已封板的价值评估底座 `valuation.foundation.v2`
 - 已封板的随机物品化底座 `itemization.foundation.v2`
 - 已封板的临时队伍底座 `party.foundation.v1`

@@ -27,8 +27,8 @@ async def market(message: str = "", overview=Depends(current_character_overview)
     cmd="上架",
     help=HelpSpec(
         category="资产",
-        summary="按指定价格预览上架一件武器或装备",
-        usage=("上架 物品编号 价格",),
+        summary="按指定价格预览上架可交易物品",
+        usage=("上架 物品编号 价格", "上架 物品编号 数量 价格"),
         side_effect="确认后物品进入挂单并暂时不能装配或回收",
         order=160,
     ),

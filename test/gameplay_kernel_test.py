@@ -45,6 +45,7 @@ from game.core.gameplay import (
     ResourceRatioCondition,
     RuleContext,
     RuleEntity,
+    RuleEvent,
     Ruleset,
     RuleViolation,
     SeededRandomSource,
@@ -531,6 +532,18 @@ def _assert_trigger_chain_and_failure_codes() -> None:
             duration_turns=None,
         )
     )
+    effects.register(
+        EffectDefinition(
+            id="effect.capped_thorns_state",
+            operations=(
+                GrantTrigger(
+                    "operation.grant_capped_thorns",
+                    "trigger.reflect_damage.capped",
+                ),
+            ),
+            duration_turns=None,
+        )
+    )
     trigger_definitions = DefinitionRegistry[TriggerDefinition]("Trigger")
     trigger_definitions.register(
         TriggerDefinition(
@@ -547,6 +560,24 @@ def _assert_trigger_chain_and_failure_codes() -> None:
                     0,
                 ),
             ),
+        )
+    )
+    trigger_definitions.register(
+        TriggerDefinition(
+            id="trigger.reflect_damage.capped",
+            event_kind="resource.changed",
+            effect_id="effect.reflect_damage",
+            target=TriggerTarget.EVENT_SOURCE,
+            owner=TriggerOwner.EVENT_TARGET,
+            conditions=(
+                EventValueCondition(
+                    "condition.capped_damage_only",
+                    "delta",
+                    Comparison.LESS,
+                    0,
+                ),
+            ),
+            max_activations_per_execution=1,
         )
     )
     effect_engine = EffectEngine(
@@ -599,6 +630,90 @@ def _assert_trigger_chain_and_failure_codes() -> None:
     assert all(event.trace_id == context.trace_id for event in result.value.events)
     assert all(event.rule_version == "rules.v1" for event in result.value.events)
     assert all(event.ruleset_id == "ruleset.standard" for event in result.value.events)
+
+    capped = effect_engine.apply(
+        EffectSpec("capped-thorns-1", "effect.capped_thorns_state", defender.id),
+        source=defender,
+        target=defender,
+        context=context,
+    ).target
+    capped_context = _rule_context(304)
+    damage_event = RuleEvent.from_context(
+        capped_context,
+        kind="resource.changed",
+        source_id=attacker.id,
+        target_id=capped.id,
+        subject_id="health.current",
+        values={"delta": -20.0},
+    )
+    capped_session = trigger_engine.session(capped_context)
+    first_batch = capped_session.process(
+        (damage_event,),
+        {attacker.id: attacker, capped.id: capped},
+    )
+    second_batch = capped_session.process((damage_event,), first_batch.entities)
+    activated = tuple(
+        event
+        for event in (*first_batch.events, *second_batch.events)
+        if event.kind == "trigger.activated"
+        and event.subject_id == "trigger.reflect_damage.capped"
+    )
+    assert len(activated) == 1
+    assert second_batch.entity(attacker.id).resources["health.current"] == 90
+
+    self_context = _rule_context(306, max_trigger_depth=1)
+    self_event = RuleEvent.from_context(
+        self_context,
+        kind="resource.changed",
+        source_id=capped.id,
+        target_id=capped.id,
+        subject_id="health.current",
+        values={"delta": -20.0},
+    )
+    self_result = trigger_engine.process(
+        (self_event,),
+        entities={capped.id: capped},
+        context=self_context,
+    )
+    assert sum(
+        event.kind == "trigger.activated"
+        and event.subject_id == "trigger.reflect_damage.capped"
+        for event in self_result.events
+    ) == 1
+
+    recursive_attacker = effect_engine.apply(
+        EffectSpec("recursive-thorns-attacker", "effect.thorns_state", attacker.id),
+        source=attacker,
+        target=attacker,
+        context=context,
+    ).target
+    recursive_defender = effect_engine.apply(
+        EffectSpec("recursive-thorns-defender", "effect.thorns_state", defender.id),
+        source=defender,
+        target=defender,
+        context=context,
+    ).target
+    recursive_context = _rule_context(305, max_trigger_depth=2)
+    recursive_event = RuleEvent.from_context(
+        recursive_context,
+        kind="resource.changed",
+        source_id=recursive_attacker.id,
+        target_id=recursive_defender.id,
+        subject_id="health.current",
+        values={"delta": -20.0},
+    )
+    try:
+        trigger_engine.process(
+            (recursive_event,),
+            entities={
+                recursive_attacker.id: recursive_attacker,
+                recursive_defender.id: recursive_defender,
+            },
+            context=recursive_context,
+        )
+        raise AssertionError("递归触发链必须被深度保护拒绝")
+    except RuleViolation as exc:
+        assert exc.failure.code == "rule.recursion_limit"
 
     try:
         _rule_context(404, max_trigger_depth=1).at_trigger_depth(1).next_trigger()

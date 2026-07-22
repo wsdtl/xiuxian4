@@ -61,7 +61,8 @@ class CompanionCombatProjector:
         companion_id = entity_id or getattr(value, "id", None)
         if companion_id is None:
             companion_id = f"companion-trace:{value.index}"
-        attributes = self._base_attributes(value.level, value.aptitudes)
+        level = value.level if isinstance(value, CompanionInstance) else value.battle_level
+        attributes = self._base_attributes(level, value.aptitudes)
         for attribute_id, multiplier in definition.attribute_multipliers.items():
             attributes[attribute_id] *= multiplier
         for behavior in behaviors:
@@ -115,19 +116,21 @@ class CompanionCombatProjector:
             entity,
             tuple(ai_rules),
         )
-    @staticmethod
-    def _base_attributes(level: int, aptitudes) -> dict[str, float]:
+    def _base_attributes(self, level: int, aptitudes) -> dict[str, float]:
         vitality = aptitudes[APTITUDE_VITALITY] / 100
         offense = aptitudes[APTITUDE_OFFENSE] / 100
         agility = aptitudes[APTITUDE_AGILITY]
         focus = aptitudes[APTITUDE_FOCUS] / 100
-        return {
-            HEALTH_MAXIMUM: (60 + 6 * (level - 1)) * vitality,
-            SPIRIT_MAXIMUM: (80 + level - 1) * focus,
-            COMBAT_ATTACK: (4 + 0.55 * (level - 1)) * offense,
-            COMBAT_DEFENSE: 0.20 * (level - 1) * vitality,
-            COMBAT_SPEED: max(40.0, 100 + (agility - 100) * 0.25),
-        }
+        attributes = self.companions.growth.attributes_at(level)
+        attributes[HEALTH_MAXIMUM] *= vitality
+        attributes[SPIRIT_MAXIMUM] *= focus
+        attributes[COMBAT_ATTACK] *= offense
+        attributes[COMBAT_DEFENSE] *= vitality
+        attributes[COMBAT_SPEED] = max(
+            40.0,
+            attributes[COMBAT_SPEED] + (agility - 100) * 0.25,
+        )
+        return attributes
 
     @staticmethod
     def _effect(companion_id: str, spec: ContributionSpec, index: int) -> ActiveEffect:

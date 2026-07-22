@@ -28,6 +28,7 @@ from launch.paths import public_url
 from message import Action, DocumentMessage, M
 
 from ..reply import send_game_reply
+from ..presentation import current_action_action
 from ..reply_intents import DIMENSIONAL_DISASTER_INTENT
 
 
@@ -173,6 +174,8 @@ def _challenge_message(result: DimensionalDisasterChallengeResult, projector) ->
         )
         if receipt.draw_ticket_drops:
             builder.field("战斗掉落", f"{projector.name(DRAW_TICKET_ITEM_ID)} x1")
+        if receipt.companion_id is not None:
+            builder.field("伙伴经验", f"+{receipt.companion_experience}")
         if result.battle_report is not None:
             builder.field(
                 "战报",
@@ -200,7 +203,19 @@ def _challenge_message(result: DimensionalDisasterChallengeResult, projector) ->
         "exploring": "当前正在探险，停止后才能讨伐灾厄",
         "health_depleted": "血气已经归零，恢复后才能讨伐灾厄",
     }
-    return builder.line(messages.get(result.status, "本次讨伐没有完成")).build()
+    builder.line(messages.get(result.status, "本次讨伐没有完成"))
+    if result.status == "main_action_occupied":
+        builder.action(current_action_action())
+    elif result.status == "exploring":
+        builder.action(Action("disaster.stop_exploration", "停止探险", "停止探险"))
+    elif result.status == "health_depleted":
+        builder.actions(
+            (
+                Action("disaster.inventory", "查看纳戒", "纳戒", style="secondary"),
+                Action("disaster.rest", "休息", "休息"),
+            )
+        )
+    return builder.build()
 
 
 def _ranking_message(

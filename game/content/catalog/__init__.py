@@ -55,10 +55,13 @@ from .companion import (
     COMPANION_BALANCE,
     COMPANION_BIND_ACTION_ID,
     COMPANION_CATALOG,
+    COMPANION_EXPERIENCE_REQUIREMENTS,
+    COMPANION_GROWTH,
     COMPANION_FAREWELL_ACTION_ID,
     COMPANION_SANCTUARY_TERM_ID,
     COMPANION_TERM_ID,
     CompanionCatalog,
+    CompanionGrowthDefinition,
     CompanionSanctuaryDefinition,
     CompanionSpeciesDefinition,
 )
@@ -121,7 +124,6 @@ from .item import (
     COMPANION_SANCTUARY_ITEM_ID,
     DIMENSION_SHIFT_ITEM_COMPONENT_ID,
     DIMENSION_SHIFT_ITEM_ID,
-    EQUIPMENT_SET_GUARANTEE_ITEM_ID,
     DRAW_TICKET_ITEM_ID,
     DRAW_TICKET_ITEM_TAG,
     INSCRIPTION_FEATHER_ITEM_ID,
@@ -138,7 +140,9 @@ from .item import (
     SPECIAL_STORAGE_TAG,
     SPECIAL_ITEMS,
     STARTER_WEAPON_ITEM_ID,
-    WEAPON_LEVEL_ITEM_ID,
+    CHARACTER_EXPERIENCE_ITEM_ID,
+    COMPANION_EXPERIENCE_ITEM_ID,
+    WEAPON_EXPERIENCE_ITEM_ID,
     WEAPON_MAXIMUM_LEVEL_ITEM_ID,
     special_item_definition,
 )
@@ -149,6 +153,15 @@ from .social import (
     PARTY_INVITATION_REQUEST_LIFETIME_SECONDS,
     PARTY_TYPE_TRIO,
     PARTY_TYPE_TRIO_ID,
+)
+from .trial import (
+    BUILD_TRIAL_CATALOG,
+    BUILD_TRIAL_ENDURANCE_ID,
+    BUILD_TRIAL_GROUP_ID,
+    BUILD_TRIAL_MODES,
+    BUILD_TRIAL_SINGLE_ID,
+    BuildTrialCatalog,
+    BuildTrialModeDefinition,
 )
 from .weapon import STARTER_WEAPON_ID
 from .world import (

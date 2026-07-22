@@ -19,6 +19,8 @@ from game.core.gameplay import (
     InventoryState,
     InventoryTransaction,
     ItemStack,
+    COMPANION_EXPERIENCE_ITEM_COMPONENT_ID,
+    CompanionExperienceItemComponent,
     LoadoutState,
     RuleContext,
     Ruleset,
@@ -37,6 +39,7 @@ from game.rules.character import CharacterWorldState, MULTIVERSE_WORLD_STATE_ID
 from game.rules.companion import (
     COMPANION_RULESET_VERSION,
     CompanionEngine,
+    CompanionGrowthEngine,
     CompanionKind,
     CompanionRosterState,
     CompanionRuleError,
@@ -46,6 +49,8 @@ from game.rules.exploration import ExplorationState, ExplorationStatus
 
 from .battle import CompanionSanctuaryBattleSimulator
 from .models import (
+    CompanionExperienceItemReceipt,
+    CompanionExperienceItemResult,
     CompanionOperationReceipt,
     CompanionOperationResult,
     CompanionStorageKinds,
@@ -67,6 +72,7 @@ class CompanionFeature:
         engine: CompanionEngine,
         battle: CompanionSanctuaryBattleSimulator,
         storage: CompanionStorageKinds,
+        growth: CompanionGrowthEngine,
     ) -> None:
         self.database = database
         self.content = content
@@ -77,6 +83,165 @@ class CompanionFeature:
         self.engine = engine
         self.battle = battle
         self.storage = storage
+        self.growth = growth
+
+    def use_experience_item(
+        self,
+        transaction_id: str,
+        character_id: str,
+        item_asset_id: str,
+        companion_reference: str | None,
+        *,
+        logical_time,
+    ) -> CompanionExperienceItemResult:
+        fingerprint = _fingerprint(
+            "experience_item",
+            transaction_id,
+            character_id,
+            item_asset_id,
+            companion_reference or "",
+        )
+        with self.database.unit_of_work() as uow:
+            committed = uow.load_transaction(transaction_id)
+            if committed is not None:
+                if committed.fingerprint != fingerprint or committed.scope_id != character_id:
+                    raise ValueError(f"同一伙伴经验事务 ID 对应不同内容：{transaction_id}")
+                receipt = self.snapshots.codec.loads(
+                    committed.receipt_payload,
+                    CompanionExperienceItemReceipt,
+                )
+                if (
+                    receipt.transaction_id != transaction_id
+                    or receipt.actor_id != character_id
+                    or receipt.item_asset_id != item_asset_id
+                ):
+                    raise ValueError("伙伴经验事务表与回执身份不一致")
+                roster = self._load_roster(uow, character_id)
+                return CompanionExperienceItemResult(
+                    "used",
+                    receipt,
+                    roster.instances.get(receipt.companion_id),
+                    replayed=True,
+                )
+            character = self.snapshots.require(
+                uow,
+                self.storage.character,
+                character_id,
+                CharacterState,
+            )
+            inventory = self.snapshots.require(
+                uow,
+                self.storage.inventory,
+                character_id,
+                InventoryState,
+            )
+            loadout = self.snapshots.require(
+                uow,
+                self.storage.loadout,
+                character_id,
+                LoadoutState,
+            )
+            roster = self._load_roster(uow, character_id)
+            item = inventory.stacks.get(item_asset_id)
+            if item is None or inventory.owner_of(item.id) != character_id:
+                return CompanionExperienceItemResult("item_unknown", failure_message="找不到伙伴经验物品")
+            if inventory.available_quantity(item.id) < 1:
+                return CompanionExperienceItemResult("item_unavailable", failure_message="伙伴经验物品当前不可使用")
+            definition = self.content.catalog.items.require(item.definition_id)
+            component = definition.components.get(COMPANION_EXPERIENCE_ITEM_COMPONENT_ID)
+            if not isinstance(component, CompanionExperienceItemComponent):
+                return CompanionExperienceItemResult("item_invalid", failure_message="物品不是伙伴经验物品")
+            companion = (
+                roster.by_reference(companion_reference)
+                if companion_reference
+                else roster.companion_for_preset(loadout.active_preset_id)
+            )
+            if companion is None:
+                return CompanionExperienceItemResult(
+                    "companion_unknown",
+                    failure_message=(
+                        "找不到指定伙伴"
+                        if companion_reference
+                        else "当前配装没有出战伙伴，请补充伙伴编号"
+                    ),
+                )
+            next_roster, growth = self.growth.grant_experience(
+                roster,
+                companion.id,
+                component.maximum_experience,
+                character_level=_character_level(character),
+            )
+            if growth.accepted == 0:
+                return CompanionExperienceItemResult(
+                    "level_capped",
+                    failure_message="伙伴已经达到人物等级限制，物品没有消耗",
+                )
+            context = _context(transaction_id, logical_time, "experience_item")
+            inventory_outcome = self.inventory_engine.execute(
+                InventoryTransaction(
+                    f"{transaction_id}:inventory",
+                    character_id,
+                    "companion.experience_item",
+                    (ConsumeStack(item.id, 1),),
+                ),
+                state=inventory,
+                context=context,
+            )
+            if inventory_outcome.failure or inventory_outcome.value is None:
+                return CompanionExperienceItemResult(
+                    "inventory_failed",
+                    failure_message=(
+                        inventory_outcome.failure.message
+                        if inventory_outcome.failure
+                        else "伙伴经验物品扣除失败"
+                    ),
+                )
+            next_companion = next_roster.instances[companion.id]
+            receipt = CompanionExperienceItemReceipt(
+                transaction_id,
+                character_id,
+                item.id,
+                definition.id,
+                companion.id,
+                growth.level_before,
+                growth.level_after,
+                growth.experience_before,
+                growth.experience_after,
+                growth.accepted,
+            )
+            self.snapshots.update(
+                uow,
+                self.storage.inventory,
+                character_id,
+                inventory,
+                inventory_outcome.value.state,
+                logical_time,
+            )
+            self.snapshots.update(
+                uow,
+                self.storage.roster,
+                character_id,
+                roster,
+                next_roster,
+                logical_time,
+            )
+            uow.insert_transaction(
+                transaction_id,
+                fingerprint,
+                character_id,
+                self.snapshots.codec.dumps(receipt),
+                logical_time.isoformat(),
+            )
+            for sequence, event in enumerate(inventory_outcome.value.events):
+                uow.append_outbox(
+                    transaction_id,
+                    sequence,
+                    event.kind,
+                    self.snapshots.codec.dumps(event),
+                    logical_time.isoformat(),
+                )
+            uow.commit()
+            return CompanionExperienceItemResult("used", receipt, next_companion)
 
     def view(self, character_id: str, *, logical_time) -> CompanionView:
         with self.database.unit_of_work() as uow:

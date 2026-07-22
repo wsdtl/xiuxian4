@@ -37,6 +37,7 @@ from game.core.gameplay import (  # noqa: E402
 )
 from game.core.persistence import CHARACTER_AGGREGATE, INVENTORY_AGGREGATE  # noqa: E402
 from game.rules import game_operation_context  # noqa: E402
+from game.rules.item import asset_reference  # noqa: E402
 from game.cmd import 休息 as rest_component  # noqa: E402,F401
 from game.cmd import 物品 as item_component  # noqa: E402,F401
 from game.cmd import 角色 as character_component  # noqa: E402,F401
@@ -55,7 +56,17 @@ def main() -> None:
 
 
 async def _main() -> None:
-    for command in ("纳戒", "武库", "背包", "查看", "使用", "休息", "结束休息"):
+    for command in (
+        "纳戒",
+        "武库",
+        "背包",
+        "查看",
+        "珍藏",
+        "取消珍藏",
+        "使用",
+        "休息",
+        "结束休息",
+    ):
         assert len(LocalEventHandler.exact_rules[command]) == 1
         assert len(QqEventHandler.exact_rules[command]) == 1
 
@@ -97,6 +108,11 @@ async def _main() -> None:
             assert "单次: _12_" in detail.replies[0].message.content
             wrong_prefix = await _dispatch(f"查看 W{medicine_ref}", "item-rest-prefix")
             assert "前缀应为 I" in wrong_prefix.replies[0].message.content
+            stack_protection = await _dispatch(
+                f"珍藏 I{medicine_ref}",
+                "item-rest-protect-stack",
+            )
+            assert "只有武器和装备可以加入珍藏" in stack_protection.replies[0].message.content
 
             _set_resources(services, character.id, health=10, spirit=20)
             used = await _dispatch(f"使用 I{medicine_ref} 2", "item-rest-use")
@@ -120,6 +136,40 @@ async def _main() -> None:
                 weapon_state_from_instance(starter),
                 starter,
             ).name
+            starter_reference = asset_reference(
+                overview.inventory,
+                starter,
+                services.content.catalog.items,
+            )
+            protected = await _dispatch(
+                f"珍藏 {starter_reference}",
+                "item-rest-protect-weapon",
+            )
+            assert "已加入珍藏" in protected.replies[0].message.content
+            repeated = await _dispatch(
+                f"珍藏 {starter_reference}",
+                "item-rest-protect-weapon-again",
+            )
+            assert "已经处于珍藏状态" in repeated.replies[0].message.content
+            detail = await _dispatch(
+                f"查看 {starter_reference}",
+                "item-rest-protected-detail",
+            )
+            assert "珍藏: _是_" in detail.replies[0].message.content
+            assert any(
+                action.data == f"取消珍藏 {starter_reference}"
+                for action in detail.replies[0].message.actions
+            )
+            protected_page = await _dispatch(
+                f"武库 {slot_name}",
+                "item-rest-protected-page",
+            )
+            assert "珍藏" in protected_page.replies[0].message.content
+            unprotected = await _dispatch(
+                f"取消珍藏 {starter_reference}",
+                "item-rest-unprotect-weapon",
+            )
+            assert "已取消珍藏" in unprotected.replies[0].message.content
             first_page_count = first_page.replies[0].message.content.count(starter_name)
             assert first_page_count == 100, (
                 first_page_count,
@@ -136,7 +186,7 @@ async def _main() -> None:
                     page_command=f"武库 {slot_name}",
                 )
             )
-            assert qq_payload["markdown"]["content"].count("mqqapi://aio/inlinecmd") == 100
+            assert qq_payload["markdown"]["content"].count("mqqapi://aio/inlinecmd") == 200
             assert sum(
                 len(row["buttons"])
                 for row in qq_payload["keyboard"]["content"]["rows"]

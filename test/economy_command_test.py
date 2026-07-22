@@ -21,6 +21,7 @@ from game.app import build_game_services, install_game_services, restore_game_se
 from game.cmd import 二手 as market_component  # noqa: E402,F401
 from game.cmd import 回收 as recycle_component  # noqa: E402,F401
 from game.cmd import 角色 as character_component  # noqa: E402,F401
+from game.content.catalog.item import SMALL_HEALTH_MEDICINE_ITEM_ID  # noqa: E402
 from game.core.gameplay import InventoryState  # noqa: E402
 from game.core.persistence import CHARACTER_AGGREGATE  # noqa: E402
 from game.rules.item import asset_reference  # noqa: E402
@@ -152,6 +153,45 @@ async def _main() -> None:
             )
             assert "归航成交" in purchased.replies[0].message.content
             assert market_asset.id in _inventory(services, buyer.id).instances
+
+            medicine = next(
+                value
+                for value in _inventory(services, seller.id).stacks.values()
+                if value.definition_id == SMALL_HEALTH_MEDICINE_ITEM_ID
+            )
+            medicine_reference = asset_reference(
+                _inventory(services, seller.id),
+                medicine,
+                services.content.catalog.items,
+            )
+            medicine_quote = await _dispatch(
+                "seller",
+                f"上架 {medicine_reference} 2 30",
+                "economy-list-medicine-quote",
+            )
+            assert "数量" in medicine_quote.replies[0].message.content
+            assert f" {medicine_reference} 2 30 " in medicine_quote.replies[0].message.actions[0].data
+            medicine_listed = await _dispatch(
+                "seller",
+                medicine_quote.replies[0].message.actions[0].data,
+                "economy-list-medicine-confirm",
+            )
+            assert "M2 已进入归航市场" in medicine_listed.replies[0].message.content
+            medicine_page = await _dispatch("buyer", "二手 药品", "economy-market-medicine")
+            assert "x2" in medicine_page.replies[0].message.content
+            medicine_buy = await _dispatch("buyer", "购买 M2", "economy-buy-medicine")
+            medicine_purchased = await _dispatch(
+                "buyer",
+                medicine_buy.replies[0].message.actions[0].data,
+                "economy-buy-medicine-confirm",
+            )
+            assert "归航成交" in medicine_purchased.replies[0].message.content
+            buyer_medicine_total = sum(
+                value.quantity
+                for value in _inventory(services, buyer.id).stacks.values()
+                if value.definition_id == SMALL_HEALTH_MEDICINE_ITEM_ID
+            )
+            assert buyer_medicine_total == 4
 
             tax = await _dispatch("buyer", "税务", "economy-tax")
             assert "归航公约·税务" in tax.replies[0].message.content

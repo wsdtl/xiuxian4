@@ -18,12 +18,15 @@ from .catalog import CATALOG_PACKAGE
 from .worlds import PLAYABLE_WORLD_DEFINITIONS, WORLD_PACKAGE
 from .catalog.companion import COMPANION_CATALOG, CompanionCatalog
 from .catalog.disaster import build_dimensional_disaster_catalog
+from .catalog.draw import DRAW_CATALOG_CONTENT
+from .catalog.economy import audit_market_prices
 from .catalog.enemy import (
     PARTY_BOSS_SOURCE_CATALOG,
     PERSONAL_BOSS_ENEMIES,
     PartyBossSourceCatalog,
 )
 from .catalog.exploration import EXPLORATION_REGION_CATALOG, ExplorationRegionCatalog
+from .catalog.trial import BUILD_TRIAL_CATALOG, BuildTrialCatalog
 from .catalog.world import PLAYABLE_WORLD_IDS, TAIXUAN_WORLD_ID
 from .presentation import EnemyNameProjector, GearProjector
 from .world_skins import (
@@ -52,6 +55,7 @@ class OfficialContent:
     exploration_regions: ExplorationRegionCatalog
     companions: CompanionCatalog
     party_bosses: PartyBossSourceCatalog
+    build_trials: BuildTrialCatalog
     world: WorldDefinition
     worlds: WorldRuntimeCatalog
 
@@ -139,7 +143,9 @@ class WorldViewCatalog:
 def assemble_official_catalog() -> ContentRuntime:
     """装配全部官方内容；应用组合根应在启动时只调用一次。"""
 
-    return ContentAssembler().assemble(OFFICIAL_PACKAGES)
+    runtime = ContentAssembler().assemble(OFFICIAL_PACKAGES)
+    audit_market_prices(runtime.items, DRAW_CATALOG_CONTENT)
+    return runtime
 
 
 def select_world_skin(
@@ -177,6 +183,7 @@ def select_world_skin(
         EXPLORATION_REGION_CATALOG,
         COMPANION_CATALOG,
         PARTY_BOSS_SOURCE_CATALOG,
+        BUILD_TRIAL_CATALOG,
         selected_world,
         runtime,
     )

@@ -68,9 +68,34 @@ class CompanionOperationResult:
     replayed: bool = False
 
 
+@dataclass(frozen=True)
+class CompanionExperienceItemReceipt:
+    transaction_id: str
+    actor_id: str
+    item_asset_id: str
+    item_definition_id: str
+    companion_id: str
+    level_before: int
+    level_after: int
+    experience_before: int
+    experience_after: int
+    experience_granted: int
+
+
+@dataclass(frozen=True)
+class CompanionExperienceItemResult:
+    status: str
+    receipt: CompanionExperienceItemReceipt | None = None
+    companion: CompanionInstance | None = None
+    failure_message: str = ""
+    replayed: bool = False
+
+
 __all__ = [
     "CompanionOperationReceipt",
     "CompanionOperationResult",
     "CompanionStorageKinds",
     "CompanionView",
+    "CompanionExperienceItemReceipt",
+    "CompanionExperienceItemResult",
 ]

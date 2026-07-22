@@ -212,6 +212,72 @@ class CompanionBalance:
         object.__setattr__(self, "aptitude_budgets", MappingProxyType(aptitude_budgets))
 
 
+@dataclass(frozen=True)
+class CompanionGrowthDefinition:
+    """伙伴独立经验曲线、等级属性和正式战斗经验参数。"""
+
+    experience_requirements: tuple[int, ...]
+    base_attributes: Mapping[StableId, float]
+    per_level_attributes: Mapping[StableId, float]
+    exploration_multipliers: Mapping[str, float]
+    party_boss_multiplier: float
+    disaster_damage_tiers: tuple[tuple[float, float], ...]
+
+    def __post_init__(self) -> None:
+        requirements = tuple(int(value) for value in self.experience_requirements)
+        if len(requirements) != 99 or any(value < 1 for value in requirements):
+            raise ValueError("伙伴经验曲线必须完整声明 1 至 100 级的 99 项需求")
+        base = {
+            stable_id(key, field="companion growth attribute id"): float(value)
+            for key, value in self.base_attributes.items()
+        }
+        growth = {
+            stable_id(key, field="companion growth attribute id"): float(value)
+            for key, value in self.per_level_attributes.items()
+        }
+        if set(base) != set(CORE_ATTRIBUTE_IDS) or set(growth) != set(CORE_ATTRIBUTE_IDS):
+            raise ValueError("伙伴等级属性必须完整声明五项基础值")
+        if any(value < 0 for value in base.values()) or any(value < 0 for value in growth.values()):
+            raise ValueError("伙伴等级属性不能小于零")
+        multipliers = {
+            str(key): float(value) for key, value in self.exploration_multipliers.items()
+        }
+        if set(multipliers) != {"normal", "elite", "boss"} or any(
+            value <= 0 for value in multipliers.values()
+        ):
+            raise ValueError("伙伴探险经验参数必须覆盖普通、精英和个人首领")
+        tiers = tuple(
+            (float(ratio), float(multiplier))
+            for ratio, multiplier in self.disaster_damage_tiers
+        )
+        if (
+            self.party_boss_multiplier <= 0
+            or not tiers
+            or tuple(ratio for ratio, _ in tiers)
+            != tuple(sorted(ratio for ratio, _ in tiers))
+            or any(ratio < 0 or multiplier <= 0 for ratio, multiplier in tiers)
+        ):
+            raise ValueError("伙伴组队或灾厄经验参数无效")
+        object.__setattr__(self, "experience_requirements", requirements)
+        object.__setattr__(self, "base_attributes", MappingProxyType(base))
+        object.__setattr__(self, "per_level_attributes", MappingProxyType(growth))
+        object.__setattr__(self, "exploration_multipliers", MappingProxyType(multipliers))
+        object.__setattr__(self, "disaster_damage_tiers", tiers)
+
+    def required_for_next_level(self, level: int) -> int | None:
+        if not 1 <= level <= 100:
+            raise ValueError("伙伴等级必须位于 1 至 100")
+        return None if level == 100 else self.experience_requirements[level - 1]
+
+    def attributes_at(self, level: int) -> dict[StableId, float]:
+        if not 1 <= level <= 100:
+            raise ValueError("伙伴等级必须位于 1 至 100")
+        return {
+            key: self.base_attributes[key] + self.per_level_attributes[key] * (level - 1)
+            for key in self.base_attributes
+        }
+
+
 class CompanionCatalog:
     """伙伴物种和世界秘境的冻结目录。"""
 
@@ -220,6 +286,7 @@ class CompanionCatalog:
         species: tuple[CompanionSpeciesDefinition, ...],
         sanctuaries: tuple[CompanionSanctuaryDefinition, ...],
         balance: CompanionBalance,
+        growth: CompanionGrowthDefinition,
         people: tuple[PersonCompanionDefinition, ...] = (),
     ) -> None:
         self.species = DefinitionRegistry[CompanionSpeciesDefinition]("CompanionSpecies")
@@ -237,6 +304,7 @@ class CompanionCatalog:
         self.sanctuaries.freeze()
         self.people.freeze()
         self.balance = balance
+        self.growth = growth
         self._by_world = {
             definition.world_id: definition for definition in self.sanctuaries
         }
@@ -339,6 +407,7 @@ __all__ = [
     "COMPANION_KIND_PET",
     "CompanionBalance",
     "CompanionCatalog",
+    "CompanionGrowthDefinition",
     "CompanionSanctuaryDefinition",
     "CompanionSpeciesDefinition",
     "PersonCompanionDefinition",

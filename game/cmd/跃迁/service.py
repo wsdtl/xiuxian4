@@ -13,6 +13,7 @@ from launch import C, config, logger
 from message import Action, DocumentMessage, M
 
 from ..reply import send_game_reply
+from ..presentation import current_action_action
 
 
 async def dimension_shift(
@@ -85,6 +86,7 @@ def _result_message(result: WorldShiftResult) -> DocumentMessage:
             M.document()
             .section("界标未稳", icon="notice")
             .line("当前正在进行主要行动，结束后才能跃迁")
+            .action(current_action_action())
             .build()
         )
     if result.status == "already_there":

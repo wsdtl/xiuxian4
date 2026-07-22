@@ -69,7 +69,6 @@ class ExplorationRewardBuild:
     draw_ticket_drops: int
     trophy_value: int
     backpack_space: int
-    equipment_set_guarantees_consumed: int
     references: tuple[ExplorationRewardReference, ...]
 
 
@@ -99,11 +98,8 @@ class ExplorationRewardFactory:
         loadout,
         character_experience: int,
         weapon_experience: int,
-        equipment_set_guarantee_charges: int = 0,
         context,
     ) -> ExplorationRewardBuild:
-        if equipment_set_guarantee_charges < 0:
-            raise ValueError("装备套装保证次数不能小于 0")
         armory_id = _container_id(inventory, "container.armory")
         backpack_id = _container_id(inventory, "container.backpack")
         special_id = _container_id(inventory, "container.special")
@@ -126,7 +122,6 @@ class ExplorationRewardFactory:
         draw_ticket_count = 0
         trophy_value = 0
         backpack_space = 0
-        equipment_set_guarantees_consumed = 0
         references: list[ExplorationRewardReference] = []
         sequence = 0
         stack_quantities: dict[str, int] = {}
@@ -168,10 +163,6 @@ class ExplorationRewardFactory:
                     )
                 elif award.award_id == AWARD_RANDOM_EQUIPMENT_ID:
                     definition_id = context.random.choice(equipment_ids)
-                    force_set_mark = (
-                        equipment_set_guarantees_consumed
-                        < equipment_set_guarantee_charges
-                    )
                     generated = self.equipment_generator.generate(
                         EquipmentGenerationRequest(
                             f"{context.trace_id}:equipment:{sequence}",
@@ -180,10 +171,7 @@ class ExplorationRewardFactory:
                             self.content.catalog.report.content_fingerprint,
                         ),
                         context=context,
-                        force_set_mark=force_set_mark,
                     ).state
-                    if force_set_mark:
-                        equipment_set_guarantees_consumed += 1
                     definition = self.content.catalog.equipment.require(definition_id)
                     rewards.append(
                         GeneratedEquipmentReward(
@@ -278,7 +266,6 @@ class ExplorationRewardFactory:
             draw_ticket_count,
             trophy_value,
             backpack_space,
-            equipment_set_guarantees_consumed,
             tuple(references),
         )
 

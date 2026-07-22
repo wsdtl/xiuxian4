@@ -12,7 +12,7 @@ from .models import WEAPON_ABSOLUTE_MAXIMUM_LEVEL
 
 
 WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID = "item_component.use_weapon_maximum_level"
-WEAPON_LEVEL_ITEM_COMPONENT_ID = "item_component.use_weapon_level"
+WEAPON_EXPERIENCE_ITEM_COMPONENT_ID = "item_component.use_weapon_experience"
 
 
 @dataclass(frozen=True)
@@ -32,23 +32,26 @@ class WeaponMaximumLevelItemComponent:
 
 
 @dataclass(frozen=True)
-class WeaponLevelItemComponent:
-    levels: int = 1
+class WeaponExperienceItemComponent:
+    maximum_experience: int = 40_000
 
     def __post_init__(self) -> None:
-        if isinstance(self.levels, bool) or not isinstance(self.levels, int):
-            raise TypeError("WeaponLevelItemComponent.levels 必须是整数")
-        if self.levels != 1:
-            raise ValueError("武器直升道具第一版每次只能提升 1 级")
+        if isinstance(self.maximum_experience, bool) or not isinstance(
+            self.maximum_experience,
+            int,
+        ):
+            raise TypeError("WeaponExperienceItemComponent.maximum_experience 必须是整数")
+        if self.maximum_experience < 1:
+            raise ValueError("武器经验物品的单次经验上限必须大于 0")
 
 
 WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_TYPE = ItemComponentType(
     WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
     WeaponMaximumLevelItemComponent,
 )
-WEAPON_LEVEL_ITEM_COMPONENT_TYPE = ItemComponentType(
-    WEAPON_LEVEL_ITEM_COMPONENT_ID,
-    WeaponLevelItemComponent,
+WEAPON_EXPERIENCE_ITEM_COMPONENT_TYPE = ItemComponentType(
+    WEAPON_EXPERIENCE_ITEM_COMPONENT_ID,
+    WeaponExperienceItemComponent,
 )
 
 
@@ -77,6 +80,9 @@ class WeaponItemUseReceipt:
     level_after: int
     maximum_level_before: int
     maximum_level_after: int
+    experience_before: int = 0
+    experience_after: int = 0
+    experience_granted: int = 0
     replayed: bool = False
 
     def __post_init__(self) -> None:
@@ -112,6 +118,16 @@ class WeaponItemUseReceipt:
             raise ValueError("武器使用回执不能降低等级")
         if self.maximum_level_after < self.maximum_level_before:
             raise ValueError("武器使用回执不能降低等级上限")
+        experiences = (
+            self.experience_before,
+            self.experience_after,
+            self.experience_granted,
+        )
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in experiences
+        ):
+            raise ValueError("WeaponItemUseReceipt 经验字段必须是非负整数")
         if not isinstance(self.replayed, bool):
             raise TypeError("WeaponItemUseReceipt.replayed 必须是布尔值")
 
@@ -132,11 +148,11 @@ def weapon_item_use_fingerprint(command: WeaponItemUseCommand) -> str:
 
 
 __all__ = [
-    "WEAPON_LEVEL_ITEM_COMPONENT_ID",
-    "WEAPON_LEVEL_ITEM_COMPONENT_TYPE",
+    "WEAPON_EXPERIENCE_ITEM_COMPONENT_ID",
+    "WEAPON_EXPERIENCE_ITEM_COMPONENT_TYPE",
     "WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID",
     "WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_TYPE",
-    "WeaponLevelItemComponent",
+    "WeaponExperienceItemComponent",
     "WeaponMaximumLevelItemComponent",
     "WeaponItemUseCommand",
     "WeaponItemUseReceipt",

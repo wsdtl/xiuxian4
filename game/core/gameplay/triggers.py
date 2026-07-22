@@ -12,7 +12,6 @@ from .conditions import ConditionContext, ConditionReferences, RuleCondition
 from .context import RuleContext
 from .effects import EffectEngine, EffectSpec
 from .entity import RuleEntity, TriggerBinding
-from .errors import RuleViolation
 from .events import RuleEvent
 from .ids import StableId, stable_id
 from .phases import ExecutionPhase
@@ -79,7 +78,7 @@ class TriggerResult:
 
 
 class TriggerSession:
-    """在一次 Ability 执行中跨多个事件批次保留触发次数和序列。"""
+    """在一次规则动作中跨多个事件批次保留触发次数和序列。"""
 
     def __init__(
         self,
@@ -155,6 +154,14 @@ class TriggerEngine:
                         continue
                     if not self._owner_matches(definition.owner, owner, event):
                         continue
+                    activation_key = (
+                        owner.id,
+                        definition.id,
+                        binding.effect_instance_id,
+                    )
+                    count = session.activations.get(activation_key, 0)
+                    if count >= definition.max_activations_per_execution:
+                        continue
                     destination = self._target(definition.target, owner, event, states)
                     if destination is None:
                         continue
@@ -184,23 +191,7 @@ class TriggerEngine:
                         chance_roll = trigger_context.random.random()
                         if chance_roll >= definition.chance:
                             continue
-                    activation_key = (
-                        owner.id,
-                        definition.id,
-                        binding.effect_instance_id,
-                    )
-                    count = session.activations.get(activation_key, 0) + 1
-                    if count > definition.max_activations_per_execution:
-                        raise RuleViolation(
-                            "rule.trigger_activation_limit",
-                            f"Trigger {definition.id} 在一次执行中触发次数过多",
-                            {
-                                "trigger_id": definition.id,
-                                "owner_id": owner.id,
-                                "maximum": definition.max_activations_per_execution,
-                            },
-                        )
-                    session.activations[activation_key] = count
+                    session.activations[activation_key] = count + 1
                     session.sequence += 1
                     result = self.effects.apply(
                         EffectSpec(

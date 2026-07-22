@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
 from game.content import (  # noqa: E402
     COMMON_QUALITY_ID,
     STARTER_WEAPON_ID,
-    WEAPON_LEVEL_ITEM_ID,
+    WEAPON_EXPERIENCE_ITEM_ID,
     WEAPON_MAXIMUM_LEVEL_ITEM_ID,
     assemble_official_catalog,
 )
@@ -104,7 +104,7 @@ def main() -> None:
             ),
             "stack:level": ItemStack(
                 "stack:level",
-                WEAPON_LEVEL_ITEM_ID,
+                WEAPON_EXPERIENCE_ITEM_ID,
                 special_container.id,
                 (ProvenanceLot(receipt, 2),),
             ),

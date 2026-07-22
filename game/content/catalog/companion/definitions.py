@@ -39,6 +39,7 @@ from ..world import (
 from .models import (
     CompanionBalance,
     CompanionCatalog,
+    CompanionGrowthDefinition,
     CompanionSanctuaryDefinition,
     CompanionSpeciesDefinition,
     PersonCompanionDefinition,
@@ -251,6 +252,20 @@ COMPANION_BALANCE = CompanionBalance(
     },
 )
 
+COMPANION_EXPERIENCE_REQUIREMENTS = tuple(
+    80 + 3 * level * level
+    for level in range(1, 100)
+)
+
+COMPANION_GROWTH = CompanionGrowthDefinition(
+    experience_requirements=COMPANION_EXPERIENCE_REQUIREMENTS,
+    base_attributes=_attributes(60, 80, 4, 0, 100),
+    per_level_attributes=_attributes(6, 1, 0.55, 0.2, 0),
+    exploration_multipliers={"normal": 2.5, "elite": 8, "boss": 40},
+    party_boss_multiplier=60,
+    disaster_damage_tiers=((0.0, 10), (0.001, 20), (0.005, 40)),
+)
+
 COMPANION_CATALOG = CompanionCatalog(
     (*CULTIVATION_COMPANIONS, *MAGIC_COMPANIONS, *STELLAR_RING_COMPANIONS),
     (
@@ -277,6 +292,7 @@ COMPANION_CATALOG = CompanionCatalog(
         ),
     ),
     COMPANION_BALANCE,
+    COMPANION_GROWTH,
     (*CULTIVATION_PEOPLE, *MAGIC_PEOPLE, *STELLAR_RING_PEOPLE),
 )
 

@@ -465,8 +465,8 @@ def _prepared_loadout(env: dict[str, object]):
 
 def _assert_foundation_shapes(env: dict[str, object]) -> None:
     assert LOADOUT_FOUNDATION_VERSION == "loadout.foundation.v2"
-    assert WEAPON_FOUNDATION_VERSION == "weapon.foundation.v4"
-    assert EQUIPMENT_FOUNDATION_VERSION == "equipment.foundation.v3"
+    assert WEAPON_FOUNDATION_VERSION == "weapon.foundation.v5"
+    assert EQUIPMENT_FOUNDATION_VERSION == "equipment.foundation.v4"
     slots = env["slots"]
     assert len(slots.definitions.ids()) == 7  # type: ignore[union-attr]
 

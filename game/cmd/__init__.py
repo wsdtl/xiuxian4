@@ -23,5 +23,6 @@ def _load_component_router(component_name: str) -> APIRouter:
 
 router = APIRouter()
 router.include_router(_load_component_router("战报"))
+router.include_router(_load_component_router("web"))
 
 __all__ = ["router"]

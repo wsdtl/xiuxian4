@@ -37,3 +37,11 @@ from .registry import available_adapter_specs as available_adapter_specs
 from .registry import enabled_adapter_names as enabled_adapter_names
 from .registry import enabled_adapter_specs as enabled_adapter_specs
 from .registry import manager as manager
+
+
+async def dispatch_local_message(*args, **kwargs):
+    """通过公开适配器入口向本地驱动器分发消息。"""
+
+    from .local import dispatch
+
+    return await dispatch(*args, **kwargs)

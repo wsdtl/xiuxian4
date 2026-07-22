@@ -46,6 +46,7 @@ from game.core.persistence import (
     LEDGER_AGGREGATE,
     LOADOUT_AGGREGATE,
     LOOT_AGGREGATE,
+    MessageFlowStore,
     PersistenceError,
     NotificationInboxService,
     ProjectionStore,
@@ -54,8 +55,10 @@ from game.core.persistence import (
     PersistedAccountService,
     PersistedCharacterCreationService,
     PersistedCharacterService,
+    PersistedCharacterItemUseService,
     PersistedInscriptionService,
     PersistedItemUseService,
+    PersistedInventoryProtectionService,
     PersistedWeaponItemUseService,
     PersistedLoadoutService,
     PersistedRewardSettlementService,
@@ -91,6 +94,7 @@ from game.rules.companion import (
     COMPANION_SANCTUARY_AGGREGATE,
     CompanionCombatProjector,
     CompanionEngine,
+    CompanionGrowthEngine,
     PlayerBattleLineupProjector,
 )
 from game.features.exploration import (
@@ -135,8 +139,10 @@ from game.features.lottery import (
     lottery_codec_registrations,
 )
 from game.features.battle_report import BattleReportService
+from game.features.build_trial import BuildTrialFeature, BuildTrialStorageKinds
 from game.features.companion import (
     CompanionFeature,
+    CompanionGrowthSettlement,
     CompanionSanctuaryBattleSimulator,
     CompanionStorageKinds,
     companion_codec_registrations,
@@ -193,9 +199,11 @@ class GameServices:
     player_combat: PlayerCombatProjector
     inscriptions: PersistedInscriptionService
     item_use: PersistedItemUseService
+    character_item_use: PersistedCharacterItemUseService
     weapon_item_use: PersistedWeaponItemUseService
     special_item_use: SpecialItemUseService
     inventory_engine: InventoryEngine
+    inventory_protection: PersistedInventoryProtectionService
     player: PlayerFeature
     dimension_shift: DimensionShiftFeature
     breakthrough: BreakthroughFeature
@@ -205,6 +213,7 @@ class GameServices:
     actions: PersistedActionService
     global_activities: GlobalActivityCatalog
     battle_reports: BattleReportService
+    build_trials: BuildTrialFeature
     dimensional_disasters: DimensionalDisasterFeature
     party: PartyFeature
     party_battles: PartyBattleFeature
@@ -475,6 +484,8 @@ def message_identity_evidence(
 
 _services: GameServices | None = None
 _services_overridden = False
+_message_flow_store: MessageFlowStore | None = None
+_message_flow_store_overridden = False
 
 
 def build_game_services(
@@ -541,6 +552,11 @@ def build_game_services(
         )
     )
     inventory_engine = InventoryEngine(content.catalog.items)
+    inventory_protection = PersistedInventoryProtectionService(
+        database,
+        inventory_engine,
+        snapshots,
+    )
     character_projector = CharacterProjector(
         content.catalog.characters,
         AttributeResolver(content.catalog.attributes),
@@ -552,6 +568,12 @@ def build_game_services(
     )
     player_combat = PlayerCombatProjector(content.catalog, character_projector)
     companion_engine = CompanionEngine(content.companions)
+    companion_growth = CompanionGrowthEngine(content.companions)
+    companion_growth_settlement = CompanionGrowthSettlement(
+        snapshots,
+        COMPANION_ROSTER_AGGREGATE,
+        companion_growth,
+    )
     companion_combat = CompanionCombatProjector(
         content.catalog,
         content.companions,
@@ -575,6 +597,13 @@ def build_game_services(
             CharacterEngine(content.catalog.characters),
             character_projector,
         ),
+        snapshots,
+    )
+    character_item_use_service = PersistedCharacterItemUseService(
+        database,
+        content.catalog.items,
+        inventory_engine,
+        CharacterEngine(content.catalog.characters),
         snapshots,
     )
     weapon_engine = WeaponEngine(content.catalog.weapons)
@@ -642,6 +671,21 @@ def build_game_services(
         RewardSettlementStorageKeys,
     )
     battle_reports = BattleReportService(database, BattleReportStore(database))
+    build_trials = BuildTrialFeature(
+        database,
+        content,
+        world_views,
+        snapshots,
+        battle_reports,
+        player_lineup,
+        BuildTrialStorageKinds(
+            character=CHARACTER_AGGREGATE,
+            character_world=CHARACTER_WORLD_AGGREGATE,
+            inventory=INVENTORY_AGGREGATE,
+            loadout=LOADOUT_AGGREGATE,
+            companion_roster=COMPANION_ROSTER_AGGREGATE,
+        ),
+    )
     companions = CompanionFeature(
         database,
         content,
@@ -666,6 +710,7 @@ def build_game_services(
             sanctuary=COMPANION_SANCTUARY_AGGREGATE,
             world=WORLD_AGGREGATE,
         ),
+        companion_growth,
     )
     world_travel = WorldTravelFeature(
         database,
@@ -700,6 +745,7 @@ def build_game_services(
             CHARACTER_WORLD_AGGREGATE,
         ),
         RewardSettlementStorageKeys,
+        companion_growth_settlement,
         world_progress,
     )
     dimensional_disasters = DimensionalDisasterFeature(
@@ -724,6 +770,7 @@ def build_game_services(
             REWARD_CLAIM_AGGREGATE,
         ),
         RewardSettlementStorageKeys,
+        companion_growth_settlement,
         maximum_battle_rounds=DIMENSIONAL_DISASTER_BATTLE_ROUNDS,
         timezone=config.project.timezone,
     )
@@ -874,6 +921,7 @@ def build_game_services(
             weapon=WEAPON_AGGREGATE,
         ),
         RewardSettlementStorageKeys,
+        companion_growth_settlement,
         party_scope_id=PARTY_SCOPE_ID,
         timezone=config.project.timezone,
     )
@@ -901,9 +949,11 @@ def build_game_services(
         player_combat=player_combat,
         inscriptions=inscription_service,
         item_use=item_use_service,
+        character_item_use=character_item_use_service,
         weapon_item_use=weapon_item_use_service,
         special_item_use=special_item_use_service,
         inventory_engine=inventory_engine,
+        inventory_protection=inventory_protection,
         player=player,
         dimension_shift=dimension_shift,
         breakthrough=breakthrough,
@@ -913,6 +963,7 @@ def build_game_services(
         actions=action_service,
         global_activities=registered_global_activities,
         battle_reports=battle_reports,
+        build_trials=build_trials,
         dimensional_disasters=dimensional_disasters,
         party=party,
         party_battles=party_battles,
@@ -938,6 +989,35 @@ def current_game_services() -> GameServices:
     if _services is None:
         _services = build_game_services()
     return _services
+
+
+def current_message_flow_store() -> MessageFlowStore:
+    """返回 Web 游戏台独立短期消息仓储。"""
+
+    global _message_flow_store
+    expected_path = config.database.message_console_path
+    if _message_flow_store is None or (
+        not _message_flow_store_overridden
+        and (
+            _message_flow_store.path != expected_path
+            or _message_flow_store.busy_timeout_ms != config.database.busy_timeout_ms
+        )
+    ):
+        _message_flow_store = MessageFlowStore(
+            expected_path,
+            busy_timeout_ms=config.database.busy_timeout_ms,
+        )
+    return _message_flow_store
+
+
+def install_message_flow_store(store: MessageFlowStore | None) -> MessageFlowStore | None:
+    """为测试或受控工具替换独立消息仓储。"""
+
+    global _message_flow_store, _message_flow_store_overridden
+    previous = _message_flow_store
+    _message_flow_store = store
+    _message_flow_store_overridden = store is not None
+    return previous
 
 
 def install_game_services(services: GameServices) -> GameServices | None:
@@ -999,8 +1079,10 @@ __all__ = [
     "PlayerReminderDetailsResult",
     "build_game_services",
     "current_game_services",
+    "current_message_flow_store",
     "initialize_game_services",
     "install_game_services",
+    "install_message_flow_store",
     "message_identity_evidence",
     "restore_game_services",
 ]

@@ -7,6 +7,7 @@ from datetime import datetime
 from game.content import CHARACTER_LEVEL_PROGRESSION_ID, character_realm_for_level
 from game.core.gameplay import CharacterState, SkinProjector
 from game.rules.character import CharacterSettingsState
+from message import Action
 
 
 MOOD_HEADER_COLORS = (
@@ -61,10 +62,22 @@ def character_header_color(
     return MOOD_HEADER_COLORS[logical_time.weekday()]
 
 
+def current_action_action() -> Action:
+    """为主要行动冲突提供统一的可操作入口。"""
+
+    return Action(
+        "game.current_action",
+        "查看行动",
+        "我的角色",
+        style="secondary",
+    )
+
+
 __all__ = [
     "MOOD_HEADER_COLORS",
     "character_header_color",
     "character_header_parts",
     "character_level",
     "character_realm_name",
+    "current_action_action",
 ]

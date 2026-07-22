@@ -82,6 +82,43 @@ async def inspect(
 
 
 @GameCommand.handler(
+    cmd="珍藏",
+    help=HelpSpec(
+        category="资产",
+        summary="保护武器或装备，避免被回收和转移",
+        usage=("珍藏 物品编号",),
+        side_effect="物品仍可正常装配、铭刻和培养",
+        order=45,
+    ),
+)
+async def protect_asset(
+    message: str = "",
+    overview=Depends(current_character_overview),
+) -> None:
+    """将当前角色持有的武器或装备加入珍藏。"""
+
+    await service.protect_asset(message, overview)
+
+
+@GameCommand.handler(
+    cmd="取消珍藏",
+    help=HelpSpec(
+        category="资产",
+        summary="解除武器或装备的珍藏保护",
+        usage=("取消珍藏 物品编号",),
+        order=46,
+    ),
+)
+async def unprotect_asset(
+    message: str = "",
+    overview=Depends(current_character_overview),
+) -> None:
+    """解除当前角色持有武器或装备的珍藏。"""
+
+    await service.unprotect_asset(message, overview)
+
+
+@GameCommand.handler(
     cmd="使用",
     help=HelpSpec(
         category="资产",

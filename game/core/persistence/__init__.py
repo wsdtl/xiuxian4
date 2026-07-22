@@ -16,6 +16,7 @@ from .characters import (
     PersistedCharacterRegistration,
     PersistedCharacterService,
 )
+from .character_items import PersistedCharacterItemUseService
 from .battle_reports import (
     BattleReportHeaderRow,
     BattleReportStore,
@@ -31,9 +32,14 @@ from .cycles import (
 )
 from .inscriptions import PersistedInscriptionService
 from .item_use import PersistedItemUseService
+from .inventory_protection import (
+    InventoryProtectionExecution,
+    PersistedInventoryProtectionService,
+)
 from .weapon_items import PersistedWeaponItemUseService
 from .loadouts import PersistedLoadoutExecution, PersistedLoadoutService
 from .loot import PersistedLootExecution, PersistedLootService
+from .message_flows import MessageFlowRow, MessageFlowStore
 from .parties import (
     PersistedPartyAdmissionExecution,
     PersistedPartyAdmissionService,
@@ -125,6 +131,8 @@ __all__ = [
     "LEDGER_AGGREGATE",
     "LOADOUT_AGGREGATE",
     "LOOT_AGGREGATE",
+    "MessageFlowRow",
+    "MessageFlowStore",
     "PARTY_AGGREGATE",
     "NotificationInboxService",
     "OutboxEventRow",
@@ -137,6 +145,7 @@ __all__ = [
     "PersistedCharacterRegistration",
     "PersistedCharacterCreationService",
     "PersistedCharacterService",
+    "PersistedCharacterItemUseService",
     "PersistedActionClaimExecution",
     "PersistedActionExecution",
     "PersistedActionService",
@@ -149,6 +158,8 @@ __all__ = [
     "PersistedGrantService",
     "PersistedInscriptionService",
     "PersistedItemUseService",
+    "InventoryProtectionExecution",
+    "PersistedInventoryProtectionService",
     "PersistedWeaponItemUseService",
     "PersistedLoadoutExecution",
     "PersistedLoadoutService",

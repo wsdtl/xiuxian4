@@ -36,6 +36,13 @@ from .models import (
     normalize_character_name,
 )
 from .projection import CharacterProjection, CharacterProjector
+from .items import (
+    CHARACTER_EXPERIENCE_ITEM_COMPONENT_ID,
+    CharacterExperienceItemComponent,
+    CharacterItemUseCommand,
+    CharacterItemUseReceipt,
+    character_item_use_fingerprint,
+)
 from .transactions import (
     ChangeCharacterResource,
     CharacterEngine,
@@ -69,6 +76,10 @@ __all__ = [
     "CharacterState",
     "CharacterStatus",
     "CharacterTemplateDefinition",
+    "CHARACTER_EXPERIENCE_ITEM_COMPONENT_ID",
+    "CharacterExperienceItemComponent",
+    "CharacterItemUseCommand",
+    "CharacterItemUseReceipt",
     "CharacterTransaction",
     "ChangeCharacterResource",
     "ContributionSpec",
@@ -92,4 +103,5 @@ __all__ = [
     "persistent_resource_definitions",
     "merge_contribution_specs",
     "normalize_character_name",
+    "character_item_use_fingerprint",
 ]

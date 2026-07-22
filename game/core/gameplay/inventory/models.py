@@ -195,6 +195,7 @@ class InventoryState:
     revision: int = 0
     asset_references: Mapping[str, int] = field(default_factory=dict)
     next_reference_number: int = 1
+    protected_asset_ids: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         containers = dict(self.containers)
@@ -202,6 +203,7 @@ class InventoryState:
         instances = dict(self.instances)
         reservations = dict(self.reservations)
         asset_references = dict(self.asset_references)
+        protected_asset_ids = frozenset(self.protected_asset_ids)
         if self.revision < 0:
             raise ValueError("InventoryState.revision 不能小于 0")
         if isinstance(self.next_reference_number, bool) or not isinstance(
@@ -223,6 +225,11 @@ class InventoryState:
         if duplicated:
             raise ValueError(f"资产 id 在堆叠物与实例物中重复：{sorted(duplicated)[0]}")
         asset_ids = set(stacks) | set(instances)
+        unknown_protected = protected_asset_ids - set(instances)
+        if unknown_protected:
+            raise ValueError(
+                f"珍藏状态引用了未知的独立实例：{sorted(unknown_protected)[0]}"
+            )
         if not asset_references and asset_ids:
             asset_references = {
                 asset_id: number
@@ -264,6 +271,7 @@ class InventoryState:
         object.__setattr__(self, "reservations", MappingProxyType(reservations))
         object.__setattr__(self, "asset_references", MappingProxyType(asset_references))
         object.__setattr__(self, "next_reference_number", next_reference_number)
+        object.__setattr__(self, "protected_asset_ids", protected_asset_ids)
 
     def asset(self, asset_id: str) -> ItemStack | ItemInstance:
         if asset_id in self.stacks:
@@ -299,6 +307,11 @@ class InventoryState:
                 key=lambda value: value.id,
             )
         )
+
+    def is_protected(self, asset_id: str) -> bool:
+        """返回独立物品是否处于玩家珍藏保护中。"""
+
+        return asset_id in self.protected_asset_ids
 
     def reserved_quantity(self, asset_id: str) -> int:
         return sum(value.quantity for value in self.reservations_for(asset_id))

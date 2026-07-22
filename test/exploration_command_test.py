@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,11 +20,17 @@ from game.app import (  # noqa: E402
     install_game_services,
     restore_game_services,
 )
+from game.cmd.探险.service import _start_message, _summary_message  # noqa: E402
+from game.core.account import ExternalIdentity, IdentityEvidence  # noqa: E402
+from game.features.exploration import ExplorationOperationResult  # noqa: E402
+from game.rules.battle_report import BattleReportReference  # noqa: E402
+from launch import config  # noqa: E402
 from game.cmd import 探险 as exploration_component  # noqa: E402,F401
 from game.cmd import 回收 as recycle_component  # noqa: E402,F401
 from game.cmd import 角色 as character_component  # noqa: E402,F401
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
+from message import render_local_message  # noqa: E402
 
 
 def main() -> None:
@@ -97,8 +106,53 @@ async def _main() -> None:
                 sender_name="巡山客",
                 event_id="exploration-summary",
             )
+            assert "药物掉落" in summary.replies[0].message.content
             assert "状态: _进行中_" in summary.replies[0].message.content
             assert summary.replies[0].message.actions[0].data == "回收战利品"
+
+            logical_time = datetime.now(ZoneInfo(config.project.timezone))
+            current = services.load_current_character(
+                IdentityEvidence(
+                    "exploration-summary-regression",
+                    ExternalIdentity(
+                        "platform.local",
+                        config.project.name,
+                        "identity.local_user",
+                        "",
+                        "exploration-player",
+                    ),
+                    (),
+                    "identity.local_event",
+                    logical_time,
+                )
+            )
+            assert current.character is not None
+            overview = services.load_character_overview(current.character).overview
+            assert overview is not None
+            blocked_message = _start_message(
+                ExplorationOperationResult("main_action_occupied"),
+                services.world_view(overview.character_world),
+            )
+            assert blocked_message.document.actions[0].data == "我的角色"
+            state = services.exploration.load(
+                current.character.id,
+                logical_time=logical_time,
+                settle_due=False,
+            ).state
+            assert state is not None
+            regression_message = _summary_message(
+                ExplorationOperationResult(
+                    "ok",
+                    replace(state, medicine_drops=1),
+                ),
+                overview,
+                services.world_view(overview.character_world),
+                BattleReportReference("report-regression", "share-regression"),
+            )
+            rendered_regression = render_local_message(regression_message)
+            assert "药物数量为累计掉落" in rendered_regression.content
+            assert "查看完整战报" in rendered_regression.content
+            assert rendered_regression.actions[0].data == "回收战利品"
 
             empty_sale = await dispatch(
                 client_id="exploration-player",

@@ -4,10 +4,23 @@
 生命周期。通信驱动器和未来业务域都不能反向依赖 main。
 """
 
+import asyncio
+import sys
+
 import uvicorn
 from fastapi import FastAPI
 
 from launch import config, lifespan, LOGGING_CONFIG, FastAPIAllowed, FastAPIIncludeRouter
+
+
+def configure_windows_event_loop() -> None:
+    """Windows 纯 HTTP 服务使用 Selector，避开 Proactor 断链回调故障。"""
+
+    if sys.platform != "win32":
+        return
+    policy = getattr(asyncio, "WindowsSelectorEventLoopPolicy", None)
+    if policy is not None:
+        asyncio.set_event_loop_policy(policy())
 
 
 def create_app():
@@ -42,6 +55,7 @@ def uvicorn_ssl_kwargs() -> dict:
 
 
 if __name__ == "__main__":
+    configure_windows_event_loop()
     uvicorn.run(
         app="main:create_app",
         factory=True,

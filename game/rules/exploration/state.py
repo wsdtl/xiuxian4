@@ -55,6 +55,7 @@ def record_batch(
         defeats=state.defeats + int(not result.victory and not result.draw and result.plan.encounter is not None),
         character_experience=state.character_experience + result.character_experience,
         weapon_experience=state.weapon_experience + result.weapon_experience,
+        companion_experience=state.companion_experience + result.companion_experience,
         weapon_drops=state.weapon_drops + result.weapon_drops,
         equipment_drops=state.equipment_drops + result.equipment_drops,
         trophy_drops=state.trophy_drops + result.trophy_drops,

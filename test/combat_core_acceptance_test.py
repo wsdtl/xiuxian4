@@ -50,6 +50,7 @@ def main() -> None:
     _assert_trace_is_core_owned(catalog)
     _assert_session_join_and_withdraw(catalog)
     _assert_all_weapon_auto_battles(catalog)
+    _assert_weapon_equipment_combinations(catalog)
     _assert_all_enemy_ai_rules(catalog)
     print("combat core acceptance tests passed")
 
@@ -556,6 +557,114 @@ def _assert_all_enemy_ai_rules(catalog) -> None:
         )
         covered.add(behavior.id)
     assert covered == set(catalog.enemies.behaviors.ids())
+
+
+def _assert_weapon_equipment_combinations(catalog) -> None:
+    weapon_ids = tuple(
+        str(value)
+        for value in catalog.abilities.ids()
+        if str(value).startswith("ability.weapon.")
+    )
+    trigger_ids = tuple(
+        str(value)
+        for value in catalog.triggers.ids()
+        if str(value).startswith("trigger.equipment.")
+    )
+    behaviors = tuple(catalog.enemies.behaviors)
+    assert len(weapon_ids) == 72
+    assert len(trigger_ids) == 75
+    assert behaviors
+    covered_triggers: set[str] = set()
+    engine = _engine(catalog, maximum_rounds=60, maximum_turns=600)
+
+    for weapon_index, ability_id in enumerate(weapon_ids):
+        for loadout_index in range(3):
+            scenario = weapon_index * 3 + loadout_index
+            selected_triggers = tuple(
+                trigger_ids[(scenario * 7 + offset * 13) % len(trigger_ids)]
+                for offset in range(6)
+            )
+            covered_triggers.update(selected_triggers)
+            effects = tuple(
+                ActiveEffect(
+                    f"combination:{scenario}:{index}",
+                    "effect.test.equipment_combination",
+                    "player",
+                    granted_triggers=frozenset({trigger_id}),
+                )
+                for index, trigger_id in enumerate(selected_triggers)
+            )
+            behavior = behaviors[scenario % len(behaviors)]
+            enemy_ability = str(next(iter(behavior.contribution.abilities)))
+            context = _context(f"combination:{scenario}", 40_000 + scenario)
+            opened = BattleSession.start(
+                engine,
+                f"battle-combination-{scenario}",
+                participants=(
+                    BattleParticipant("player", "team.player", 0),
+                    BattleParticipant("enemy", "team.enemy", 0),
+                ),
+                entities={
+                    "player": _entity(
+                        "player",
+                        abilities=(ability_id, BASIC_ATTACK_ABILITY_ID),
+                        speed=110,
+                        active_effects=effects,
+                    ),
+                    "enemy": _entity(
+                        "enemy",
+                        abilities=(enemy_ability, BASIC_ATTACK_ABILITY_ID),
+                        speed=100,
+                    ),
+                },
+                context=context,
+            )
+            assert opened.ok and opened.value is not None, (
+                ability_id,
+                selected_triggers,
+                opened.failure,
+            )
+            session = opened.value
+            rules = {
+                "player": (
+                    _ai_rule(catalog, "combination.player", ability_id, 10),
+                    _ai_rule(catalog, "combination.player.basic", BASIC_ATTACK_ABILITY_ID, 0),
+                ),
+                "enemy": (
+                    _ai_rule(catalog, "combination.enemy", enemy_ability, 10),
+                    _ai_rule(catalog, "combination.enemy.basic", BASIC_ATTACK_ABILITY_ID, 0),
+                ),
+            }
+            while session.state.status is BattleStatus.ACTIVE:
+                actor_id = session.state.current_actor_id
+                assert actor_id is not None
+                action = catalog.battle_ai_engine.decide(
+                    rules[actor_id],
+                    session.state,
+                    actor_id,
+                    context=context,
+                )
+                assert action is not None, (
+                    ability_id,
+                    selected_triggers,
+                    actor_id,
+                )
+                outcome = session.execute_turn(action, context=context)
+                assert outcome.ok and outcome.value is not None, (
+                    ability_id,
+                    selected_triggers,
+                    enemy_ability,
+                    outcome.failure,
+                )
+                assert outcome.value.before is not None
+                _assert_resource_events(
+                    outcome.value.before.state,
+                    outcome.value.after.state,
+                    outcome.value.events,
+                )
+            assert session.trace.final_frame.state.status is not BattleStatus.ACTIVE
+
+    assert covered_triggers == set(trigger_ids)
 
 
 def _engine(catalog, *, maximum_rounds: int = 20, maximum_turns: int = 200):

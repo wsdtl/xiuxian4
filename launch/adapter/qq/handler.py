@@ -493,6 +493,7 @@ class QqEventHandler(BaseAdapter):
                 request_id=event.event_id or event.message_id,
                 message_type="text",
                 content=event.content,
+                sender_name=event.sender_name,
             )
         )
 

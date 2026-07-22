@@ -148,6 +148,7 @@ def main() -> None:
     _assert_business_feature_catalog()
     _assert_application_composition_boundary()
     _assert_balance_values_live_in_content()
+    _assert_item_use_components_are_wired()
     _assert_cross_domain_state_fields()
     _assert_dynamic_field_registry()
     _assert_foundation_coverage()
@@ -167,6 +168,20 @@ def _assert_business_feature_catalog() -> None:
     packages = [value.package for value in ACTIVE_BUSINESS_FEATURES]
     assert len(ids) == len(set(ids)), "正式业务台账存在重复 ID"
     assert len(packages) == len(set(packages)), "正式业务台账存在重复包名"
+
+    command_owners: dict[str, str] = {}
+    for feature in ACTIVE_BUSINESS_FEATURES:
+        integrated = set(feature.integrated_command_packages)
+        for command_package in set(feature.command_packages) - integrated:
+            previous = command_owners.setdefault(command_package, feature.id)
+            assert previous == feature.id, (
+                f"命令组件 {command_package} 存在多个主业务：{previous} 与 {feature.id}"
+            )
+    for feature in ACTIVE_BUSINESS_FEATURES:
+        for command_package in feature.integrated_command_packages:
+            assert command_package in command_owners, (
+                f"业务 {feature.id} 的协作命令组件 {command_package} 没有主业务"
+            )
 
     feature_root = ROOT / "game" / "features"
     actual_packages = {
@@ -206,6 +221,70 @@ def _assert_business_feature_catalog() -> None:
             )
             registered_job_files.add(job_file)
     assert registered_job_files == set(job_sources), "存在未登记到业务台账的 jobs.py"
+
+
+def _assert_item_use_components_are_wired() -> None:
+    """正式物品的类型化使用组件必须都有唯一的实际消费入口。"""
+
+    from game.content import build_official_content
+
+    source_files = {
+        path: (ROOT / path).read_text(encoding="utf-8")
+        for path in (
+            "game/cmd/物品/service.py",
+            "game/features/companion/service.py",
+            "game/features/dimension_shift/service.py",
+        )
+    }
+    route_markers = {
+        "item_component.use_ability": (
+            "game/cmd/物品/service.py",
+            "services.item_use.use",
+        ),
+        "item_component.use_character_experience": (
+            "game/cmd/物品/service.py",
+            "services.character_item_use.use",
+        ),
+        "item_component.use_companion_experience": (
+            "game/cmd/物品/service.py",
+            "services.companions.use_experience_item",
+        ),
+        "item_component.use_weapon_experience": (
+            "game/cmd/物品/service.py",
+            "services.weapon_item_use.use",
+        ),
+        "item_component.use_weapon_maximum_level": (
+            "game/cmd/物品/service.py",
+            "services.weapon_item_use.use",
+        ),
+        "item_component.use_container_capacity": (
+            "game/cmd/物品/service.py",
+            "services.special_item_use.use",
+        ),
+        "item_component.use_dimension_shift": (
+            "game/features/dimension_shift/service.py",
+            "DIMENSION_SHIFT_ITEM_COMPONENT_ID",
+        ),
+        "item_component.use_companion_sanctuary": (
+            "game/features/companion/service.py",
+            "COMPANION_SANCTUARY_ITEM_COMPONENT_ID",
+        ),
+    }
+    content = build_official_content()
+    used_components = {
+        str(component_id)
+        for definition in content.catalog.items.definitions
+        for component_id in definition.components
+        if str(component_id).startswith("item_component.use_")
+    }
+    assert used_components == set(route_markers), (
+        "正式物品使用组件与消费入口不一致："
+        f"定义={sorted(used_components)}，入口={sorted(route_markers)}"
+    )
+    for component_id, (path, marker) in route_markers.items():
+        assert marker in source_files[path], (
+            f"物品使用组件 {component_id} 缺少实际消费入口：{path}::{marker}"
+        )
 
 
 def _assert_application_composition_boundary() -> None:

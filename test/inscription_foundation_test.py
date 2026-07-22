@@ -201,7 +201,14 @@ def _fixture():
             },
         ),
     }
-    inventory = InventoryState(containers, {}, instances, {}, 0)
+    inventory = InventoryState(
+        containers,
+        {},
+        instances,
+        {},
+        0,
+        protected_asset_ids=frozenset({"weapon-1", "equipment-1"}),
+    )
     weapon_state = WeaponState(
         "weapon-1", "weapon.training_blade", "quality.common"
     )
@@ -250,6 +257,7 @@ def _assert_weapon_name(engine, inventory, weapon_state):
         weapon_state,
     )
     assert "feather-1" not in result.inventory.instances
+    assert result.inventory.is_protected("weapon-1")
     weapon = result.inventory.instances["weapon-1"]
     assert weapon.revision == 1
     assert weapon.data[INSCRIPTION_DATA_KEY].asset_name == "青云剑"
@@ -300,6 +308,7 @@ def _assert_equipment_name(engine, inventory):
         seed=43,
     )
     equipment = result.inventory.instances["equipment-1"]
+    assert result.inventory.is_protected("equipment-1")
     assert InscriptionProjector().asset_name("云纹冠", equipment) == "青云冠（云纹冠）"
     return result.inventory
 

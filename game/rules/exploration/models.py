@@ -113,6 +113,7 @@ class ExplorationBatchResult:
     spirit_after: float | None = None
     character_experience: int = 0
     weapon_experience: int = 0
+    companion_experience: int = 0
     weapon_drops: int = 0
     equipment_drops: int = 0
     trophy_drops: int = 0
@@ -128,6 +129,7 @@ class ExplorationBatchResult:
         values = (
             self.character_experience,
             self.weapon_experience,
+            self.companion_experience,
             self.weapon_drops,
             self.equipment_drops,
             self.trophy_drops,
@@ -160,6 +162,7 @@ class ExplorationState:
     defeats: int = 0
     character_experience: int = 0
     weapon_experience: int = 0
+    companion_experience: int = 0
     weapon_drops: int = 0
     equipment_drops: int = 0
     trophy_drops: int = 0
@@ -188,6 +191,7 @@ class ExplorationState:
             self.defeats,
             self.character_experience,
             self.weapon_experience,
+            self.companion_experience,
             self.weapon_drops,
             self.equipment_drops,
             self.trophy_drops,

@@ -10,6 +10,8 @@ class BusinessFeaturePlan:
     responsibility: str
     command_packages: tuple[str, ...] = ()
     scheduled_jobs: tuple[str, ...] = ()
+    # Listed command packages are owned by this feature unless explicitly marked as integrated.
+    integrated_command_packages: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.id.isascii() or not self.id.strip():
@@ -22,9 +24,17 @@ class BusinessFeaturePlan:
             raise ValueError(f"业务 {self.id} 重复登记命令组件")
         if len(set(self.scheduled_jobs)) != len(self.scheduled_jobs):
             raise ValueError(f"业务 {self.id} 重复登记定时任务")
+        if not set(self.integrated_command_packages).issubset(self.command_packages):
+            raise ValueError(f"业务 {self.id} 登记了未参与的协作命令组件")
 
 
 ACTIVE_BUSINESS_FEATURES = (
+    BusinessFeaturePlan(
+        "build_trial",
+        "build_trial",
+        "读取当前构筑执行固定种子无损战斗，并保存公开战报",
+        ("构筑试炼",),
+    ),
     BusinessFeaturePlan(
         "battle_report",
         "battle_report",
@@ -49,6 +59,7 @@ ACTIVE_BUSINESS_FEATURES = (
         "world_travel",
         "统一校验世界地点意图、主要行动占用与角色位置移动",
         ("地图", "探险", "伙伴"),
+        integrated_command_packages=("探险", "伙伴"),
     ),
     BusinessFeaturePlan(
         "breakthrough",
@@ -107,6 +118,7 @@ ACTIVE_BUSINESS_FEATURES = (
         "party_battle",
         "协调跨界组队首领、准备指纹、临时战斗投影、原子奖励与公开战报",
         ("组队",),
+        integrated_command_packages=("组队",),
     ),
     BusinessFeaturePlan(
         "player",

@@ -18,14 +18,14 @@ from ..gameplay.inventory import (
     UpdateInstance,
 )
 from ..gameplay.weapon import (
-    WEAPON_LEVEL_ITEM_COMPONENT_ID,
+    WEAPON_EXPERIENCE_ITEM_COMPONENT_ID,
     WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID,
     WEAPON_STATE_DATA_KEY,
     WeaponEngine,
     WeaponExperienceTransaction,
     WeaponItemUseCommand,
     WeaponItemUseReceipt,
-    WeaponLevelItemComponent,
+    WeaponExperienceItemComponent,
     WeaponMaximumLevelItemComponent,
     WeaponMaximumLevelTransaction,
     WeaponState,
@@ -182,7 +182,9 @@ class PersistedWeaponItemUseService:
         maximum_component = item_definition.components.get(
             WEAPON_MAXIMUM_LEVEL_ITEM_COMPONENT_ID
         )
-        level_component = item_definition.components.get(WEAPON_LEVEL_ITEM_COMPONENT_ID)
+        experience_component = item_definition.components.get(
+            WEAPON_EXPERIENCE_ITEM_COMPONENT_ID
+        )
         if isinstance(maximum_component, WeaponMaximumLevelItemComponent):
             weapon_outcome = self.weapon_engine.increase_maximum_level(
                 WeaponMaximumLevelTransaction(
@@ -197,8 +199,11 @@ class PersistedWeaponItemUseService:
                 state=weapon,
                 context=context,
             )
-        elif isinstance(level_component, WeaponLevelItemComponent):
-            amount = self.weapon_engine.experience_to_next_level(weapon)
+        elif isinstance(experience_component, WeaponExperienceItemComponent):
+            amount = min(
+                experience_component.maximum_experience,
+                self.weapon_engine.experience_to_next_level(weapon),
+            )
             weapon_outcome = self.weapon_engine.grant_experience(
                 WeaponExperienceTransaction(
                     f"{command.id}:weapon",
@@ -261,6 +266,9 @@ class PersistedWeaponItemUseService:
             next_weapon.level,
             weapon.maximum_level,
             next_weapon.maximum_level,
+            weapon.experience,
+            next_weapon.experience,
+            next_weapon.total_experience - weapon.total_experience,
         )
         return (
             inventory_outcome.value.state,
