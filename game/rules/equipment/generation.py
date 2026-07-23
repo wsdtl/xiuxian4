@@ -12,6 +12,7 @@ from game.core.gameplay import (
     ItemRollState,
     ItemizationEngine,
     RuleContext,
+    StableId,
 )
 
 
@@ -69,9 +70,12 @@ class EquipmentInstanceGenerator:
         *,
         context: RuleContext,
         force_set_mark: bool = False,
+        forced_set_id: StableId | None = None,
     ) -> EquipmentGenerationResult:
         if not isinstance(force_set_mark, bool):
             raise TypeError("force_set_mark 必须是布尔值")
+        if forced_set_id is not None:
+            forced_set_id = self.equipment.sets.require(forced_set_id).id
         definition = self.equipment.require(request.definition_id)
         if definition.generation_profile_id is None:
             raise ValueError(f"装备 {definition.id} 没有随机生成策略")
@@ -87,7 +91,9 @@ class EquipmentInstanceGenerator:
             )
             set_roll = context.random.random()
             set_id = None
-            if force_set_mark or set_roll < self.set_mark_chance:
+            if forced_set_id is not None:
+                set_id = forced_set_id
+            elif force_set_mark or set_roll < self.set_mark_chance:
                 set_id = context.random.choice(self.equipment.sets.ids())
             state = self.equipment.create_state(
                 asset_id=request.asset_id,

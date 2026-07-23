@@ -1,6 +1,7 @@
 """星环界的消耗品展示。"""
 
 from game.core.gameplay import SkinEntry
+from game.content.covenant import COVENANT_ITEM_ENTRIES
 
 from ...catalog import (
     BREAKTHROUGH_TOKEN_ITEM_ID,
@@ -29,6 +30,7 @@ from ...catalog import (
 
 
 STELLAR_RING_ITEM_ENTRIES = {
+    **COVENANT_ITEM_ENTRIES,
     BREAKTHROUGH_TOKEN_ITEM_ID: SkinEntry(
         name="序列升格许可",
         description="封存一次生命升格所需的中枢许可；抵达阶位关隘后自动消耗。",

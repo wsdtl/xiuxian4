@@ -4,8 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from game.content.catalog.item.exchange import (
+    EQUIPMENT_SET_BLUEPRINT_COMPONENT_ID,
+    EXCHANGE_MATERIAL_ITEM_ID,
+    EquipmentSetBlueprintItemComponent,
+)
+from game.content.catalog.item.trade import (
+    ITEM_RECYCLE_COMPONENT_ID,
+    ItemRecycleYield,
+    StackItemRecycleYield,
+)
 from game.core.gameplay import ItemAssetKind
 
+from .exchange import (
+    EQUIPMENT_SET_BLUEPRINT_PRICE,
+    EXCHANGE_MATERIAL_REFERENCE_VALUE,
+)
 from .market_items import MARKET_ITEM_POLICIES
 
 
@@ -14,9 +28,11 @@ class MarketPriceAuditReport:
     policy_count: int
     draw_base_expected_value: float
     draw_ticket_reference_price: int
+    blueprint_count: int = 0
+    party_trophy_conversion_count: int = 0
 
 
-def audit_market_prices(item_catalog, draw_content) -> MarketPriceAuditReport:
+def audit_market_prices(item_catalog, draw_content, equipment_catalog=None) -> MarketPriceAuditReport:
     required = {
         str(definition.id)
         for definition in (
@@ -77,7 +93,56 @@ def audit_market_prices(item_catalog, draw_content) -> MarketPriceAuditReport:
     ticket_price = MARKET_ITEM_POLICIES["item.draw.ticket"].unit_reference_price
     if not expected <= ticket_price <= expected * 2:
         raise ValueError("抽奖签参考价偏离基础奖池期望值")
-    return MarketPriceAuditReport(len(configured), expected, ticket_price)
+
+    blueprint_targets: dict[str, int] = {}
+    blueprint_ids = set()
+    party_conversions = 0
+    for definition in item_catalog.definitions:
+        blueprint = definition.components.get(EQUIPMENT_SET_BLUEPRINT_COMPONENT_ID)
+        if isinstance(blueprint, EquipmentSetBlueprintItemComponent):
+            blueprint_ids.add(str(definition.id))
+            blueprint_targets[str(blueprint.target_set_id)] = (
+                blueprint_targets.get(str(blueprint.target_set_id), 0) + 1
+            )
+            if ITEM_RECYCLE_COMPONENT_ID in definition.components:
+                raise ValueError(f"套装图纸不能被系统回收：{definition.id}")
+        recycle = definition.components.get(ITEM_RECYCLE_COMPONENT_ID)
+        if isinstance(recycle, StackItemRecycleYield):
+            if not definition.tags.has("trophy.party_boss"):
+                raise ValueError(f"非组队首领战利品不能回收为物品：{definition.id}")
+            if recycle.definition_id != EXCHANGE_MATERIAL_ITEM_ID:
+                raise ValueError(f"组队首领战利品必须回收为定相尘：{definition.id}")
+            party_conversions += 1
+        elif definition.tags.has("trophy.party_boss"):
+            raise ValueError(f"组队首领战利品缺少定相尘产出：{definition.id}")
+        elif recycle is not None and not isinstance(recycle, ItemRecycleYield):
+            raise TypeError(f"物品回收组件类型无效：{definition.id}")
+    if party_conversions != 30:
+        raise ValueError("正式组队首领战利品必须正好有 30 项定相尘产出")
+    if blueprint_ids & set(draw_content.special_item_ids):
+        raise ValueError("套装图纸不能进入特殊物品抽奖池")
+    if equipment_catalog is not None:
+        expected_sets = set(equipment_catalog.sets.ids())
+        if set(blueprint_targets) != expected_sets or any(
+            amount != 1 for amount in blueprint_targets.values()
+        ):
+            raise ValueError("每个正式套装必须恰好对应一张图纸")
+    material_policy = MARKET_ITEM_POLICIES[EXCHANGE_MATERIAL_ITEM_ID]
+    if material_policy.unit_reference_price != EXCHANGE_MATERIAL_REFERENCE_VALUE:
+        raise ValueError("定相尘市场参考价与兑换价值锚不一致")
+    for blueprint_id in blueprint_ids:
+        if (
+            MARKET_ITEM_POLICIES[blueprint_id].unit_reference_price
+            != EQUIPMENT_SET_BLUEPRINT_PRICE * EXCHANGE_MATERIAL_REFERENCE_VALUE
+        ):
+            raise ValueError(f"套装图纸参考价与兑换成本不一致：{blueprint_id}")
+    return MarketPriceAuditReport(
+        len(configured),
+        expected,
+        ticket_price,
+        len(blueprint_ids),
+        party_conversions,
+    )
 
 
 def _require_monotonic(label: str, item_ids: tuple[str, ...]) -> None:

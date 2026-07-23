@@ -398,6 +398,8 @@ def _category_id(value: str) -> str | None:
         "铭刻": "inscription",
         "抽奖签": "draw",
         "凭证": "breakthrough",
+        "材料": "exchange_material",
+        "图纸": "blueprint",
     }.get(str(value).strip())
 
 

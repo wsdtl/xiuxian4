@@ -11,6 +11,8 @@ CONSUMABLE_ITEM_TAG = "item.consumable"
 MEDICINE_ITEM_TAG = "item.medicine"
 SPECIAL_ITEM_TAG = "item.special"
 BREAKTHROUGH_TOKEN_ITEM_TAG = "item.breakthrough_token"
+BLUEPRINT_ITEM_TAG = "item.blueprint"
+EXCHANGE_MATERIAL_ITEM_TAG = "item.exchange_material"
 INSCRIPTION_MEDIUM_ITEM_TAG = "item.inscription_medium"
 SPECIAL_STORAGE_TAG = "storage.special"
 INSCRIPTION_STORAGE_TAG = "storage.inscription"
@@ -23,6 +25,8 @@ def validate_nacre_item_categories(definitions: Iterable[ItemDefinition]) -> Non
         MEDICINE_ITEM_TAG,
         SPECIAL_ITEM_TAG,
         BREAKTHROUGH_TOKEN_ITEM_TAG,
+        BLUEPRINT_ITEM_TAG,
+        EXCHANGE_MATERIAL_ITEM_TAG,
     )
     all_categories = (*stack_categories, INSCRIPTION_MEDIUM_ITEM_TAG)
     for definition in definitions:
@@ -39,8 +43,10 @@ def validate_nacre_item_categories(definitions: Iterable[ItemDefinition]) -> Non
                 raise ValueError(f"纳戒物品 {definition.id} 不能进入铭刻保管区")
             if definition.asset_kind is not ItemAssetKind.STACK:
                 raise ValueError(f"可消耗物品 {definition.id} 必须是可堆叠资产")
-            if not definition.tags.has(CONSUMABLE_ITEM_TAG):
+            if category != EXCHANGE_MATERIAL_ITEM_TAG and not definition.tags.has(CONSUMABLE_ITEM_TAG):
                 raise ValueError(f"可消耗物品 {definition.id} 缺少消耗品标签")
+            if category == EXCHANGE_MATERIAL_ITEM_TAG and definition.tags.has(CONSUMABLE_ITEM_TAG):
+                raise ValueError(f"兑换材料 {definition.id} 不能进入直接使用流程")
         if category == SPECIAL_ITEM_TAG and not any(
             component_id.startswith("item_component.use_")
             for component_id in definition.components

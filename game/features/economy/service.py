@@ -43,6 +43,7 @@ from game.core.gameplay import (
     RuleContext,
     Ruleset,
     SeededRandomSource,
+    SourceReceipt,
     SplitFunds,
     WEAPON_SLOT_ID,
     weapon_state_from_instance,
@@ -282,21 +283,62 @@ class EconomyFeature:
             quote = quote_trophy_recycle(inventory, self.content.items, owner_id)
             if not quote.lines:
                 return TrophyRecycleResult("empty", quote)
-            ledger = self.snapshots.require(
-                uow,
-                self.storage.ledger,
-                PRIMARY_LEDGER_ID,
-                LedgerState,
-            )
-            issuer = ledger.accounts[PRIMARY_ISSUER_ACCOUNT_ID]
-            wallet = self._wallet(ledger, owner_id)
             context = _context(quote.id, logical_time, "trophy_recycle")
+            inventory_operations = [
+                ConsumeStack(line.asset_id, line.quantity) for line in quote.lines
+            ]
+            special_container = next(
+                value
+                for value in inventory.containers.values()
+                if value.owner_id == owner_id and value.kind == "container.special"
+            )
+            for definition_id, quantity in sorted(quote.stack_item_totals.items()):
+                existing = next(
+                    (
+                        stack
+                        for stack in inventory.stacks.values()
+                        if stack.definition_id == definition_id
+                        and stack.container_id == special_container.id
+                    ),
+                    None,
+                )
+                receipt = SourceReceipt(
+                    f"{quote.id}:receipt:{definition_id}",
+                    "source.covenant_recycle",
+                    quote.id,
+                    logical_time,
+                    {
+                        "owner_id": owner_id,
+                        "source_definition_ids": tuple(
+                            sorted(
+                                {
+                                    str(line.definition_id)
+                                    for line in quote.lines
+                                    if line.output_kind == "stack_item"
+                                    and line.output_id == definition_id
+                                }
+                            )
+                        ),
+                    },
+                )
+                if existing is None:
+                    inventory_operations.append(
+                        GrantStack(
+                            f"{quote.id}:output:{definition_id}",
+                            definition_id,
+                            special_container.id,
+                            quantity,
+                            receipt,
+                        )
+                    )
+                else:
+                    inventory_operations.append(AppendStack(existing.id, quantity, receipt))
             inventory_outcome = self.inventory_engine.execute(
                 InventoryTransaction(
                     f"{quote.id}:inventory",
                     owner_id,
                     "inventory.recycle_trophies",
-                    tuple(ConsumeStack(line.asset_id, line.quantity) for line in quote.lines),
+                    tuple(inventory_operations),
                 ),
                 state=inventory,
                 context=context,
@@ -305,22 +347,35 @@ class EconomyFeature:
                 raise RuntimeError(
                     inventory_outcome.failure.message if inventory_outcome.failure else "战利品回收失败"
                 )
-            ledger_outcome = self.ledger_engine.execute(
-                LedgerTransaction(
-                    f"{quote.id}:ledger",
-                    owner_id,
-                    "economy.recycle_trophies",
-                    (IssueFunds(issuer.id, wallet.id, quote.total_amount),),
-                    expected_revisions={issuer.id: issuer.revision, wallet.id: wallet.revision},
-                    metadata={"quote_id": quote.id},
-                ),
-                state=ledger,
-                context=context,
-            )
-            if ledger_outcome.failure or ledger_outcome.value is None:
-                raise RuntimeError(
-                    ledger_outcome.failure.message if ledger_outcome.failure else "战利品回收款入账失败"
+            ledger = None
+            ledger_outcome = None
+            if quote.total_amount:
+                ledger = self.snapshots.require(
+                    uow,
+                    self.storage.ledger,
+                    PRIMARY_LEDGER_ID,
+                    LedgerState,
                 )
+                issuer = ledger.accounts[PRIMARY_ISSUER_ACCOUNT_ID]
+                wallet = self._wallet(ledger, owner_id)
+                ledger_outcome = self.ledger_engine.execute(
+                    LedgerTransaction(
+                        f"{quote.id}:ledger",
+                        owner_id,
+                        "economy.recycle_trophies",
+                        (IssueFunds(issuer.id, wallet.id, quote.total_amount),),
+                        expected_revisions={issuer.id: issuer.revision, wallet.id: wallet.revision},
+                        metadata={"quote_id": quote.id},
+                    ),
+                    state=ledger,
+                    context=context,
+                )
+                if ledger_outcome.failure or ledger_outcome.value is None:
+                    raise RuntimeError(
+                        ledger_outcome.failure.message
+                        if ledger_outcome.failure
+                        else "战利品回收款入账失败"
+                    )
             self.snapshots.update(
                 uow,
                 self.storage.inventory,
@@ -329,14 +384,15 @@ class EconomyFeature:
                 inventory_outcome.value.state,
                 logical_time,
             )
-            self.snapshots.update(
-                uow,
-                self.storage.ledger,
-                PRIMARY_LEDGER_ID,
-                ledger,
-                ledger_outcome.value.state,
-                logical_time,
-            )
+            if ledger is not None and ledger_outcome is not None and ledger_outcome.value is not None:
+                self.snapshots.update(
+                    uow,
+                    self.storage.ledger,
+                    PRIMARY_LEDGER_ID,
+                    ledger,
+                    ledger_outcome.value.state,
+                    logical_time,
+                )
             uow.commit()
             return TrophyRecycleResult("recycled", quote)
 

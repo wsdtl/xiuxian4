@@ -153,6 +153,14 @@ from game.features.special_items import (
     SpecialItemUseService,
     special_item_codec_registrations,
 )
+from game.features.equipment_blueprint import (
+    EquipmentBlueprintFeature,
+    equipment_blueprint_codec_registrations,
+)
+from game.features.exchange import (
+    CovenantExchangeFeature,
+    covenant_exchange_codec_registrations,
+)
 from game.features.dimension_shift import (
     DimensionShiftFeature,
     DimensionShiftStorageKinds,
@@ -202,6 +210,8 @@ class GameServices:
     character_item_use: PersistedCharacterItemUseService
     weapon_item_use: PersistedWeaponItemUseService
     special_item_use: SpecialItemUseService
+    equipment_blueprints: EquipmentBlueprintFeature
+    covenant_exchange: CovenantExchangeFeature
     inventory_engine: InventoryEngine
     inventory_protection: PersistedInventoryProtectionService
     player: PlayerFeature
@@ -546,6 +556,8 @@ def build_game_services(
                 *lottery_codec_registrations(),
                 *draw_codec_registrations(),
                 *special_item_codec_registrations(),
+                *equipment_blueprint_codec_registrations(),
+                *covenant_exchange_codec_registrations(),
                 *companion_codec_registrations(),
                 *party_battle_codec_registrations(),
             )
@@ -621,6 +633,20 @@ def build_game_services(
         snapshots,
         INVENTORY_AGGREGATE,
     )
+    equipment_blueprints = EquipmentBlueprintFeature(
+        database,
+        content.catalog,
+        snapshots,
+        inventory_engine,
+        INVENTORY_AGGREGATE,
+    )
+    covenant_exchange = CovenantExchangeFeature(
+        database,
+        content.catalog,
+        snapshots,
+        inventory_engine,
+        INVENTORY_AGGREGATE,
+    )
     action_service = PersistedActionService(
         database,
         content.catalog.action_engine,
@@ -665,6 +691,7 @@ def build_game_services(
         ProjectionStore(database, snapshots),
         WorldProgressStorageKinds(
             progress=WORLD_PROGRESS_AGGREGATE,
+            inventory=INVENTORY_AGGREGATE,
             ledger=LEDGER_AGGREGATE,
             reward_claim=REWARD_CLAIM_AGGREGATE,
         ),
@@ -952,6 +979,8 @@ def build_game_services(
         character_item_use=character_item_use_service,
         weapon_item_use=weapon_item_use_service,
         special_item_use=special_item_use_service,
+        equipment_blueprints=equipment_blueprints,
+        covenant_exchange=covenant_exchange,
         inventory_engine=inventory_engine,
         inventory_protection=inventory_protection,
         player=player,

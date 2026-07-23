@@ -15,6 +15,7 @@ from ...catalog.equipment.definitions import (
     equipment_set_id,
 )
 from ...catalog.equipment.properties import equipment_property_id
+from ...catalog.item.exchange import equipment_set_blueprint_item_id
 
 
 _FAMILY_DISPLAY = {
@@ -102,6 +103,12 @@ _SET_DISPLAY = {
     "sky_burn": ("普罗米修斯赤炉套装", "火焰与增伤协同"),
     "void_realm": ("厄瑞玻斯暗环套装", "穿盾与真实回响协同"),
     "samsara": ("菲尼克斯备份套装", "残血生存与击败恢复协同"),
+    "blood_moon": ("哈维血月循环套装", "暴击、汲取与持续作战协同"),
+    "thunder_judgment": ("伏打雷霆裁决套装", "攻速与暴击控制协同"),
+    "thorn_crown": ("霍尔棘冠防护套装", "格挡减伤与反震协同"),
+    "spirit_tide": ("狄拉克灵潮套装", "同步上限与回合恢复协同"),
+    "hunters_mark": ("阿波罗猎标套装", "命中、增伤与迟缓协同"),
+    "immortal_guard": ("诺依曼不灭冗余套装", "生命、抗性与受创恢复协同"),
 }
 
 
@@ -121,7 +128,13 @@ def _build_equipment_entries() -> dict[str, SkinEntry]:
         entries[equipment_family_id(family.key)] = SkinEntry(name=family_name, description=family_description, icon="🛡")
     for value in EQUIPMENT_SET_BLUEPRINTS:
         name, description = _SET_DISPLAY[value.key]
-        entries[equipment_set_id(value.key)] = SkinEntry(name=name, description=description, icon="◆")
+        set_id = equipment_set_id(value.key)
+        entries[set_id] = SkinEntry(name=name, description=description, icon="◆")
+        entries[equipment_set_blueprint_item_id(value.key)] = SkinEntry(
+            name=f"{name}图纸",
+            description=f"归航公约定向封存的套装图纸；使用后只固定{name}身份，其余属性随机。",
+            icon="▧",
+        )
     for value in EQUIPMENT_PROPERTY_BLUEPRINTS:
         name, description = _PROPERTY_DISPLAY[value.key]
         entries[equipment_property_id(value.key)] = SkinEntry(name=name, description=description, icon="✦")

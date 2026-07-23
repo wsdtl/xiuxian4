@@ -17,13 +17,17 @@ from game.content import (  # noqa: E402
     assemble_official_catalog,
     select_world_skin,
 )
-from game.content.catalog.equipment.definitions import equipment_definition_id  # noqa: E402
+from game.content.catalog.equipment.definitions import (  # noqa: E402
+    equipment_definition_id,
+    equipment_set_id,
+)
 from game.content.catalog.weapon.mechanics import WEAPON_MAXIMUM_LEVEL_TABLE  # noqa: E402
 from game.content.world_skins import (  # noqa: E402
     CULTIVATION_SKIN_ID,
     MAGIC_SKIN_ID,
     STELLAR_RING_SKIN_ID,
 )
+from game.cmd.战报.site import _content_name  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
     INSCRIPTION_DATA_KEY,
     InscriptionData,
@@ -131,6 +135,18 @@ def main() -> None:
         inscription_preference=InscriptionPreference("player", False),
     )
     assert hidden.name == "照夜"
+
+    for view in (cultivation, magic, stellar):
+        set_id = equipment_set_id("army_breaker")
+        set_name = view.projector.name(set_id)
+        for pieces in (2, 3, 4):
+            bonus_name = _content_name(
+                view,
+                f"{set_id}.bonus.pieces_{pieces}",
+                "未命名效果",
+            )
+            assert set_name in bonus_name
+            assert f"{pieces}件" in bonus_name
 
     print("official gear presentation test passed")
 

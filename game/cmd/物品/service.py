@@ -22,6 +22,7 @@ from game.content.catalog.combat import (
 from game.content.catalog.item import (
     COMPANION_SANCTUARY_ITEM_COMPONENT_ID,
     DIMENSION_SHIFT_ITEM_COMPONENT_ID,
+    EQUIPMENT_SET_BLUEPRINT_COMPONENT_ID,
     ITEM_RECYCLE_COMPONENT_ID,
     LARGE_HEALTH_MEDICINE_ITEM_ID,
     LARGE_SPIRIT_MEDICINE_ITEM_ID,
@@ -29,7 +30,8 @@ from game.content.catalog.item import (
     MEDIUM_SPIRIT_MEDICINE_ITEM_ID,
     SMALL_HEALTH_MEDICINE_ITEM_ID,
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
-    ItemRecycleValue,
+    CurrencyRecycleYield,
+    StackItemRecycleYield,
 )
 from game.core.gameplay import (
     HEALTH_CURRENT,
@@ -328,6 +330,13 @@ async def use_item(message: str, current: CurrentCharacterResult) -> None:
         await _use_companion_sanctuary(asset, current)
         return
 
+    if EQUIPMENT_SET_BLUEPRINT_COMPONENT_ID in definition.components:
+        if len(parts) != 1:
+            await send_game_reply(_invalid("使用", "套装图纸每次只能使用一张"))
+            return
+        await _use_equipment_blueprint(asset, initial)
+        return
+
     if any(
         component_id in definition.components
         for component_id in (
@@ -425,6 +434,53 @@ async def use_item(message: str, current: CurrentCharacterResult) -> None:
             stopped_full,
             failure_message,
         )
+    )
+
+
+async def _use_equipment_blueprint(item_asset, overview: CharacterOverview) -> None:
+    services = current_game_services()
+    transaction_id = f"equipment-blueprint:{_evidence_id()}"
+    try:
+        result = await asyncio.to_thread(
+            services.equipment_blueprints.use,
+            overview.character.id,
+            item_asset.id,
+            transaction_id,
+            logical_time=_now(),
+        )
+    except Exception as exc:
+        logger.opt(colors=True, exception=exc).error(
+            C.join(C.fail("套装图纸使用失败"), C.kv("character", overview.character.id))
+        )
+        await send_game_reply(_invalid("套装图纸", "装备没有生成，请稍后重试"))
+        return
+    if result.receipt is None:
+        await send_game_reply(_invalid("套装图纸", result.failure_message or "装备没有生成"))
+        return
+    final = await _load_overview(overview.character)
+    if final is None:
+        await send_game_reply(_invalid("套装图纸", "装备已经生成，请稍后查看武库"))
+        return
+    asset = final.inventory.instances.get(result.receipt.equipment_asset_id)
+    if asset is None:
+        await send_game_reply(_invalid("套装图纸", "装备已经生成，请稍后查看武库"))
+        return
+    view = _view(final)
+    state = equipment_state_from_instance(asset)
+    display = view.gear_projector.equipment(
+        state,
+        asset,
+        inscription_preference=final.inscription_preference,
+    )
+    reference = _reference(final.inventory, asset)
+    await send_game_reply(
+        M.document()
+        .section("套装图纸", icon="reward")
+        .field("套装", view.projector.name(result.receipt.set_id))
+        .field("获得", M.command(display.name, f"查看 {reference}"))
+        .row(("品阶", view.projector.name(state.quality_id)), ("编号", reference))
+        .note("部位、底座、品阶、词条与词条数值均由本次生成独立决定。")
+        .build()
     )
 
 
@@ -752,10 +808,15 @@ def _backpack_page(assets, page: int, overview: CharacterOverview) -> DocumentMe
         quantity = asset.quantity if isinstance(asset, ItemStack) else 1
         value = ""
         recycle = definition.components.get(ITEM_RECYCLE_COMPONENT_ID)
-        if isinstance(recycle, ItemRecycleValue):
+        if isinstance(recycle, CurrencyRecycleYield):
             subtotal = recycle.unit_amount * quantity
             total_value += subtotal
             value = f"估价 {subtotal}"
+        elif isinstance(recycle, StackItemRecycleYield):
+            value = (
+                f"回收 {recycle.unit_quantity * quantity} "
+                f"{_view(overview).projector.name(recycle.definition_id)}"
+            )
         builder.line(
             M.command(reference, f"查看 {reference}"),
             " ",
@@ -791,10 +852,22 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
         if entry.description:
             builder.line(entry.description)
         recycle = definition.components.get(ITEM_RECYCLE_COMPONENT_ID)
-        if isinstance(recycle, ItemRecycleValue):
+        if isinstance(recycle, CurrencyRecycleYield):
             builder.row(
                 ("回收单价", recycle.unit_amount),
                 ("回收总价", recycle.unit_amount * asset.quantity),
+            )
+        elif isinstance(recycle, StackItemRecycleYield):
+            builder.row(
+                (
+                    "回收单件",
+                    f"{recycle.unit_quantity} {view.projector.name(recycle.definition_id)}",
+                ),
+                (
+                    "回收合计",
+                    f"{recycle.unit_quantity * asset.quantity} "
+                    f"{view.projector.name(recycle.definition_id)}",
+                ),
             )
         medicine = _MEDICINE_RESOURCE.get(definition.id)
         if medicine is not None:
@@ -816,6 +889,7 @@ def _asset_detail(asset, overview: CharacterOverview) -> DocumentMessage:
                 WEAPON_EXPERIENCE_ITEM_COMPONENT_ID,
                 ITEM_CONTAINER_CAPACITY_COMPONENT_ID,
                 COMPANION_SANCTUARY_ITEM_COMPONENT_ID,
+                EQUIPMENT_SET_BLUEPRINT_COMPONENT_ID,
             )
         ):
             actions.append(Action("item.use", "使用", f"使用 {reference}", behavior="fill"))

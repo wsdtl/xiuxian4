@@ -37,6 +37,8 @@ from game.rules.exploration import (
     EXPLORATION_VICTORY_FACT_KIND,
     ExplorationBatchPlanner,
     ExplorationBatchResult,
+    ExplorationRewardKind,
+    ExplorationRewardReference,
     ExplorationBattleSimulator,
     ExplorationState,
     ExplorationStatus,
@@ -471,7 +473,25 @@ class ExplorationSettlementService:
                 )
                 self._append_victory_fact(uow, fact)
                 if self.settlement_observer is not None:
-                    self.settlement_observer.observe_victory_in_uow(uow, fact)
+                    observation = self.settlement_observer.observe_victory_in_uow(
+                        uow,
+                        fact,
+                    )
+                    if observation.reward_items:
+                        result = replace(
+                            result,
+                            rewards=(
+                                *result.rewards,
+                                *(
+                                    ExplorationRewardReference(
+                                        ExplorationRewardKind.ITEM,
+                                        definition_id,
+                                        quantity,
+                                    )
+                                    for definition_id, quantity in observation.reward_items
+                                ),
+                            ),
+                        )
             reason = None
             if plan.encounter is not None and not victory:
                 reason = ExplorationStopReason.DEFEATED

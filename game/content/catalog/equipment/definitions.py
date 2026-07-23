@@ -1,4 +1,4 @@
-"""十二个装备底座族、六槽正式装备和十二套可混搭套装。"""
+"""十二个装备底座族、六槽正式装备和十八套可混搭套装。"""
 
 from __future__ import annotations
 
@@ -29,7 +29,9 @@ from ..foundation import QUALITY_IDS
 from ..combat.stats import (
     COMBAT_ACCURACY,
     COMBAT_BLOCK_CHANCE,
+    COMBAT_BLOCK_REDUCTION,
     COMBAT_CONTROL_CHANCE,
+    COMBAT_CONTROL_RESISTANCE,
     COMBAT_CRITICAL_CHANCE,
     COMBAT_CRITICAL_DAMAGE,
     COMBAT_EVASION,
@@ -147,6 +149,36 @@ def _set_bonuses(key: str) -> tuple[EquipmentSetBonus, ...]:
             _attributes((HEALTH_MAXIMUM, ModifierLayer.LOCAL_FLAT, 65)),
             _attributes((COMBAT_HEALING_RECEIVED, ModifierLayer.GLOBAL_FLAT, 0.06)),
             _trigger("low_health_guard", 2),
+        ),
+        "blood_moon": (
+            _attributes((COMBAT_CRITICAL_DAMAGE, ModifierLayer.GLOBAL_FLAT, 0.12)),
+            _attributes((COMBAT_HEALING_RATE, ModifierLayer.GLOBAL_FLAT, 0.06)),
+            _trigger("lifesteal", 2),
+        ),
+        "thunder_judgment": (
+            _attributes((COMBAT_ATTACK, ModifierLayer.LOCAL_FLAT, 7)),
+            _attributes((COMBAT_SPEED, ModifierLayer.LOCAL_FLAT, 6)),
+            _trigger("critical_stun", 2),
+        ),
+        "thorn_crown": (
+            _attributes((COMBAT_DEFENSE, ModifierLayer.LOCAL_FLAT, 8)),
+            _attributes((COMBAT_BLOCK_REDUCTION, ModifierLayer.GLOBAL_FLAT, 0.06)),
+            _trigger("thorns", 2),
+        ),
+        "spirit_tide": (
+            _attributes((SPIRIT_MAXIMUM, ModifierLayer.LOCAL_FLAT, 45)),
+            _attributes((COMBAT_HEALING_RATE, ModifierLayer.GLOBAL_FLAT, 0.05)),
+            _trigger("turn_spirit", 2),
+        ),
+        "hunters_mark": (
+            _attributes((COMBAT_ACCURACY, ModifierLayer.GLOBAL_FLAT, 0.05)),
+            _attributes((COMBAT_OUTGOING_RATE, ModifierLayer.GLOBAL_FLAT, 0.04)),
+            _trigger("hit_slow", 2),
+        ),
+        "immortal_guard": (
+            _attributes((HEALTH_MAXIMUM, ModifierLayer.LOCAL_FLAT, 74)),
+            _attributes((COMBAT_CONTROL_RESISTANCE, ModifierLayer.GLOBAL_FLAT, 0.06)),
+            _trigger("damaged_heal", 2),
         ),
     }
     try:

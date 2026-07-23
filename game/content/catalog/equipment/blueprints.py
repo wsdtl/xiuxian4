@@ -137,6 +137,12 @@ EQUIPMENT_SET_BLUEPRINTS = (
     EquipmentSetBlueprint("sky_burn"),
     EquipmentSetBlueprint("void_realm"),
     EquipmentSetBlueprint("samsara"),
+    EquipmentSetBlueprint("blood_moon"),
+    EquipmentSetBlueprint("thunder_judgment"),
+    EquipmentSetBlueprint("thorn_crown"),
+    EquipmentSetBlueprint("spirit_tide"),
+    EquipmentSetBlueprint("hunters_mark"),
+    EquipmentSetBlueprint("immortal_guard"),
 )
 
 
@@ -147,8 +153,8 @@ def _validate_blueprints() -> None:
         raise ValueError("正式装备必须覆盖六个标准槽位")
     if len(EQUIPMENT_PROPERTY_BLUEPRINTS) != 48:
         raise ValueError("正式装备必须包含四十八种随机词条")
-    if len(EQUIPMENT_SET_BLUEPRINTS) != 12:
-        raise ValueError("正式装备必须包含十二套套装")
+    if len(EQUIPMENT_SET_BLUEPRINTS) != 18:
+        raise ValueError("正式装备必须包含十八套套装")
     for values, label in (
         (EQUIPMENT_FAMILY_BLUEPRINTS, "底座族"),
         (EQUIPMENT_SLOT_BLUEPRINTS, "槽位"),

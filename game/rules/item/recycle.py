@@ -5,10 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 import json
+from types import MappingProxyType
+from typing import Mapping
 
 from game.content.catalog.item import (
     ITEM_RECYCLE_COMPONENT_ID,
-    ItemRecycleValue,
+    CurrencyRecycleYield,
+    ItemRecycleYield,
+    StackItemRecycleYield,
 )
 from game.core.gameplay import StableId
 
@@ -21,6 +25,8 @@ class TrophyRecycleQuoteLine:
     asset_id: str
     definition_id: StableId
     quantity: int
+    output_kind: str
+    output_id: StableId
     unit_amount: int
     subtotal: int
 
@@ -29,6 +35,8 @@ class TrophyRecycleQuoteLine:
             raise ValueError("战利品回收报价数量和单价必须大于 0")
         if self.subtotal != self.quantity * self.unit_amount:
             raise ValueError("战利品回收报价小计不一致")
+        if self.output_kind not in {"currency", "stack_item"}:
+            raise ValueError("战利品回收报价产出类型无效")
 
 
 @dataclass(frozen=True)
@@ -39,14 +47,35 @@ class TrophyRecycleQuote:
     inventory_revision: int
     lines: tuple[TrophyRecycleQuoteLine, ...]
     total_amount: int
+    stack_item_totals: Mapping[StableId, int]
 
     def __post_init__(self) -> None:
         if not self.id.strip() or not self.owner_id.strip():
             raise ValueError("战利品回收报价缺少身份")
-        if self.total_amount != sum(line.subtotal for line in self.lines):
-            raise ValueError("战利品回收报价总额不一致")
-        if bool(self.lines) != (self.currency_id is not None):
-            raise ValueError("空报价不能携带币种，非空报价必须携带币种")
+        currency_total = sum(
+            line.subtotal for line in self.lines if line.output_kind == "currency"
+        )
+        if self.total_amount != currency_total:
+            raise ValueError("战利品回收报价货币总额不一致")
+        currency_lines = tuple(line for line in self.lines if line.output_kind == "currency")
+        if bool(currency_lines) != (self.currency_id is not None):
+            raise ValueError("货币报价行与币种不一致")
+        if self.currency_id is not None and any(
+            line.output_id != self.currency_id for line in currency_lines
+        ):
+            raise ValueError("战利品回收报价混用了多个币种")
+        expected_stacks: dict[StableId, int] = {}
+        for line in self.lines:
+            if line.output_kind == "stack_item":
+                expected_stacks[line.output_id] = (
+                    expected_stacks.get(line.output_id, 0) + line.subtotal
+                )
+        normalized = {
+            key: value for key, value in self.stack_item_totals.items() if value > 0
+        }
+        if normalized != expected_stacks:
+            raise ValueError("战利品回收报价堆叠产出总额不一致")
+        object.__setattr__(self, "stack_item_totals", MappingProxyType(normalized))
 
 
 def quote_trophy_recycle(inventory, item_catalog, owner_id: str) -> TrophyRecycleQuote:
@@ -54,6 +83,7 @@ def quote_trophy_recycle(inventory, item_catalog, owner_id: str) -> TrophyRecycl
 
     lines: list[TrophyRecycleQuoteLine] = []
     currency_id: StableId | None = None
+    stack_item_totals: dict[StableId, int] = {}
     for stack in sorted(
         inventory.stacks.values(),
         key=lambda value: (value.definition_id, value.id),
@@ -72,26 +102,48 @@ def quote_trophy_recycle(inventory, item_catalog, owner_id: str) -> TrophyRecycl
             continue
         recycle = definition.component(
             ITEM_RECYCLE_COMPONENT_ID,
-            ItemRecycleValue,
+            ItemRecycleYield,
         )
-        if currency_id is None:
-            currency_id = recycle.currency_id
-        elif currency_id != recycle.currency_id:
-            raise ValueError("一次战利品回收不能混用多个币种")
+        if isinstance(recycle, CurrencyRecycleYield):
+            if currency_id is None:
+                currency_id = recycle.currency_id
+            elif currency_id != recycle.currency_id:
+                raise ValueError("一次战利品回收不能混用多个币种")
+            output_kind = "currency"
+            output_id = recycle.currency_id
+            unit_amount = recycle.unit_amount
+        elif isinstance(recycle, StackItemRecycleYield):
+            output_kind = "stack_item"
+            output_id = recycle.definition_id
+            unit_amount = recycle.unit_quantity
+            stack_item_totals[output_id] = (
+                stack_item_totals.get(output_id, 0) + quantity * unit_amount
+            )
+        else:
+            raise TypeError(f"未知战利品回收产出：{type(recycle).__name__}")
         lines.append(
             TrophyRecycleQuoteLine(
                 stack.id,
                 definition.id,
                 quantity,
-                recycle.unit_amount,
-                quantity * recycle.unit_amount,
+                output_kind,
+                output_id,
+                unit_amount,
+                quantity * unit_amount,
             )
         )
     payload = {
         "owner_id": owner_id,
         "inventory_revision": inventory.revision,
         "lines": [
-            (line.asset_id, line.definition_id, line.quantity, line.unit_amount)
+            (
+                line.asset_id,
+                line.definition_id,
+                line.quantity,
+                line.output_kind,
+                line.output_id,
+                line.unit_amount,
+            )
             for line in lines
         ],
     }
@@ -104,7 +156,8 @@ def quote_trophy_recycle(inventory, item_catalog, owner_id: str) -> TrophyRecycl
         currency_id,
         inventory.revision,
         tuple(lines),
-        sum(line.subtotal for line in lines),
+        sum(line.subtotal for line in lines if line.output_kind == "currency"),
+        stack_item_totals,
     )
 
 

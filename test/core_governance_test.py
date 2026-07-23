@@ -234,6 +234,7 @@ def _assert_item_use_components_are_wired() -> None:
             "game/cmd/物品/service.py",
             "game/features/companion/service.py",
             "game/features/dimension_shift/service.py",
+            "game/features/equipment_blueprint/service.py",
         )
     }
     route_markers = {
@@ -268,6 +269,10 @@ def _assert_item_use_components_are_wired() -> None:
         "item_component.use_companion_sanctuary": (
             "game/features/companion/service.py",
             "COMPANION_SANCTUARY_ITEM_COMPONENT_ID",
+        ),
+        "item_component.use_equipment_set_blueprint": (
+            "game/features/equipment_blueprint/service.py",
+            "ConsumeStack(blueprint.id, 1)",
         ),
     }
     content = build_official_content()

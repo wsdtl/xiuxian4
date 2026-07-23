@@ -24,8 +24,18 @@ def exploration_battle_report_id(session_id: str) -> str:
 class ExplorationSettlementObserver(Protocol):
     """旁路系统可实现的探险胜利观察端口。"""
 
-    def observe_victory_in_uow(self, uow, fact: ExplorationVictoryFact) -> object:
+    def observe_victory_in_uow(
+        self,
+        uow,
+        fact: ExplorationVictoryFact,
+    ) -> "ExplorationSettlementObservation":
         ...
+
+
+class ExplorationSettlementObservation(Protocol):
+    """旁路结算可以追加到本批次展示的通用可堆叠物品。"""
+
+    reward_items: tuple[tuple[str, int], ...]
 
 
 @dataclass(frozen=True)
@@ -53,6 +63,7 @@ class ExplorationStorageKinds:
 
 __all__ = [
     "ExplorationOperationResult",
+    "ExplorationSettlementObservation",
     "ExplorationSettlementObserver",
     "ExplorationStorageKinds",
     "ExplorationVictoryFact",

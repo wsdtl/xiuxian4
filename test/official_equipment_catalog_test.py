@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.content.catalog import BASIC_ATTACK_ABILITY_ID  # noqa: E402
+from game.content.catalog.economy import EQUIPMENT_BLUEPRINT_EXPECTED_GEAR_VALUE  # noqa: E402
 from game.content.catalog.equipment.balance import EquipmentBalanceAuditor  # noqa: E402
 from game.content.catalog.equipment.blueprints import (  # noqa: E402
     EQUIPMENT_FAMILY_BLUEPRINTS,
@@ -27,6 +28,7 @@ from game.content.catalog.equipment.definitions import (  # noqa: E402
     equipment_item_id,
     equipment_set_id,
 )
+from game.content.catalog.item import equipment_set_blueprint_item_id  # noqa: E402
 from game.content.catalog.equipment.properties import (  # noqa: E402
     EQUIPMENT_GENERATION_PROFILE_ID,
     EQUIPMENT_SET_MARK_CHANCE,
@@ -40,6 +42,7 @@ from game.content.official import (  # noqa: E402
     select_world_skin,
 )
 from game.content.world_skins import MAGIC_SKIN_ID  # noqa: E402
+from game.cmd.战报.site import _content_name  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
     ActiveEffect,
     AbilityUse,
@@ -75,13 +78,13 @@ def _assert_catalog_shape(catalog) -> None:
     assert len(EQUIPMENT_FAMILY_BLUEPRINTS) == 12
     assert len(EQUIPMENT_SLOT_BLUEPRINTS) == 6
     assert len(EQUIPMENT_PROPERTY_BLUEPRINTS) == 48
-    assert len(EQUIPMENT_SET_BLUEPRINTS) == 12
+    assert len(EQUIPMENT_SET_BLUEPRINTS) == 18
     assert len(EQUIPMENT_CATALOG_CONTENT.items) == 72
     assert len(EQUIPMENT_CATALOG_CONTENT.equipment) == 72
     assert len(EQUIPMENT_PROPERTY_CONTENT.properties) == 48
     assert len(catalog.equipment.families.ids()) == 12
     assert len(catalog.equipment.definitions.ids()) == 72
-    assert len(catalog.equipment.sets.ids()) == 12
+    assert len(catalog.equipment.sets.ids()) == 18
     assert {
         value.id for value in EQUIPMENT_PROPERTY_CONTENT.properties
     } == {
@@ -104,15 +107,46 @@ def _assert_world_skin_projection(catalog) -> None:
     stellar = select_world_skin(catalog, "skin.stellar_ring")
     definition_id = equipment_definition_id("mystic_sky", "head")
     item_id = equipment_item_id("mystic_sky", "head")
-    assert cultivation.skin.version == 26
-    assert magic.skin.version == 25
-    assert stellar.skin.version == 3
+    assert cultivation.skin.version == 27
+    assert magic.skin.version == 26
+    assert stellar.skin.version == 4
     assert cultivation.projector.name(definition_id) == "昆仑冠"
     assert cultivation.projector.name(item_id) == "昆仑冠器胚"
     assert magic.projector.name(definition_id) == "奥林匹斯头冠"
     assert stellar.projector.name(definition_id) == "欧几里得头冠"
     assert cultivation.projector.name(equipment_set_id("army_breaker")) == "七杀破军套"
     assert cultivation.projector.name(equipment_property_id("critical_echo")) == "暴烈回响"
+    for view in (cultivation, magic, stellar):
+        set_names = []
+        blueprint_names = []
+        definition_names = []
+        for blueprint in EQUIPMENT_SET_BLUEPRINTS:
+            set_id = equipment_set_id(blueprint.key)
+            set_name = view.projector.name(set_id)
+            set_names.append(set_name)
+            blueprint_name = view.projector.name(
+                equipment_set_blueprint_item_id(blueprint.key)
+            )
+            blueprint_names.append(blueprint_name)
+            assert set_name in blueprint_name
+            for pieces in (2, 3, 4):
+                bonus_name = _content_name(
+                    view,
+                    f"{set_id}.bonus.pieces_{pieces}",
+                    "未命名效果",
+                )
+                assert set_name in bonus_name
+                assert f"{pieces}件" in bonus_name
+        for family in EQUIPMENT_FAMILY_BLUEPRINTS:
+            for slot in EQUIPMENT_SLOT_BLUEPRINTS:
+                definition_names.append(
+                    view.projector.name(
+                        equipment_definition_id(family.key, slot.key)
+                    )
+                )
+        assert len(set_names) == len(set(set_names)) == 18
+        assert len(blueprint_names) == len(set(blueprint_names)) == 18
+        assert len(definition_names) == len(set(definition_names)) == 72
 
 
 def _assert_instance_generation(catalog) -> None:
@@ -427,6 +461,7 @@ def _assert_balance(catalog) -> None:
     assert report.samples == 9216
     assert not report.missing_property_ids
     assert report.mean_attempts == 1
+    assert abs(report.mean_value * 100 - EQUIPMENT_BLUEPRINT_EXPECTED_GEAR_VALUE) < 100
     assert elapsed < 20
     assert 0.40 <= report.quality_ratio("quality.common") <= 0.52
     assert 0.24 <= report.quality_ratio("quality.fine") <= 0.36

@@ -13,6 +13,8 @@ from .policy import *
 from .policy import __all__ as _policy_exports
 from .market_items import MARKET_ITEM_POLICIES, MarketItemPolicy
 from .audit import MarketPriceAuditReport, audit_market_prices
+from .exchange import *
+from .exchange import __all__ as _exchange_exports
 
 
 __all__ = [
@@ -27,4 +29,5 @@ __all__ = [
     "MarketItemPolicy",
     "MarketPriceAuditReport",
     "audit_market_prices",
+    *_exchange_exports,
 ]

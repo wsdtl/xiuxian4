@@ -6,6 +6,7 @@ from .models import (
     MAX_DISCOVERABLE_EXPLORATIONS,
     MAX_EXPLORATION_BATCHES,
     ExplorationOperationResult,
+    ExplorationSettlementObservation,
     ExplorationSettlementObserver,
     ExplorationStorageKinds,
     ExplorationVictoryFact,
@@ -17,6 +18,7 @@ from .service import ExplorationFeature
 __all__ = [
     "ExplorationFeature",
     "ExplorationOperationResult",
+    "ExplorationSettlementObservation",
     "ExplorationSettlementObserver",
     "ExplorationStorageKinds",
     "ExplorationVictoryFact",

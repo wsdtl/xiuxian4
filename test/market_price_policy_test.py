@@ -19,8 +19,14 @@ from game.rules.economy import quote_market_tax  # noqa: E402
 
 def main() -> None:
     content = build_official_content()
-    report = audit_market_prices(content.catalog.items, DRAW_CATALOG_CONTENT)
-    assert report.policy_count == 16
+    report = audit_market_prices(
+        content.catalog.items,
+        DRAW_CATALOG_CONTENT,
+        content.catalog.equipment,
+    )
+    assert report.policy_count == 35
+    assert report.blueprint_count == 18
+    assert report.party_trophy_conversion_count == 30
     assert 149 < report.draw_base_expected_value < 150
     assert report.draw_ticket_reference_price == 200
     assert "item.special.equipment_set_guarantee" not in content.catalog.items.definitions.ids()

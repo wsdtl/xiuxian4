@@ -31,7 +31,13 @@ from ..world import (
     THUNDER_MARSH_STEPPE_ID,
     VERDANT_WILDERNESS_ID,
 )
-from .trade import ITEM_RECYCLE_COMPONENT_ID, ItemRecycleValue
+from .exchange import EXCHANGE_MATERIAL_ITEM_ID
+from .trade import (
+    ITEM_RECYCLE_COMPONENT_ID,
+    CurrencyRecycleYield,
+    ItemRecycleYield,
+    StackItemRecycleYield,
+)
 
 
 TROPHY_STACK_LIMIT = 999
@@ -71,6 +77,7 @@ _REGION_CODES = (
 
 _REGULAR_ENEMY_PRICE_BANDS = (24, 40, 68, 112, 180, 280, 430, 660, 980, 1450)
 _BOSS_PRICE_BANDS = (90, 150, 250, 420, 680, 1050, 1600, 2400, 3500, 5000)
+PARTY_BOSS_EXCHANGE_YIELDS = (2, 3, 5, 8, 14, 21, 32, 48, 70, 100)
 _WORLD_CURIO_KEYS = (
     "world_scripture",
     "fate_fragment",
@@ -101,7 +108,13 @@ _WORLD_CURIO_PRICES = (
 )
 
 
-def _item(definition_id: str, unit_amount: int, *category_tags: str) -> ItemDefinition:
+def _item(
+    definition_id: str,
+    recycle_yield: ItemRecycleYield | int,
+    *category_tags: str,
+) -> ItemDefinition:
+    if isinstance(recycle_yield, int):
+        recycle_yield = CurrencyRecycleYield(PRIMARY_CURRENCY_ID, recycle_yield)
     return ItemDefinition(
         definition_id,
         ItemAssetKind.STACK,
@@ -114,7 +127,7 @@ def _item(definition_id: str, unit_amount: int, *category_tags: str) -> ItemDefi
         TROPHY_STACK_LIMIT,
         {
             ITEM_STORAGE_COMPONENT_ID: ItemStorageComponent(TROPHY_UNIT_SPACE),
-            ITEM_RECYCLE_COMPONENT_ID: ItemRecycleValue(PRIMARY_CURRENCY_ID, unit_amount),
+            ITEM_RECYCLE_COMPONENT_ID: recycle_yield,
         },
     )
 
@@ -172,7 +185,10 @@ BOSS_TROPHY_ITEM_IDS = MappingProxyType(
 PARTY_BOSS_TROPHY_ITEMS = tuple(
     _item(
         f"item.trophy.party_boss.{enemy.id.removeprefix('enemy.boss.party.')}",
-        _BOSS_PRICE_BANDS[index % len(_BOSS_PRICE_BANDS)],
+        StackItemRecycleYield(
+            EXCHANGE_MATERIAL_ITEM_ID,
+            PARTY_BOSS_EXCHANGE_YIELDS[index % len(PARTY_BOSS_EXCHANGE_YIELDS)],
+        ),
         "trophy.party_boss",
     )
     for index, enemy in enumerate(PARTY_BOSS_ENEMIES)
@@ -213,6 +229,14 @@ def _validate() -> None:
         raise ValueError("战利品稳定 ID 不能重复")
     if set(REGION_TROPHY_ITEM_IDS) != {value[0] for value in _REGION_CODES}:
         raise ValueError("区域战利品必须完整覆盖全部探险地点")
+    party_ids = {item.id for item in PARTY_BOSS_TROPHY_ITEMS}
+    for item in TROPHY_ITEMS:
+        output = item.component(ITEM_RECYCLE_COMPONENT_ID, ItemRecycleYield)
+        is_material = isinstance(output, StackItemRecycleYield)
+        if is_material != (item.id in party_ids):
+            raise ValueError("只有组队首领战利品可以回收为定相尘")
+        if is_material and output.definition_id != EXCHANGE_MATERIAL_ITEM_ID:
+            raise ValueError("组队首领战利品必须统一回收为定相尘")
 
 
 _validate()
@@ -223,6 +247,7 @@ __all__ = [
     "BOSS_TROPHY_ITEMS",
     "PARTY_BOSS_TROPHY_ITEM_IDS",
     "PARTY_BOSS_TROPHY_ITEMS",
+    "PARTY_BOSS_EXCHANGE_YIELDS",
     "REGION_TROPHY_ITEM_IDS",
     "REGION_TROPHY_ITEMS",
     "REGION_TROPHY_WEIGHTS",

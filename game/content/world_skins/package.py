@@ -20,11 +20,11 @@ OFFICIAL_SKIN_IDS = (CULTIVATION_SKIN_ID, MAGIC_SKIN_ID, STELLAR_RING_SKIN_ID)
 WORLD_SKIN_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=WORLD_SKIN_PACKAGE_ID,
-        version=ContentVersion(3, 20, 0),
+        version=ContentVersion(3, 21, 0),
         dependencies=(
             PackageRequirement(
                 package_id=CATALOG_PACKAGE_ID,
-                minimum_version=ContentVersion(3, 22, 0),
+                minimum_version=ContentVersion(3, 26, 0),
                 maximum_exclusive=ContentVersion(4, 0, 0),
             ),
         ),

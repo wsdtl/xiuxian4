@@ -6,6 +6,17 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
 
+from game.content.catalog.equipment.blueprints import EQUIPMENT_SET_BLUEPRINTS
+from game.content.catalog.item.exchange import (
+    EXCHANGE_MATERIAL_ITEM_ID,
+    equipment_set_blueprint_item_id,
+)
+
+from .exchange import (
+    EQUIPMENT_SET_BLUEPRINT_PRICE,
+    EXCHANGE_MATERIAL_REFERENCE_VALUE,
+)
+
 
 @dataclass(frozen=True)
 class MarketItemPolicy:
@@ -78,6 +89,21 @@ _POLICIES = (
     _policy("item.inscription.feather", "inscription", 5_000, _RARE_RANGE, maximum_quantity=1),
     _policy("item.draw.ticket", "draw", 200, _ORDINARY_RANGE),
     _policy("item.breakthrough_token.realm", "breakthrough", 6_000, _RARE_RANGE),
+    _policy(
+        EXCHANGE_MATERIAL_ITEM_ID,
+        "exchange_material",
+        EXCHANGE_MATERIAL_REFERENCE_VALUE,
+        _ORDINARY_RANGE,
+    ),
+    *(
+        _policy(
+            equipment_set_blueprint_item_id(blueprint.key),
+            "blueprint",
+            EQUIPMENT_SET_BLUEPRINT_PRICE * EXCHANGE_MATERIAL_REFERENCE_VALUE,
+            _RARE_RANGE,
+        )
+        for blueprint in EQUIPMENT_SET_BLUEPRINTS
+    ),
 )
 
 MARKET_ITEM_POLICIES: Mapping[str, MarketItemPolicy] = MappingProxyType(

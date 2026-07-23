@@ -390,6 +390,12 @@ def _event_text(event: StoredBattleEvent, labels: dict[str, str], view) -> str:
 
 
 def _content_name(view, content_id: str, fallback: str) -> str:
+    set_id, marker, pieces = content_id.rpartition(".bonus.pieces_")
+    if marker and pieces in {"2", "3", "4"}:
+        try:
+            return f"{view.projector.name(set_id)}·{pieces}件效果"
+        except KeyError:
+            pass
     try:
         return view.projector.name(content_id)
     except KeyError:

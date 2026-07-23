@@ -11,6 +11,7 @@ from game.rules.world_progress import WorldProgressState
 @dataclass(frozen=True)
 class WorldProgressStorageKinds:
     progress: str
+    inventory: str
     ledger: str
     reward_claim: str
 
@@ -37,6 +38,7 @@ class WorldProgressView:
     character_id: str
     world_id: StableId
     regions: tuple[WorldProgressRegionView, ...]
+    world_completion_reward_claimed: bool = False
 
     @property
     def points(self) -> int:
@@ -68,6 +70,8 @@ class WorldProgressAdvanceResult:
     added_points: int = 0
     reached_milestones: tuple[int, ...] = ()
     reward_amount: int = 0
+    reward_items: tuple[tuple[StableId, int], ...] = ()
+    world_completed: bool = False
 
 
 @dataclass(frozen=True)

@@ -192,18 +192,21 @@ async def recycle_trophies(current: CurrentCharacterResult) -> None:
         for index, line in enumerate(result.quote.lines[:12], start=1):
             builder.item(
                 index,
-                f"{view.projector.name(line.definition_id)} x{line.quantity} | {line.subtotal}",
+                f"{view.projector.name(line.definition_id)} x{line.quantity} | "
+                f"{line.subtotal} {view.projector.name(line.output_id)}",
             )
         remaining = len(result.quote.lines) - 12
         if remaining > 0:
             builder.note(f"另有 {remaining} 类战利品已一并回收")
-        await send_game_reply(
+        if result.quote.total_amount and result.quote.currency_id is not None:
             builder.field(
-                "收入",
+                "货币",
                 f"{result.quote.total_amount} {view.projector.name(result.quote.currency_id)}",
             )
-            .note("按名录固定价结算，不动用归航库，也不收交易税。")
-            .build()
+        for definition_id, quantity in result.quote.stack_item_totals.items():
+            builder.field("材料", f"{quantity} {view.projector.name(definition_id)}")
+        await send_game_reply(
+            builder.note("按名录类型化产出结算，不动用归航库，也不收交易税。").build()
         )
     except Exception as exc:
         await _failed("回收战利品失败", character.id, exc)

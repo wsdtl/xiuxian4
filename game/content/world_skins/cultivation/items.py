@@ -1,6 +1,7 @@
 """太玄界的消耗品展示。"""
 
 from game.core.gameplay import SkinEntry
+from game.content.covenant import COVENANT_ITEM_ENTRIES
 
 from ...catalog import (
     BREAKTHROUGH_TOKEN_ITEM_ID,
@@ -29,6 +30,7 @@ from ...catalog import (
 
 
 CULTIVATION_ITEM_ENTRIES = {
+    **COVENANT_ITEM_ENTRIES,
     BREAKTHROUGH_TOKEN_ITEM_ID: SkinEntry(
         name="问道玉契",
         description="承载破境所需的一缕道机；达到境界关隘后由突破流程自动消耗。",

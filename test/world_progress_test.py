@@ -16,12 +16,19 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.app import build_game_services, install_game_services, restore_game_services  # noqa: E402
-from game.content import MAGIC_WORLD_ID, TAIXUAN_WORLD_ID  # noqa: E402
+from game.content import (  # noqa: E402
+    DIMENSION_SHIFT_ITEM_ID,
+    DRAW_TICKET_ITEM_ID,
+    MAGIC_WORLD_ID,
+    STELLAR_RING_WORLD_ID,
+    TAIXUAN_WORLD_ID,
+)
 from game.content.catalog.world import GREEN_CLOUD_PLAIN_ID  # noqa: E402
-from game.core.gameplay import LedgerAccountKind, LedgerState  # noqa: E402
+from game.core.gameplay import InventoryState, LedgerAccountKind, LedgerState  # noqa: E402
 from game.core.persistence import (  # noqa: E402
     CHARACTER_AGGREGATE,
     FactJournalService,
+    INVENTORY_AGGREGATE,
     LEDGER_AGGREGATE,
     ProjectionStore,
 )
@@ -32,6 +39,11 @@ from game.features.world_progress.service import (  # noqa: E402
     WORLD_PROGRESS_PROJECTOR_ID,
 )
 from game.rules.character import PRIMARY_LEDGER_ID  # noqa: E402
+from game.rules.world_progress import (  # noqa: E402
+    WORLD_PROGRESS_AGGREGATE,
+    WorldProgressState,
+    world_progress_state_id,
+)
 from game.cmd import 行纪 as progress_component  # noqa: E402,F401
 from game.cmd import 角色 as character_component  # noqa: E402,F401
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
@@ -150,8 +162,11 @@ async def _main() -> None:
             overview_reply = await _dispatch("行纪", "progress-view")
             assert world_name in _content(overview_reply)
             assert "总进度" in _content(overview_reply)
+            assert "完成全部区域后获得" in _content(overview_reply)
             detail_reply = await _dispatch(f"行纪 {location_name}", "progress-detail")
             assert "25/100" in _content(detail_reply) and "胜利" in _content(detail_reply)
+            assert "25 灵石" in _content(detail_reply)
+            assert "流光签 x1" in _content(detail_reply)
             rank_reply = await _dispatch("行纪排行", "progress-rank")
             assert "诸界行纪排行" in _content(rank_reply)
             world_rank_reply = await _dispatch(
@@ -159,17 +174,192 @@ async def _main() -> None:
                 "progress-world-rank",
             )
             assert f"{world_name}行纪排行" in _content(world_rank_reply)
+
+            await _assert_world_completion_rewards(services, character)
         finally:
             restore_game_services(previous)
 
 
-def _fact(character_id, character_name, world_id, kind, index):
+async def _assert_world_completion_rewards(services, character) -> None:
+    bindings = services.content.worlds.bindings_for_world(
+        STELLAR_RING_WORLD_ID,
+        function_id="location.function.exploration",
+    )
+    region_ids = tuple(value.content_ref for value in bindings)
+    assert len(region_ids) == 13
+    final_region_id = region_ids[-1]
+    completed_at = STARTED_AT + timedelta(days=3)
+    with services.database.unit_of_work() as uow:
+        for region_id in region_ids[:-1]:
+            state = WorldProgressState(
+                character.id,
+                character.name,
+                STELLAR_RING_WORLD_ID,
+                region_id,
+                points=100,
+                victories=20,
+                claimed_milestones=(25, 50, 75, 100),
+                started_at=completed_at,
+                reached_at=completed_at,
+                completed_at=completed_at,
+                revision=1,
+            )
+            services.world_progress.snapshots.insert(
+                uow,
+                WORLD_PROGRESS_AGGREGATE,
+                world_progress_state_id(character.id, STELLAR_RING_WORLD_ID, region_id),
+                state,
+                completed_at,
+            )
+        state = WorldProgressState(
+            character.id,
+            character.name,
+            STELLAR_RING_WORLD_ID,
+            final_region_id,
+            points=95,
+            victories=19,
+            claimed_milestones=(25, 50, 75),
+            started_at=completed_at,
+            reached_at=completed_at,
+            revision=1,
+        )
+        services.world_progress.snapshots.insert(
+            uow,
+            WORLD_PROGRESS_AGGREGATE,
+            world_progress_state_id(character.id, STELLAR_RING_WORLD_ID, final_region_id),
+            state,
+            completed_at,
+        )
+        uow.commit()
+
+    before_balance = _balance(services, character.id)
+    before_inventory = _inventory(services, character.id)
+    fact = _fact(
+        character.id,
+        character.name,
+        STELLAR_RING_WORLD_ID,
+        "boss",
+        900,
+        region_id=final_region_id,
+    )
+    with services.database.unit_of_work() as uow:
+        _publish_fact(uow, services, fact)
+        result = services.world_progress.observe_victory_in_uow(uow, fact)
+        uow.commit()
+    assert result.reached_milestones == (100,)
+    assert result.reward_amount == 200
+    assert result.reward_items == (
+        (DRAW_TICKET_ITEM_ID, 1),
+        (DIMENSION_SHIFT_ITEM_ID, 1),
+    )
+    assert result.world_completed is True
+    assert _balance(services, character.id) == before_balance + 200
+    after_inventory = _inventory(services, character.id)
+    assert _stack_quantity(after_inventory, DRAW_TICKET_ITEM_ID) == (
+        _stack_quantity(before_inventory, DRAW_TICKET_ITEM_ID) + 1
+    )
+    assert _stack_quantity(after_inventory, DIMENSION_SHIFT_ITEM_ID) == (
+        _stack_quantity(before_inventory, DIMENSION_SHIFT_ITEM_ID) + 1
+    )
+
+    with services.database.unit_of_work() as uow:
+        replayed = services.world_progress.observe_victory_in_uow(uow, fact)
+        uow.commit()
+    assert replayed.status == "replayed"
+    assert _balance(services, character.id) == before_balance + 200
+    assert _stack_quantity(_inventory(services, character.id), DRAW_TICKET_ITEM_ID) == (
+        _stack_quantity(before_inventory, DRAW_TICKET_ITEM_ID) + 1
+    )
+    stellar_name = services.world_views.require(STELLAR_RING_WORLD_ID).skin.name
+    reply = await _dispatch(f"行纪 {stellar_name}", "progress-stellar-complete")
+    assert "世界圆满" in _content(reply) and "已获得" in _content(reply)
+    assert "界门相位核 x1" in _content(reply)
+    _assert_world_completion_backfill(services, character)
+
+
+def _assert_world_completion_backfill(services, character) -> None:
+    bindings = services.content.worlds.bindings_for_world(
+        MAGIC_WORLD_ID,
+        function_id="location.function.exploration",
+    )
+    region_ids = tuple(value.content_ref for value in bindings)
+    completed_at = STARTED_AT + timedelta(days=4)
+    with services.database.unit_of_work() as uow:
+        for region_id in region_ids:
+            aggregate_id = world_progress_state_id(
+                character.id,
+                MAGIC_WORLD_ID,
+                region_id,
+            )
+            previous = services.world_progress.snapshots.load(
+                uow,
+                WORLD_PROGRESS_AGGREGATE,
+                aggregate_id,
+                WorldProgressState,
+            )
+            state = WorldProgressState(
+                character.id,
+                character.name,
+                MAGIC_WORLD_ID,
+                region_id,
+                points=100,
+                victories=20,
+                claimed_milestones=(25, 50, 75, 100),
+                started_at=completed_at,
+                reached_at=completed_at,
+                completed_at=completed_at,
+                revision=previous.revision + 1 if previous else 1,
+            )
+            if previous is None:
+                services.world_progress.snapshots.insert(
+                    uow,
+                    WORLD_PROGRESS_AGGREGATE,
+                    aggregate_id,
+                    state,
+                    completed_at,
+                )
+            else:
+                services.world_progress.snapshots.update(
+                    uow,
+                    WORLD_PROGRESS_AGGREGATE,
+                    aggregate_id,
+                    previous,
+                    state,
+                    completed_at,
+                )
+        uow.commit()
+
+    before = _stack_quantity(_inventory(services, character.id), DIMENSION_SHIFT_ITEM_ID)
+    pending = services.world_progress.view(character.id, MAGIC_WORLD_ID)
+    assert pending.completed_regions == len(region_ids)
+    assert pending.world_completion_reward_claimed is False
+    for index, expected_items in ((901, ((DIMENSION_SHIFT_ITEM_ID, 1),)), (902, ())):
+        fact = _fact(
+            character.id,
+            character.name,
+            MAGIC_WORLD_ID,
+            "boss",
+            index,
+            region_id=region_ids[0],
+        )
+        with services.database.unit_of_work() as uow:
+            _publish_fact(uow, services, fact)
+            result = services.world_progress.observe_victory_in_uow(uow, fact)
+            uow.commit()
+        assert result.status == "completed"
+        assert result.reward_items == expected_items
+    claimed = services.world_progress.view(character.id, MAGIC_WORLD_ID)
+    assert claimed.world_completion_reward_claimed is True
+    assert _stack_quantity(_inventory(services, character.id), DIMENSION_SHIFT_ITEM_ID) == before + 1
+
+
+def _fact(character_id, character_name, world_id, kind, index, *, region_id=None):
     return ExplorationVictoryFact(
         f"test-victory-{world_id}-{index}",
         character_id,
         character_name,
         world_id,
-        "exploration.region.r1",
+        region_id or "exploration.region.r1",
         kind,
         STARTED_AT + timedelta(minutes=index * 10),
     )
@@ -219,6 +409,24 @@ def _balance(services, character_id: str) -> int:
         for account in ledger.accounts.values()
         if account.kind is LedgerAccountKind.STANDARD
         and account.owner_id == character_id
+    )
+
+
+def _inventory(services, character_id: str) -> InventoryState:
+    with services.database.unit_of_work(write=False) as uow:
+        return services.world_progress.snapshots.require(
+            uow,
+            INVENTORY_AGGREGATE,
+            character_id,
+            InventoryState,
+        )
+
+
+def _stack_quantity(inventory: InventoryState, definition_id: str) -> int:
+    return sum(
+        value.quantity
+        for value in inventory.stacks.values()
+        if value.definition_id == definition_id
     )
 
 

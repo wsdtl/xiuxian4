@@ -43,7 +43,7 @@ async def recycle_batch(message: str = "", overview=Depends(current_character_ov
         category="资产",
         summary="一次出售背包中的全部战利品",
         usage=("回收战利品",),
-        side_effect="直接注销全部可回收战利品并按固定价格结算",
+        side_effect="直接注销全部可回收战利品并按类型化名录产出结算",
         order=140,
     ),
 )

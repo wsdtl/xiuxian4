@@ -144,7 +144,7 @@ def assemble_official_catalog() -> ContentRuntime:
     """装配全部官方内容；应用组合根应在启动时只调用一次。"""
 
     runtime = ContentAssembler().assemble(OFFICIAL_PACKAGES)
-    audit_market_prices(runtime.items, DRAW_CATALOG_CONTENT)
+    audit_market_prices(runtime.items, DRAW_CATALOG_CONTENT, runtime.equipment)
     return runtime
 
 

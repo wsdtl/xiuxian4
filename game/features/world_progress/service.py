@@ -9,6 +9,7 @@ from game.content.catalog import PRIMARY_CURRENCY_ID
 from game.content.catalog.world_progress import WORLD_PROGRESS_DEFINITION
 from game.core.gameplay import (
     CurrencyReward,
+    InventoryState,
     LedgerAccountKind,
     LedgerState,
     RankingCandidate,
@@ -20,6 +21,7 @@ from game.core.gameplay import (
     RuleContext,
     Ruleset,
     SeededRandomSource,
+    StackItemReward,
 )
 from game.rules.character import PRIMARY_ISSUER_ACCOUNT_ID, PRIMARY_LEDGER_ID
 from game.rules.exploration import EXPLORATION_VICTORY_FACT_KIND, ExplorationVictoryFact
@@ -107,7 +109,30 @@ class WorldProgressFeature:
             logical_time=fact.resolved_at,
         )
         if advance.added_points == 0:
-            return WorldProgressAdvanceResult("completed", previous)
+            world_completed = self._world_completed_in_uow(uow, previous)
+            world_reward_items: tuple[tuple[str, int], ...] = ()
+            world_reward_granted = False
+            if world_completed:
+                _, items, replayed = self._settle_rewards(
+                    uow,
+                    fact,
+                    (),
+                    world_completed=True,
+                    settlement_id=_world_completion_settlement_id(
+                        fact.character_id,
+                        fact.world_id,
+                    ),
+                    source_id=f"{fact.character_id}:{fact.world_id}",
+                )
+                if not replayed:
+                    world_reward_items = items
+                    world_reward_granted = True
+            return WorldProgressAdvanceResult(
+                "completed",
+                previous,
+                reward_items=world_reward_items,
+                world_completed=world_reward_granted,
+            )
         if previous.revision == 0 and previous.points == 0:
             self.snapshots.insert(
                 uow,
@@ -126,11 +151,36 @@ class WorldProgressFeature:
                 fact.resolved_at,
             )
 
-        reward_amount = self._settle_milestones(
+        world_completed = (
+            previous.completed_at is None
+            and advance.state.completed_at is not None
+            and self._world_completed_in_uow(uow, advance.state)
+        )
+        reward_amount, milestone_items, _ = self._settle_rewards(
             uow,
             fact,
             advance.reached_milestones,
+            world_completed=False,
         )
+        world_reward_items: tuple[tuple[str, int], ...] = ()
+        if world_completed:
+            _, world_reward_items, replayed = self._settle_rewards(
+                uow,
+                fact,
+                (),
+                world_completed=True,
+                settlement_id=_world_completion_settlement_id(
+                    fact.character_id,
+                    fact.world_id,
+                ),
+                source_id=f"{fact.character_id}:{fact.world_id}",
+            )
+            if replayed:
+                world_reward_items = ()
+        combined_items: dict[str, int] = {}
+        for definition_id, quantity in (*milestone_items, *world_reward_items):
+            combined_items[definition_id] = combined_items.get(definition_id, 0) + quantity
+        reward_items = tuple(sorted(combined_items.items()))
         timestamp = fact.resolved_at.isoformat()
         uow.insert_transaction(
             transaction_id,
@@ -146,6 +196,8 @@ class WorldProgressFeature:
             advance.added_points,
             advance.reached_milestones,
             reward_amount,
+            reward_items,
+            world_completed,
         )
 
     def view(self, character_id: str, world_id: str) -> WorldProgressView:
@@ -172,6 +224,12 @@ class WorldProgressFeature:
                 )
                 for region in regions
             )
+            claim = self.snapshots.require(
+                uow,
+                self.storage.reward_claim,
+                character_id,
+                RewardClaimState,
+            )
         maximum = WORLD_PROGRESS_DEFINITION.maximum_points
         return WorldProgressView(
             character_id,
@@ -186,6 +244,7 @@ class WorldProgressFeature:
                 )
                 for region, state in zip(regions, values)
             ),
+            _world_completion_settlement_id(character_id, world_id) in claim.records,
         )
 
     def ranking_view(
@@ -308,14 +367,38 @@ class WorldProgressFeature:
             uow.commit()
         return len(grouped)
 
-    def _settle_milestones(self, uow, fact, milestones: tuple[int, ...]) -> int:
-        if not milestones:
-            return 0
+    def _settle_rewards(
+        self,
+        uow,
+        fact,
+        milestones: tuple[int, ...],
+        *,
+        world_completed: bool,
+        settlement_id: str | None = None,
+        source_id: str | None = None,
+    ) -> tuple[int, tuple[tuple[str, int], ...], bool]:
         amount = sum(
             milestone.currency_amount
             for milestone in WORLD_PROGRESS_DEFINITION.milestones
             if milestone.percent in milestones
         )
+        item_quantities: dict[str, int] = {}
+        for milestone in WORLD_PROGRESS_DEFINITION.milestones:
+            if milestone.percent not in milestones:
+                continue
+            for reward in milestone.item_rewards:
+                item_quantities[reward.definition_id] = (
+                    item_quantities.get(reward.definition_id, 0) + reward.quantity
+                )
+        if world_completed:
+            for reward in WORLD_PROGRESS_DEFINITION.world_completion_rewards:
+                item_quantities[reward.definition_id] = (
+                    item_quantities.get(reward.definition_id, 0) + reward.quantity
+                )
+        reward_items = tuple(sorted(item_quantities.items()))
+        if amount == 0 and not reward_items:
+            return 0, (), False
+
         ledger = self.snapshots.require(
             uow,
             self.storage.ledger,
@@ -328,26 +411,74 @@ class WorldProgressFeature:
             fact.character_id,
             RewardClaimState,
         )
-        wallet = _wallet(ledger, fact.character_id)
-        issuer = ledger.accounts[PRIMARY_ISSUER_ACCOUNT_ID]
+        rewards: list[object] = []
+        ledger_revisions = {}
+        if amount:
+            wallet = _wallet(ledger, fact.character_id)
+            issuer = ledger.accounts[PRIMARY_ISSUER_ACCOUNT_ID]
+            rewards.append(CurrencyReward(issuer.id, wallet.id, amount))
+            ledger_revisions = {
+                issuer.id: issuer.revision,
+                wallet.id: wallet.revision,
+            }
+
+        inventory_revision = None
+        if reward_items:
+            inventory = self.snapshots.require(
+                uow,
+                self.storage.inventory,
+                fact.character_id,
+                InventoryState,
+            )
+            special_container_id = next(
+                value.id
+                for value in inventory.containers.values()
+                if value.kind == "container.special"
+            )
+            for definition_id, quantity in reward_items:
+                self.content.catalog.items.require(definition_id)
+                existing = next(
+                    (
+                        value
+                        for value in inventory.stacks.values()
+                        if value.definition_id == definition_id
+                        and value.container_id == special_container_id
+                    ),
+                    None,
+                )
+                rewards.append(
+                    StackItemReward(
+                        existing.id
+                        if existing is not None
+                        else f"stack:{fact.character_id}:{definition_id}",
+                        definition_id,
+                        special_container_id,
+                        quantity,
+                        {
+                            "world_id": fact.world_id,
+                            "region_id": fact.region_id,
+                        },
+                    )
+                )
+            inventory_revision = inventory.revision
+
         settlement = RewardSettlement(
-            f"world-progress-reward:{fact.event_id}",
+            settlement_id or f"world-progress-reward:{fact.event_id}",
             fact.character_id,
             fact.character_id,
             WORLD_PROGRESS_SOURCE_KIND,
-            fact.event_id,
-            (CurrencyReward(issuer.id, wallet.id, amount),),
+            source_id or fact.event_id,
+            tuple(rewards),
             RewardExpectations(
                 claim_revision=claim.revision,
-                ledger_account_revisions={
-                    issuer.id: issuer.revision,
-                    wallet.id: wallet.revision,
-                },
+                inventory_revision=inventory_revision,
+                ledger_account_revisions=ledger_revisions,
             ),
             {
                 "world_id": fact.world_id,
                 "region_id": fact.region_id,
                 "milestones": milestones,
+                "world_completed": world_completed,
             },
         )
         outcome = self.reward_settlement.settle_in_uow(
@@ -360,7 +491,36 @@ class WorldProgressFeature:
             raise RuntimeError(
                 outcome.failure.message if outcome.failure else "行纪阶段奖励入账失败"
             )
-        return amount
+        return amount, reward_items, outcome.value.replayed
+
+    def _world_completed_in_uow(self, uow, current: WorldProgressState) -> bool:
+        region_ids = {
+            binding.content_ref
+            for binding in self.content.worlds.bindings_for_world(
+                current.world_id,
+                function_id="location.function.exploration",
+            )
+        }
+        if not region_ids or current.region_id not in region_ids:
+            return False
+        maximum = WORLD_PROGRESS_DEFINITION.maximum_points
+        for region_id in region_ids:
+            if region_id == current.region_id:
+                state = current
+            else:
+                state = self.snapshots.load(
+                    uow,
+                    self.storage.progress,
+                    world_progress_state_id(
+                        current.character_id,
+                        current.world_id,
+                        region_id,
+                    ),
+                    WorldProgressState,
+                )
+            if state is None or state.points < maximum:
+                return False
+        return True
 
     def _update_ranking_projection(self, uow, fact, state, added_points) -> None:
         self.projections.initialize_in_uow(
@@ -501,6 +661,10 @@ def _fact_fingerprint(fact: ExplorationVictoryFact) -> str:
         )
     )
     return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _world_completion_settlement_id(character_id: str, world_id: str) -> str:
+    return f"world-progress-world-completion:v1:{character_id}:{world_id}"
 
 
 __all__ = [

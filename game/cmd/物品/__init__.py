@@ -13,7 +13,7 @@ from . import service
     cmd="纳戒",
     help=HelpSpec(
         category="资产",
-        summary="查看恢复药、特殊物品和破境凭证",
+        summary="查看药品、特殊物品、兑换材料、图纸和凭证",
         usage=("纳戒", "纳戒 页码"),
         order=10,
     ),
@@ -122,7 +122,7 @@ async def unprotect_asset(
     cmd="使用",
     help=HelpSpec(
         category="资产",
-        summary="使用恢复药或特殊物品",
+        summary="使用恢复药、特殊物品或套装图纸",
         usage=("使用 物品编号", "使用 物品编号 数量"),
         side_effect="成功后会消耗对应物品",
         order=50,
@@ -132,7 +132,7 @@ async def use_item(
     message: str = "",
     current=Depends(current_character),
 ) -> None:
-    """使用当前角色持有的可消耗物品。"""
+    """使用当前角色持有的可消耗物品或套装图纸。"""
 
     await service.use_item(message, current)
 

@@ -51,6 +51,11 @@ from .enemy import (
 from .item.definitions import ITEM_DISPLAY_CONTENT_IDS, MEDICINE_ITEMS
 from .item.breakthrough import BREAKTHROUGH_TOKEN_ITEM, BREAKTHROUGH_TOKEN_ITEM_ID
 from .item.draw import DRAW_TICKET_ITEM, DRAW_TICKET_ITEM_ID
+from .item.exchange import (
+    EQUIPMENT_SET_BLUEPRINT_COMPONENT_TYPE,
+    EQUIPMENT_SET_BLUEPRINT_ITEMS,
+    EXCHANGE_MATERIAL_ITEM,
+)
 from .item.special import (
     CHARACTER_EXPERIENCE_ITEM_COMPONENT_TYPE,
     COMPANION_EXPERIENCE_ITEM_COMPONENT_TYPE,
@@ -125,6 +130,8 @@ OFFICIAL_ITEMS = (
     DRAW_TICKET_ITEM,
     BREAKTHROUGH_TOKEN_ITEM,
     *SPECIAL_ITEMS,
+    EXCHANGE_MATERIAL_ITEM,
+    *EQUIPMENT_SET_BLUEPRINT_ITEMS,
     *TROPHY_ITEMS,
     STARTER_WEAPON_ITEM,
     *GENERATED_WEAPON_ITEMS,
@@ -136,7 +143,7 @@ validate_nacre_item_categories(OFFICIAL_ITEMS)
 CATALOG_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=CATALOG_PACKAGE_ID,
-        version=ContentVersion(3, 25, 0),
+        version=ContentVersion(3, 26, 0),
     ),
     item_component_types=(
         ITEM_RECYCLE_COMPONENT_TYPE,
@@ -147,6 +154,7 @@ CATALOG_PACKAGE = ContentPackage(
         ITEM_CONTAINER_CAPACITY_COMPONENT_TYPE,
         DIMENSION_SHIFT_ITEM_COMPONENT_TYPE,
         COMPANION_SANCTUARY_ITEM_COMPONENT_TYPE,
+        EQUIPMENT_SET_BLUEPRINT_COMPONENT_TYPE,
     ),
     display_definitions=(
         *CHARACTER_REALM_CONTENT_DEFINITIONS,
@@ -250,6 +258,8 @@ CATALOG_PACKAGE = ContentPackage(
         | {DRAW_TICKET_ITEM_ID}
         | {BREAKTHROUGH_TOKEN_ITEM_ID}
         | {str(value.id) for value in SPECIAL_ITEMS}
+        | {str(EXCHANGE_MATERIAL_ITEM.id)}
+        | {str(value.id) for value in EQUIPMENT_SET_BLUEPRINT_ITEMS}
         | {REST_ACTION_ID}
         | {str(value.id) for value in COMPANION_DISPLAY_DEFINITIONS}
         | WORLD_DISPLAY_CONTENT_IDS

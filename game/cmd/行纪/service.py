@@ -7,7 +7,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from game.app import CharacterOverview, CharacterOverviewResult, current_game_services
+from game.content.catalog import PRIMARY_CURRENCY_ID
 from game.content.catalog.world import LOCATION_FUNCTION_EXPLORATION
+from game.content.catalog.world_progress import WORLD_PROGRESS_DEFINITION
 from launch import C, config, logger
 from message import DocumentMessage, M
 from message.schema import FieldSeparator
@@ -96,6 +98,17 @@ def _world_overview(progress, view) -> DocumentMessage:
             FieldSeparator(),
             f"{region.percent}%",
         )
+    world_complete = progress.completed_regions == len(progress.regions)
+    if progress.world_completion_reward_claimed:
+        world_reward_status = "已获得 " + _world_completion_reward_text(view)
+    elif world_complete:
+        world_reward_status = "待补发 " + _world_completion_reward_text(view)
+    else:
+        world_reward_status = "完成全部区域后获得 " + _world_completion_reward_text(view)
+    builder.field(
+        "世界圆满",
+        world_reward_status,
+    )
     return builder.note("发送：行纪 地点名称，可查看详细记载").build()
 
 
@@ -122,14 +135,15 @@ def _region_detail(requested: str, progress, view) -> DocumentMessage:
             ("进度", f"{region.points}/{region.maximum_points} ({region.percent}%)"),
             ("胜利", str(region.victories)),
         )
-        .field(
-            "阶段",
-            " / ".join(
-                f"{value}%{'[已得]' if value in region.claimed_milestones else ''}"
-                for value in (25, 50, 75, 100)
-            ),
-        )
     )
+    builder.section("阶段奖励", icon="inventory")
+    for milestone in WORLD_PROGRESS_DEFINITION.milestones:
+        status = "已得" if milestone.percent in region.claimed_milestones else "未得"
+        builder.line(
+            f"{milestone.percent}% [{status}]",
+            FieldSeparator(),
+            _milestone_reward_text(milestone, view),
+        )
     if next_stage is None:
         builder.note("这处区域的行纪已经写至圆满。")
     else:
@@ -174,6 +188,24 @@ def _region_name(services, view, region_id: str) -> str:
         if value.content_ref == region_id
     )
     return view.projector.name(binding.display_ref)
+
+
+def _milestone_reward_text(milestone, view) -> str:
+    values = [
+        f"{milestone.currency_amount} {view.projector.name(PRIMARY_CURRENCY_ID)}"
+    ]
+    values.extend(
+        f"{view.projector.name(reward.definition_id)} x{reward.quantity}"
+        for reward in milestone.item_rewards
+    )
+    return "、".join(values)
+
+
+def _world_completion_reward_text(view) -> str:
+    return "、".join(
+        f"{view.projector.name(reward.definition_id)} x{reward.quantity}"
+        for reward in WORLD_PROGRESS_DEFINITION.world_completion_rewards
+    )
 
 
 def _overview(result: CharacterOverviewResult) -> CharacterOverview | None:

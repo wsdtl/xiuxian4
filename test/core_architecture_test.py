@@ -165,6 +165,7 @@ def _assert_physical_layout() -> None:
             "classification.py",
             "definitions.py",
             "draw.py",
+            "exchange.py",
             "special.py",
             "trade.py",
             "trophies.py",
@@ -188,6 +189,7 @@ def _assert_physical_layout() -> None:
         "economy": {
             "__init__.py",
             "audit.py",
+            "exchange.py",
             "lottery.py",
             "market_items.py",
             "policy.py",

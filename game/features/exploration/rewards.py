@@ -32,7 +32,7 @@ from game.content.catalog.item import (
     SMALL_SPIRIT_MEDICINE_ITEM_ID,
     WORLD_CURIO_ITEM_IDS,
     WORLD_CURIO_WEIGHTS,
-    ItemRecycleValue,
+    CurrencyRecycleYield,
 )
 from game.core.gameplay import (
     ITEM_STORAGE_COMPONENT_ID,
@@ -244,7 +244,7 @@ class ExplorationRewardFactory:
                 trophy_count += quantity
                 recycle = definition.component(
                     ITEM_RECYCLE_COMPONENT_ID,
-                    ItemRecycleValue,
+                    CurrencyRecycleYield,
                 )
                 trophy_value += recycle.unit_amount * quantity
                 storage = definition.component(

@@ -30,6 +30,19 @@ class BusinessFeaturePlan:
 
 ACTIVE_BUSINESS_FEATURES = (
     BusinessFeaturePlan(
+        "covenant_exchange",
+        "exchange",
+        "原子消费定相尘并按固定目录发放套装图纸",
+        ("归航兑换",),
+    ),
+    BusinessFeaturePlan(
+        "equipment_blueprint",
+        "equipment_blueprint",
+        "原子消费套装图纸并生成仅固定套装身份的随机装备",
+        ("物品",),
+        integrated_command_packages=("物品",),
+    ),
+    BusinessFeaturePlan(
         "build_trial",
         "build_trial",
         "读取当前构筑执行固定种子无损战斗，并保存公开战报",

@@ -83,18 +83,32 @@ from game.core.gameplay import (  # noqa: E402
     MapAnchorDefinition,
     character_name_display_width,
 )
+from game.content.catalog.world_progress import WORLD_PROGRESS_DEFINITION  # noqa: E402
 
 
 def main() -> None:
     catalog = assemble_official_catalog()
+    progress_reward_ids = {
+        reward.definition_id
+        for milestone in WORLD_PROGRESS_DEFINITION.milestones
+        for reward in milestone.item_rewards
+    } | {
+        reward.definition_id
+        for reward in WORLD_PROGRESS_DEFINITION.world_completion_rewards
+    }
+    assert progress_reward_ids == {
+        DRAW_TICKET_ITEM_ID,
+        DIMENSION_SHIFT_ITEM_ID,
+    }
+    assert progress_reward_ids <= set(catalog.items.definitions.ids())
 
     assert tuple(value.id for value in catalog.report.packages) == (
         CATALOG_PACKAGE_ID,
         WORLD_SKIN_PACKAGE_ID,
         WORLD_PACKAGE_ID,
     )
-    assert str(CATALOG_PACKAGE.manifest.version) == "3.25.0"
-    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.20.0"
+    assert str(CATALOG_PACKAGE.manifest.version) == "3.26.0"
+    assert str(WORLD_SKIN_PACKAGE.manifest.version) == "3.21.0"
     assert str(WORLD_PACKAGE.manifest.version) == "1.2.0"
     assert len(catalog.report.content_fingerprint) == 64
     assert catalog.report.display_content_ids == (
@@ -162,7 +176,7 @@ def main() -> None:
     stellar = select_world_skin(catalog, STELLAR_RING_SKIN_ID)
     assert cultivation.catalog is magic.catalog is stellar.catalog
     assert cultivation.skin.name == "太玄界"
-    assert cultivation.skin.version == 26
+    assert cultivation.skin.version == 27
     assert cultivation.skin.icon == "☯"
     assert cultivation.projector.name(PRIMARY_CURRENCY_ID) == "灵石"
     assert tuple(cultivation.projector.name(value) for value in QUALITY_IDS) == (
@@ -173,12 +187,12 @@ def main() -> None:
         "圣",
     )
     assert magic.skin.name == "魔法世界"
-    assert magic.skin.version == 25
+    assert magic.skin.version == 26
     assert magic.skin.icon == "✦"
     assert magic.projector.name(PRIMARY_CURRENCY_ID) == "魔晶"
     assert magic.projector.name(COMMON_QUALITY_ID) == "普通"
     assert stellar.skin.name == "星环界"
-    assert stellar.skin.version == 3
+    assert stellar.skin.version == 4
     assert stellar.skin.icon == "◎"
     assert stellar.projector.name(PRIMARY_CURRENCY_ID) == "星铢"
     assert cultivation.projector.name(INSCRIPTION_FEATHER_ITEM_ID) == "铭刻之羽"

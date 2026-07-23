@@ -21,13 +21,17 @@ from game.content.catalog.exploration import REGULAR_EXPLORATION_REGIONS  # noqa
 from game.content.catalog.item import (  # noqa: E402
     BOSS_TROPHY_ITEMS,
     PARTY_BOSS_TROPHY_ITEMS,
+    PARTY_BOSS_EXCHANGE_YIELDS,
     ITEM_RECYCLE_COMPONENT_ID,
     REGION_TROPHY_ITEMS,
     REGION_TROPHY_WEIGHTS,
     REGULAR_ENEMY_TROPHY_ITEMS,
     TROPHY_ITEMS,
     WORLD_CURIO_ITEMS,
-    ItemRecycleValue,
+    CurrencyRecycleYield,
+    EXCHANGE_MATERIAL_ITEM_ID,
+    ItemRecycleYield,
+    StackItemRecycleYield,
 )
 from game.core.gameplay import ITEM_STORAGE_COMPONENT_ID, ItemStorageComponent  # noqa: E402
 
@@ -53,10 +57,16 @@ def main() -> None:
         assert item.tags.has("loot.recyclable")
         assert item.tags.has("storage.backpack")
         storage = item.component(ITEM_STORAGE_COMPONENT_ID, ItemStorageComponent)
-        sale = item.component(ITEM_RECYCLE_COMPONENT_ID, ItemRecycleValue)
+        sale = item.component(ITEM_RECYCLE_COMPONENT_ID, ItemRecycleYield)
         assert storage.unit_space == 1
-        assert sale.currency_id == PRIMARY_CURRENCY_ID
-        assert sale.unit_amount > 0
+        if item in PARTY_BOSS_TROPHY_ITEMS:
+            assert isinstance(sale, StackItemRecycleYield)
+            assert sale.definition_id == EXCHANGE_MATERIAL_ITEM_ID
+            assert sale.unit_quantity > 0
+        else:
+            assert isinstance(sale, CurrencyRecycleYield)
+            assert sale.currency_id == PRIMARY_CURRENCY_ID
+            assert sale.unit_amount > 0
         cultivation_names.append(cultivation.projector.name(item.id))
         magic_names.append(magic.projector.name(item.id))
         stellar_names.append(stellar.projector.name(item.id))
@@ -65,12 +75,16 @@ def main() -> None:
     assert len(stellar_names) == len(set(stellar_names)) == 210
     assert cultivation_names != magic_names
     assert stellar_names != cultivation_names and stellar_names != magic_names
+    assert tuple(
+        item.component(ITEM_RECYCLE_COMPONENT_ID, StackItemRecycleYield).unit_quantity
+        for item in PARTY_BOSS_TROPHY_ITEMS[:10]
+    ) == PARTY_BOSS_EXCHANGE_YIELDS
 
     expected_values = []
     for region in REGULAR_EXPLORATION_REGIONS:
         prices = tuple(
             catalog.items.require(item_id)
-            .component(ITEM_RECYCLE_COMPONENT_ID, ItemRecycleValue)
+            .component(ITEM_RECYCLE_COMPONENT_ID, CurrencyRecycleYield)
             .unit_amount
             for item_id in region.trophy_item_ids
         )
