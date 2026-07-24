@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content import INSCRIPTION_FEATHER_ITEM_ID
@@ -24,12 +23,13 @@ from game.core.gameplay import (
 )
 from game.rules import game_operation_context
 from game.rules.item import asset_reference, resolve_asset_reference
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import current_message_context
 from message import Action, DocumentMessage, M
 from message.schema import FieldSeparator
 
-from ..reply import send_game_reply
+from ..command_helpers import command_time, current_character_value
+from ..reply import send_command_failure, send_game_reply
 from ..reply_intents import reply_intents
 
 
@@ -37,7 +37,7 @@ _LIST_LIMIT = 8
 
 
 async def inscription(message: str, current: CurrentCharacterResult) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable("铭刻"))
         return
@@ -77,7 +77,7 @@ async def inscription(message: str, current: CurrentCharacterResult) -> None:
 
 
 async def inscription_ability(message: str, current: CurrentCharacterResult) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable("铭刻能力"))
         return
@@ -123,7 +123,7 @@ async def confirm_asset_inscription(
     message: str,
     current: CurrentCharacterResult,
 ) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable("确认铭刻"))
         return
@@ -152,7 +152,7 @@ async def confirm_asset_inscription(
             current_game_services().inscriptions.apply,
             command,
             inventory_id=character.id,
-            context=game_operation_context(command.id, logical_time=_now()),
+            context=game_operation_context(command.id, logical_time=command_time()),
         )
     except Exception as exc:
         await _failed("资产铭刻执行失败", character.id, exc)
@@ -170,7 +170,7 @@ async def confirm_ability_inscription(
     message: str,
     current: CurrentCharacterResult,
 ) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable("确认铭刻"))
         return
@@ -200,7 +200,7 @@ async def confirm_ability_inscription(
             current_game_services().inscriptions.apply,
             command,
             inventory_id=character.id,
-            context=game_operation_context(command.id, logical_time=_now()),
+            context=game_operation_context(command.id, logical_time=command_time()),
         )
     except Exception as exc:
         await _failed("能力铭刻执行失败", character.id, exc)
@@ -218,7 +218,7 @@ async def inscription_original_name(
     message: str,
     current: CurrentCharacterResult,
 ) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable("铭刻原名"))
         return
@@ -227,7 +227,7 @@ async def inscription_original_name(
         preference = await asyncio.to_thread(
             services.load_inscription_preference,
             character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         requested = _parse_switch(message)
         if requested is None and str(message or "").strip():
@@ -238,7 +238,7 @@ async def inscription_original_name(
                 services.set_inscription_show_original_name,
                 character.id,
                 requested,
-                logical_time=_now(),
+                logical_time=command_time(),
             )
     except Exception as exc:
         await _failed("铭刻原名设置失败", character.id, exc)
@@ -449,10 +449,7 @@ def _unavailable(title: str) -> DocumentMessage:
 
 
 async def _failed(title: str, character_id: str, exc: Exception) -> None:
-    logger.opt(colors=True, exception=exc).error(
-        C.join(C.fail(title), C.kv("character", character_id))
-    )
-    await send_game_reply(_unavailable(title))
+    await send_command_failure(title, character_id, exc, _unavailable(title))
 
 
 def _medium(inventory: InventoryState, token: str) -> ItemInstance:
@@ -573,14 +570,6 @@ def _transaction_id(prefix: str) -> str:
     if context is None:
         raise RuntimeError("铭刻命令缺少消息上下文")
     return f"{prefix}:{context.identity.evidence_id}"
-
-
-def _character(current: CurrentCharacterResult):
-    return current.character if current.status == "ok" else None
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = [

@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.core.account import ExternalIdentity
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import current_message_context
 from launch.paths import public_url
 from message import Action, DocumentMessage, M
 
-from ..reply import send_game_reply
+from ..command_helpers import command_time, current_character_value
+from ..reply import send_command_failure, send_game_reply
 
 
 async def challenge(message: str, current: CurrentCharacterResult) -> None:
-    challenger = _character(current)
+    challenger = current_character_value(current)
     if challenger is None:
         await send_game_reply(_failure("当前没有可用角色"))
         return
@@ -37,7 +37,7 @@ async def challenge(message: str, current: CurrentCharacterResult) -> None:
             f"sparring:{context.identity.evidence_id}",
             challenger,
             defender,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         await _failed("发起切磋失败", challenger.id, exc)
@@ -53,7 +53,7 @@ async def challenge(message: str, current: CurrentCharacterResult) -> None:
 
 
 async def accept(message: str, current: CurrentCharacterResult) -> None:
-    defender = _character(current)
+    defender = current_character_value(current)
     if defender is None:
         await send_game_reply(_failure("当前没有可用角色"))
         return
@@ -68,7 +68,7 @@ async def accept(message: str, current: CurrentCharacterResult) -> None:
             f"sparring:accept:{context.identity.evidence_id}",
             request_id,
             defender,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         await _failed("接受切磋失败", defender.id, exc)
@@ -77,7 +77,7 @@ async def accept(message: str, current: CurrentCharacterResult) -> None:
 
 
 async def reject(message: str, current: CurrentCharacterResult) -> None:
-    defender = _character(current)
+    defender = current_character_value(current)
     if defender is None:
         await send_game_reply(_failure("当前没有可用角色"))
         return
@@ -92,7 +92,7 @@ async def reject(message: str, current: CurrentCharacterResult) -> None:
             f"sparring:reject:{context.identity.evidence_id}",
             request_id,
             defender,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         await _failed("拒绝切磋失败", defender.id, exc)
@@ -178,10 +178,6 @@ def _resolve_target(target_external_id: str):
     return services.characters.load_for_account(account.id)
 
 
-def _character(current: CurrentCharacterResult):
-    return current.character if current.status == "ok" else None
-
-
 def _message_context():
     context = current_message_context()
     if context is None:
@@ -189,15 +185,13 @@ def _message_context():
     return context
 
 
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
-
-
 async def _failed(title: str, character_id: str, exc: Exception) -> None:
-    logger.opt(colors=True, exception=exc).error(
-        C.join(C.fail(title), C.kv("character", character_id))
+    await send_command_failure(
+        title,
+        character_id,
+        exc,
+        _failure("当前操作没有完成，请稍后重试"),
     )
-    await send_game_reply(_failure("当前操作没有完成，请稍后重试"))
 
 
 def _failure(message: str) -> DocumentMessage:

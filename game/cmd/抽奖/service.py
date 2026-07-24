@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content import (
@@ -28,11 +27,12 @@ from game.content import (
     PRIMARY_CURRENCY_ID,
 )
 from game.features.draw import DrawHistoryRecord, DrawOperationResult
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import current_message_context
 from launch.paths import public_url, static_path
 from message import Action, DocumentMessage, M
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -71,7 +71,7 @@ async def draw(current: CurrentCharacterResult, rolls: int) -> None:
             character.id,
             operation_id,
             rolls,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         view = services.world_view(current.character_world)
         await send_game_reply(_result_message(result, view.projector, rolls))
@@ -248,10 +248,6 @@ def _actions() -> tuple[Action, ...]:
 
 def _failure(message: str) -> DocumentMessage:
     return M.document().section("抽奖", icon="notice").line(message).build()
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = ["draw", "history", "pool"]

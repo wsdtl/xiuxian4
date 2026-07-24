@@ -699,6 +699,30 @@ class BattleEngine:
         )
         entities, generated = process((started,), entities)
         events.extend(generated)
+        alive_after_turn_start = self._alive_teams(
+            state.participants,
+            entities,
+            state.inactive_ids,
+        )
+        if len(alive_after_turn_start) <= 1:
+            status = (
+                BattleStatus.FINISHED
+                if alive_after_turn_start
+                else BattleStatus.DRAW
+            )
+            finished = replace(
+                state,
+                entities=entities,
+                turn_number=state.turn_number + 1,
+                status=status,
+                winning_teams=tuple(sorted(alive_after_turn_start)),
+                revision=state.revision + 1,
+            )
+            event = self._finished_event(finished, context, "turn_start_effect")
+            finished_entities, generated = process((event,), finished.entities)
+            finished = replace(finished, entities=finished_entities)
+            events.extend(generated)
+            return BattleStepResult(finished, tuple(events))
         actor = entities[actor_id]
 
         skip_reason = None

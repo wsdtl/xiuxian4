@@ -81,14 +81,6 @@ class DimensionalDisasterCatalog:
                     f"灾厄 {owner} 与 {definition.id} 共享了敌人身份"
                 )
             enemy_owners[definition.enemy_definition_id] = definition.id
-            expected_behaviors = frozenset(
-                f"enemy.behavior.{value}"
-                for value in definition.combat_behavior_keys
-            )
-            if enemy.default_behavior_ids != expected_behaviors:
-                raise ValueError(
-                    f"灾厄 {definition.id} 的叙事定义与战斗行为不一致"
-                )
 
     def audit(self) -> DisasterContentAudit:
         sources = []

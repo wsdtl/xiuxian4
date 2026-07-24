@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 
@@ -235,6 +236,26 @@ def _assert_persisted_loop() -> None:
         )
         assert blocked.status == "main_action_occupied"
 
+        before_failure = _persistent_state(services)
+        with patch.object(
+            services.battle_reports,
+            "capture_in_uow",
+            side_effect=RuntimeError("injected exploration report failure"),
+        ):
+            try:
+                services.exploration.settle_due(
+                    character_id,
+                    logical_time=TIME + timedelta(seconds=EXPLORATION_BATCH_SECONDS),
+                )
+            except RuntimeError as exc:
+                assert str(exc) == "injected exploration report failure"
+            else:
+                raise AssertionError("战报失败应中止整批探险结算")
+        assert _persistent_state(services) == before_failure
+        assert services.battle_reports.reference(
+            exploration_battle_report_id(started.state.session_id)
+        ) is None
+
         settled = services.exploration.settle_due(
             character_id,
             logical_time=TIME + timedelta(seconds=EXPLORATION_BATCH_SECONDS),
@@ -304,6 +325,30 @@ def _assert_persisted_loop() -> None:
             logical_time=TIME + timedelta(minutes=12),
         )
         assert returned.status in {"moved", "already_there"}
+
+
+def _persistent_state(services):
+    tables = (
+        "aggregate_snapshot",
+        "committed_transaction",
+        "outbox_event",
+        "fact_journal",
+        "battle_report",
+        "battle_report_segment",
+    )
+    with services.database.unit_of_work(write=False) as uow:
+        return tuple(
+            (
+                table,
+                tuple(
+                    tuple(row)
+                    for row in uow.connection.execute(
+                        f"SELECT * FROM {table} ORDER BY 1, 2"
+                    ).fetchall()
+                ),
+            )
+            for table in tables
+        )
 
 
 if __name__ == "__main__":

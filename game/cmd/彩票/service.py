@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content.catalog.economy import LOTTERY_TICKET_PRICE
 from game.content.presentation import COVENANT_TREASURY_NAME
 from game.rules.lottery import pool_breakdown
-from launch import C, config, logger
+from launch import C, logger
 from message import Action, M
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -22,7 +22,7 @@ async def lottery(current: CurrentCharacterResult) -> None:
         await send_game_reply(_failure("当前没有可用角色"))
         return
     services = current_game_services()
-    logical_time = _now()
+    logical_time = command_time()
     try:
         view = await asyncio.to_thread(
             services.lottery.status,
@@ -106,7 +106,7 @@ async def purchase(message: str, current: CurrentCharacterResult) -> None:
             character.id,
             character.name,
             parts[0],
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         await send_game_reply(
             M.document().section("购票完成", icon="trade").line(result).build()
@@ -177,10 +177,6 @@ def _append_due_result(builder, view) -> None:
             index,
             f"{winner.tier} {winner.character_name} | 差 {winner.distance} | {winner.amount}",
         )
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 def _failure(message: str):

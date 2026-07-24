@@ -5,15 +5,15 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from math import ceil
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content.catalog.economy import EQUIPMENT_SET_BLUEPRINT_PRICE
 from game.content.catalog.item import EXCHANGE_MATERIAL_ITEM_ID
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import current_message_context
 from message import Action, DocumentMessage, M
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -79,7 +79,7 @@ async def confirm_covenant_exchange(message: str, current: CurrentCharacterResul
             character.id,
             set_id,
             f"covenant-exchange:{context.identity.evidence_id}",
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         view = services.world_view(current.character_world)
         if result.receipt is None:
@@ -205,10 +205,6 @@ def _resolve_set_id(value: str, view) -> str:
 
 def _failure(message: str) -> DocumentMessage:
     return M.document().section("归航兑换", icon="notice").line(message).build()
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = [

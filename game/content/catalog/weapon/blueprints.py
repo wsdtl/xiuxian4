@@ -1,4 +1,4 @@
-"""七十二把正式武器的机制矩阵；名称属于世界皮肤，稳定键属于规则内容。"""
+"""正式武器的机制矩阵；名称属于世界皮肤，稳定键属于规则内容。"""
 
 from __future__ import annotations
 
@@ -134,12 +134,18 @@ WEAPON_BLUEPRINTS = (
     _w("death_scribe", "risk", "execute", "mark", "lowest", 0.94, 20, 2, ValueVector(offense=48, volatility=8)),
     _w("defiant_spear", "risk", "missing_rage", "death_guard", "single", 1.10, 18, 3, ValueVector(offense=40, survival=10, volatility=12)),
     _w("samsara_wheel", "risk", "true_strike", "on_kill_heal", "all", 0.62, 36, 5, ValueVector(offense=45, sustain=10, volatility=9)),
+
+    # 借势反锋：读取敌方攻击形成有上限的回击，不复制连击、异常或斩杀机制。
+    _w("borrowed_edge", "reaction", "borrowed_force", "guard", "single", 0.76, 20, 2, ValueVector(offense=42, survival=10, volatility=5)),
+
+    # 延迟回响：先留下独立标记，再于目标下一次行动开始时结算一次回响。
+    _w("deferred_echo", "reaction", "deferred_echo", "none", "single", 0.72, 24, 3, ValueVector(offense=47, tempo=5, volatility=3)),
 )
 
 
 def _validate_blueprints() -> None:
-    if len(WEAPON_BLUEPRINTS) != 72:
-        raise ValueError(f"正式武器矩阵必须正好包含 72 把，当前为 {len(WEAPON_BLUEPRINTS)}")
+    if len(WEAPON_BLUEPRINTS) != 74:
+        raise ValueError(f"正式武器矩阵必须正好包含 74 把，当前为 {len(WEAPON_BLUEPRINTS)}")
     keys = [value.key for value in WEAPON_BLUEPRINTS]
     mechanics = [(value.primary, value.support, value.targeting) for value in WEAPON_BLUEPRINTS]
     if len(keys) != len(set(keys)):

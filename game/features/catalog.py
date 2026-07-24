@@ -114,6 +114,12 @@ ACTIVE_BUSINESS_FEATURES = (
         ("行纪",),
     ),
     BusinessFeaturePlan(
+        "world_lore",
+        "world_lore",
+        "读取世界总行纪进度解锁世界记录，并保存成功阅读的记录",
+        ("世界志",),
+    ),
+    BusinessFeaturePlan(
         "lottery",
         "lottery",
         "处理单期购票、环形开奖、退票与中奖入账",
@@ -130,6 +136,13 @@ ACTIVE_BUSINESS_FEATURES = (
         "party_battle",
         "party_battle",
         "协调跨界组队首领、准备指纹、临时战斗投影、原子奖励与公开战报",
+        ("组队",),
+        integrated_command_packages=("组队",),
+    ),
+    BusinessFeaturePlan(
+        "party_sparring",
+        "party_sparring",
+        "协调队长请求、双方当前阵容无损对战和公开战报",
         ("组队",),
         integrated_command_packages=("组队",),
     ),

@@ -63,11 +63,11 @@ async def _main() -> Counter:
         "game.cmd.构筑试炼.service",
         "game.cmd.物品.service",
         "game.cmd.角色.service",
-        "game.cmd.组队.service",
+        "game.cmd.组队.shared",
     ):
         module = import_module(module_name)
-        if hasattr(module, "_now"):
-            module._now = lambda clock=clock: clock[0]
+        if hasattr(module, "command_time"):
+            module.command_time = lambda clock=clock: clock[0]
 
     with TemporaryDirectory() as directory:
         path = Path(directory) / "player-soak.db"

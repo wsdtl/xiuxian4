@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import current_message_context
 from launch.paths import public_url
 from message import Action, M
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -51,7 +51,7 @@ async def start_trial(message: str, current: CurrentCharacterResult) -> None:
             context.identity.evidence_id,
             character.id,
             str(mode.id),
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -138,10 +138,6 @@ def _failure(message: str):
 
 def _number(value: float) -> str:
     return f"{float(value):.2f}".rstrip("0").rstrip(".")
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = ["start_trial", "view_trials"]

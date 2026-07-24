@@ -79,6 +79,7 @@ from launch.adapter import current_message_context
 from message import Action, DocumentMessage, M
 from message.schema import FieldSeparator
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -249,7 +250,7 @@ async def _set_asset_protection(
             overview.character.id,
             asset.id,
             protected,
-            context=game_operation_context(transaction_id, logical_time=_now()),
+            context=game_operation_context(transaction_id, logical_time=command_time()),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -403,7 +404,7 @@ async def use_item(message: str, current: CurrentCharacterResult) -> None:
                 command,
                 inventory_id=character.id,
                 contributions={character.id: contributions},
-                context=game_operation_context(transaction_id, logical_time=_now()),
+                context=game_operation_context(transaction_id, logical_time=command_time()),
             )
         except Exception as exc:
             logger.opt(colors=True, exception=exc).error(
@@ -446,7 +447,7 @@ async def _use_equipment_blueprint(item_asset, overview: CharacterOverview) -> N
             overview.character.id,
             item_asset.id,
             transaction_id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -518,7 +519,7 @@ async def _use_weapon_growth_item(parts, item_asset, overview: CharacterOverview
                 target.id,
             ),
             inventory_id=overview.character.id,
-            context=game_operation_context(transaction_id, logical_time=_now()),
+            context=game_operation_context(transaction_id, logical_time=command_time()),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -566,7 +567,7 @@ async def _use_character_experience_item(item_asset, overview: CharacterOverview
                 item_asset.id,
             ),
             inventory_id=overview.character.id,
-            context=game_operation_context(transaction_id, logical_time=_now()),
+            context=game_operation_context(transaction_id, logical_time=command_time()),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -603,7 +604,7 @@ async def _use_companion_experience_item(parts, item_asset, overview: CharacterO
             overview.character.id,
             item_asset.id,
             reference,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -640,7 +641,7 @@ async def _use_specialized_item(item_asset, overview: CharacterOverview) -> None
                 item_asset.id,
             ),
             inventory_id=overview.character.id,
-            context=game_operation_context(transaction_id, logical_time=_now()),
+            context=game_operation_context(transaction_id, logical_time=command_time()),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -679,7 +680,7 @@ async def _use_companion_sanctuary(item_asset, current: CurrentCharacterResult) 
             character,
             dimension,
             item_asset.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -1432,10 +1433,6 @@ def _number(value: float, *, signed: bool = False) -> str:
         return "0"
     text = f"{value:+.2f}" if signed else f"{value:.2f}"
     return text.rstrip("0").rstrip(".")
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 def _invalid(title: str, message: str) -> DocumentMessage:

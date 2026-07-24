@@ -98,11 +98,13 @@ from game.core.gameplay import (  # noqa: E402
 
 
 def main() -> None:
-    assert COMBAT_FOUNDATION_VERSION == "combat.foundation.v5"
+    assert COMBAT_FOUNDATION_VERSION == "combat.foundation.v6"
     engine, effects = _build()
     _assert_composite_magnitudes(effects)
     _assert_state_resource_and_cooldown_operations(effects)
     _assert_recovery_protocol(effects)
+    _assert_effect_rejection_protocol(engine, effects)
+    _assert_revival_protocol(engine, effects)
     _assert_damage_interceptors(engine, effects)
     _assert_control_protocol(effects)
     _assert_timeline_directives(engine)
@@ -308,6 +310,13 @@ def _build() -> tuple[BattleEngine, EffectEngine]:
     )
     definitions.register(
         EffectDefinition(
+            "effect.rejectable",
+            required_target_tags=TagSet.of("state.accepts_effect"),
+            duration_turns=1,
+        )
+    )
+    definitions.register(
+        EffectDefinition(
             "effect.shield",
             operations=(
                 GrantShield(
@@ -432,6 +441,15 @@ def _build() -> tuple[BattleEngine, EffectEngine]:
     )
     definitions.register(
         EffectDefinition(
+            "effect.revive_state",
+            operations=(
+                GrantTrigger("operation.revive_state", "trigger.revive_on_defeat"),
+            ),
+            duration_turns=None,
+        )
+    )
+    definitions.register(
+        EffectDefinition(
             "effect.redirect_damage",
             operations=(
                 DealDamage(
@@ -495,6 +513,12 @@ def _build() -> tuple[BattleEngine, EffectEngine]:
     )
     abilities.register(
         AbilityDefinition(
+            "ability.rejectable",
+            effects=(EffectReference("effect.rejectable"),),
+        )
+    )
+    abilities.register(
+        AbilityDefinition(
             "ability.interrupted_combo",
             effects=(
                 EffectReference("effect.interrupt", EffectTarget.SELF),
@@ -525,6 +549,16 @@ def _build() -> tuple[BattleEngine, EffectEngine]:
             source=TriggerSource.EVENT_SOURCE,
         )
     )
+    triggers.register(
+        TriggerDefinition(
+            "trigger.revive_on_defeat",
+            event_kind="combat.target.defeated",
+            effect_id="effect.heal",
+            owner=TriggerOwner.EVENT_TARGET,
+            target=TriggerTarget.OWNER,
+            source=TriggerSource.OWNER,
+        )
+    )
     ability_engine = AbilityEngine(
         abilities,
         effects,
@@ -536,6 +570,11 @@ def _build() -> tuple[BattleEngine, EffectEngine]:
     targeting = {
         "ability.attack": BattleAbilityTargeting(
             "ability.attack",
+            frozenset({"target.enemy.explicit"}),
+            1,
+        ),
+        "ability.rejectable": BattleAbilityTargeting(
+            "ability.rejectable",
             frozenset({"target.enemy.explicit"}),
             1,
         ),
@@ -666,6 +705,100 @@ def _assert_recovery_protocol(effects: EffectEngine) -> None:
     assert result.target.resources["shield.current"] == 50
 
 
+def _assert_effect_rejection_protocol(
+    engine: BattleEngine,
+    effects: EffectEngine,
+) -> None:
+    source = _entity(
+        "rejection-source",
+        abilities=("ability.rejectable",),
+    )
+    target = _entity("rejection-target")
+    rejected = engine.executor.execute_ability_many(
+        AbilityUse("rejected-use", "ability.rejectable"),
+        actor_id=source.id,
+        target_ids=(target.id,),
+        entities={source.id: source, target.id: target},
+        context=_context("rejected-use"),
+    )
+    assert rejected.ok and rejected.value
+    event = next(
+        event
+        for event in rejected.value.events
+        if event.kind == "effect.application.rejected"
+    )
+    assert event.subject_id == "effect.rejectable"
+    assert event.values["reason"] == "target_blocked"
+    assert not any(
+        event.kind == "effect.applied" and event.subject_id == "effect.rejectable"
+        for event in rejected.value.events
+    )
+
+    resistant = _entity("rejection-resistant", resistance=1)
+    control = _apply(effects, "effect.stun", source, resistant, "control-rejected")
+    control_rejection = next(
+        event
+        for event in control.events
+        if event.kind == "effect.application.rejected"
+    )
+    assert control_rejection.subject_id == "effect.stun"
+    assert control_rejection.values["reason"] == "control_resisted"
+
+
+def _assert_revival_protocol(
+    engine: BattleEngine,
+    effects: EffectEngine,
+) -> None:
+    attacker = _entity(
+        "revival-attacker",
+        attack=100,
+        speed=20,
+        abilities=("ability.attack",),
+    )
+    revived = _entity("revival-target", speed=10)
+    revived = _apply(
+        effects,
+        "effect.revive_state",
+        revived,
+        revived,
+        "revival-state",
+    ).target
+    state = _start(
+        engine,
+        {attacker.id: attacker, revived.id: revived},
+        {attacker.id: "team.attacker", revived.id: "team.revived"},
+        {attacker.id: 0, revived.id: 0},
+        "battle.revival",
+    )
+    result = engine.execute_turn(
+        state,
+        BattleAction(
+            "action.revival",
+            attacker.id,
+            "ability.attack",
+            TargetRequest("target.enemy.explicit", explicit_ids=(revived.id,)),
+        ),
+        context=_context("battle.revival.turn"),
+    )
+    assert result.ok and result.value
+    assert result.value.state.status is BattleStatus.ACTIVE
+    assert result.value.state.current_actor_id == revived.id
+    assert result.value.state.entities[revived.id].resources["health.current"] == 30
+    event_kinds = [event.kind for event in result.value.events]
+    assert event_kinds.index("combat.target.defeated") < event_kinds.index(
+        "combat.target.revived"
+    )
+    assert "combat.battle.finished" not in event_kinds
+    revival = next(
+        event
+        for event in result.value.events
+        if event.kind == "combat.target.revived"
+    )
+    assert revival.source_id == revived.id
+    assert revival.target_id == revived.id
+    assert revival.values == {"before": 0.0, "after": 30.0, "actual": 30.0}
+
+
 def _assert_damage_interceptors(engine: BattleEngine, effects: EffectEngine) -> None:
     attacker = _entity("interceptor-attacker", attack=100)
     guarded = _entity("guarded")
@@ -739,6 +872,12 @@ def _assert_control_protocol(effects: EffectEngine) -> None:
     assert not result.target.tags.has("state.control.stunned")
     event = next(event for event in result.events if event.kind == "combat.control.resolved")
     assert event.values["applied"] is False
+    rejection = next(
+        event
+        for event in result.events
+        if event.kind == "effect.application.rejected"
+    )
+    assert rejection.values["reason"] == "control_resisted"
 
 
 def _start(engine: BattleEngine, entities, teams, slots, battle_id):

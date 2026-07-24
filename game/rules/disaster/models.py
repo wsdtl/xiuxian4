@@ -8,11 +8,11 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
 
-from game.core.gameplay import StableId, stable_id
+from game.core.gameplay import EnemyPhaseLoadout, StableId, stable_id
 
 
 DIMENSIONAL_DISASTER_AGGREGATE = "snapshot.dimensional_disaster"
-DIMENSIONAL_DISASTER_RULESET_VERSION = "rules.dimensional_disaster.v2"
+DIMENSIONAL_DISASTER_RULESET_VERSION = "rules.dimensional_disaster.v3"
 
 
 class DimensionalDisasterStatus(str, Enum):
@@ -61,6 +61,7 @@ class DisasterCombatSnapshot:
     behavior_ids: tuple[StableId, ...]
     generation_seed: str
     content_version: str
+    phase_loadouts: tuple[EnemyPhaseLoadout, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -74,6 +75,7 @@ class DisasterCombatSnapshot:
             "behavior_ids",
             tuple(stable_id(value, field="enemy behavior id") for value in self.behavior_ids),
         )
+        object.__setattr__(self, "phase_loadouts", tuple(self.phase_loadouts))
         if self.level < 1 or not self.generation_seed.strip() or not self.content_version.strip():
             raise ValueError("灾厄战斗快照无效")
 

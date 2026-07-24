@@ -153,8 +153,7 @@ class PartyBattleSimulator:
         entity = state.entities[enemy_id]
         maximum = entity.snapshot(self.content.enemy_projector.attributes).value(HEALTH_MAXIMUM)
         ratio = entity.resources[HEALTH_CURRENT] / maximum if maximum > 0 else 0.0
-        definition = self.content.enemies.require(instance.definition_id)
-        pending = self.content.enemy_projector.pending_phases(definition, ratio, active_phases)
+        pending = self.content.enemy_projector.pending_phases(instance, ratio, active_phases)
         if not pending:
             return {}, (), active_phases, ()
         phase_rules = []
@@ -174,7 +173,12 @@ class PartyBattleSimulator:
                     source_id=enemy_id,
                     target_id=enemy_id,
                     subject_id=phase.id,
-                    values={"health_ratio": ratio, "threshold": phase.health_ratio},
+                values={
+                    "health_ratio": ratio,
+                    "threshold": phase.health_ratio,
+                    "behavior_count": len(phase.behavior_ids),
+                    "behavior_ids": tuple(phase.behavior_ids),
+                },
                 )
             )
         return {enemy_id: entity}, tuple(phase_rules), active_phases, tuple(phase_events)

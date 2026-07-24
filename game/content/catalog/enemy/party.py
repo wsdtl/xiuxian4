@@ -16,7 +16,6 @@ from game.core.gameplay import (
     ENEMY_RANK_BOSS_ID,
     EnemyDefinition,
     EnemyLevelProfileDefinition,
-    EnemyPhaseDefinition,
     EnemyRewardProfileDefinition,
     StableId,
     TagSet,
@@ -25,7 +24,6 @@ from game.core.gameplay import (
 
 from ..combat.definitions import BASIC_ATTACK_ABILITY_ID
 from ..combat.stats import COMBAT_CONTROL_RESISTANCE, COMBAT_TENACITY
-from .behaviors import ENEMY_BEHAVIOR_CONTENT
 from .blueprints import (
     CULTIVATION_PARTY_BOSS_BLUEPRINTS,
     MAGIC_PARTY_BOSS_BLUEPRINTS,
@@ -76,61 +74,24 @@ _BASIC_AI = (
         maximum_targets=1,
     ),
 )
-_ALL_BEHAVIOR_IDS = frozenset(
-    value.id for value in ENEMY_BEHAVIOR_CONTENT.behaviors
-)
-_BEHAVIOR_KEYS = tuple(
-    value.id.removeprefix("enemy.behavior.")
-    for value in ENEMY_BEHAVIOR_CONTENT.behaviors
-)
 
 
-def _party_boss(blueprint, index: int, source_key: str) -> EnemyDefinition:
-    defaults = frozenset(
-        f"enemy.behavior.{value}" for value in blueprint.behavior_keys
-    )
-    phase_keys = tuple(
-        value
-        for value in _BEHAVIOR_KEYS
-        if f"enemy.behavior.{value}" not in defaults
-    )
+def _party_boss(blueprint, source_key: str) -> EnemyDefinition:
     enemy_id = f"enemy.boss.party.{source_key}.{blueprint.key}"
-    phases = (
-        EnemyPhaseDefinition(
-            f"enemy.phase.party.{source_key}.{blueprint.key}.second",
-            0.70,
-            frozenset(
-                {f"enemy.behavior.{phase_keys[index % len(phase_keys)]}"}
-            ),
-        ),
-        EnemyPhaseDefinition(
-            f"enemy.phase.party.{source_key}.{blueprint.key}.final",
-            0.35,
-            frozenset(
-                {
-                    f"enemy.behavior."
-                    f"{phase_keys[(index + 11) % len(phase_keys)]}"
-                }
-            ),
-        ),
-    )
     return EnemyDefinition(
         enemy_id,
         PARTY_BOSS_LEVEL_PROFILE_ID,
         PARTY_BOSS_REWARD_PROFILE_ID,
         frozenset({ENEMY_RANK_BOSS_ID}),
-        defaults,
-        _ALL_BEHAVIOR_IDS,
-        ContributionSpec(
+        base_contribution=ContributionSpec(
             tags=TagSet.of(
                 "enemy.identity.party_boss",
                 f"enemy.source.{source_key}",
             ),
             abilities=frozenset({BASIC_ATTACK_ABILITY_ID}),
         ),
-        _BASIC_AI,
-        phases,
-        TagSet.of(
+        base_ai_rules=_BASIC_AI,
+        tags=TagSet.of(
             "enemy.identity.party_boss",
             f"enemy.source.{source_key}",
         ),
@@ -138,16 +99,16 @@ def _party_boss(blueprint, index: int, source_key: str) -> EnemyDefinition:
 
 
 CULTIVATION_PARTY_BOSS_ENEMIES = tuple(
-    _party_boss(value, index, "cultivation")
-    for index, value in enumerate(CULTIVATION_PARTY_BOSS_BLUEPRINTS)
+    _party_boss(value, "cultivation")
+    for value in CULTIVATION_PARTY_BOSS_BLUEPRINTS
 )
 MAGIC_PARTY_BOSS_ENEMIES = tuple(
-    _party_boss(value, index, "magic")
-    for index, value in enumerate(MAGIC_PARTY_BOSS_BLUEPRINTS)
+    _party_boss(value, "magic")
+    for value in MAGIC_PARTY_BOSS_BLUEPRINTS
 )
 STELLAR_RING_PARTY_BOSS_ENEMIES = tuple(
-    _party_boss(value, index, "stellar_ring")
-    for index, value in enumerate(STELLAR_RING_PARTY_BOSS_BLUEPRINTS)
+    _party_boss(value, "stellar_ring")
+    for value in STELLAR_RING_PARTY_BOSS_BLUEPRINTS
 )
 PARTY_BOSS_ENEMIES = (
     *CULTIVATION_PARTY_BOSS_ENEMIES,

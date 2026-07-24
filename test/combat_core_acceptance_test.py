@@ -64,7 +64,7 @@ def _assert_all_abilities_and_effects(catalog) -> None:
     }
     referenced_effects.update(str(trigger.effect_id) for trigger in catalog.triggers)
     assert referenced_effects == set(map(str, catalog.effects.ids()))
-    assert len(referenced_effects) == 240
+    assert len(referenced_effects) == 245
     for index, ability_id in enumerate(catalog.abilities.ids()):
         actor = _entity("actor", abilities=(ability_id,), health=1_000)
         target = _entity("target", health=1_000)
@@ -97,7 +97,7 @@ def _assert_all_abilities_and_effects(catalog) -> None:
 
 
 def _assert_all_triggers(catalog) -> None:
-    assert len(catalog.triggers.ids()) == 97
+    assert len(catalog.triggers.ids()) == 98
     for index, trigger_id in enumerate(catalog.triggers.ids()):
         definition = catalog.triggers.require(trigger_id)
         owner_id = "target" if definition.owner.value == "event_target" else "actor"
@@ -445,7 +445,7 @@ def _assert_all_weapon_auto_battles(catalog) -> None:
         for value in catalog.abilities.ids()
         if str(value).startswith("ability.weapon.")
     )
-    assert len(weapon_ids) == 72
+    assert len(weapon_ids) == 74
     engine = _engine(catalog, maximum_rounds=60, maximum_turns=600)
     for index, ability_id in enumerate(weapon_ids):
         context = _context(f"weapon-auto:{ability_id}", 10_000 + index)
@@ -571,7 +571,7 @@ def _assert_weapon_equipment_combinations(catalog) -> None:
         if str(value).startswith("trigger.equipment.")
     )
     behaviors = tuple(catalog.enemies.behaviors)
-    assert len(weapon_ids) == 72
+    assert len(weapon_ids) == 74
     assert len(trigger_ids) == 75
     assert behaviors
     covered_triggers: set[str] = set()

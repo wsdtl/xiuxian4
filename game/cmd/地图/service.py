@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CharacterOverview, CharacterOverviewResult, current_game_services
 from game.content.catalog.exploration import ExplorationRegionKind
@@ -14,10 +13,11 @@ from game.content.catalog.world import (
     LOCATION_FUNCTION_EXPLORATION,
 )
 from game.features.world_travel import WorldLocationIntent
-from launch import C, config, logger
+from launch import C, logger
 from message import Action, DocumentMessage, M
 from message.schema import FieldSeparator
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -41,7 +41,7 @@ async def view_map(message: str, result: CharacterOverviewResult) -> None:
         companion_view = await asyncio.to_thread(
             services.companions.view,
             overview.character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         view = services.world_view(overview.character_world)
         progress = await asyncio.to_thread(
@@ -278,10 +278,6 @@ def _failure(message: str) -> DocumentMessage:
 
 def _unavailable() -> DocumentMessage:
     return _failure("当前没有读取到角色状态，请稍后重试")
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = ["view_map"]

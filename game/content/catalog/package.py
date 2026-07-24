@@ -95,7 +95,12 @@ from .world.definitions import (
     WORLD_DISPLAY_CONTENT_IDS,
     WORLD_SPACES,
 )
-from .social import PARTY_INVITATION_REQUEST, PARTY_TYPE_TRIO, SPARRING_REQUEST
+from .social import (
+    PARTY_INVITATION_REQUEST,
+    PARTY_SPARRING_REQUEST,
+    PARTY_TYPE_TRIO,
+    SPARRING_REQUEST,
+)
 from .trial import (
     BUILD_TRIAL_LEVEL_PROFILES,
     BUILD_TRIAL_RANK,
@@ -143,7 +148,7 @@ validate_nacre_item_categories(OFFICIAL_ITEMS)
 CATALOG_PACKAGE = ContentPackage(
     manifest=ContentPackageManifest(
         id=CATALOG_PACKAGE_ID,
-        version=ContentVersion(3, 26, 0),
+        version=ContentVersion(3, 28, 0),
     ),
     item_component_types=(
         ITEM_RECYCLE_COMPONENT_TYPE,
@@ -241,7 +246,11 @@ CATALOG_PACKAGE = ContentPackage(
     loot_tables=(*ENEMY_LOOT_TABLES, DRAW_CATALOG_CONTENT.loot_table),
     draw_pools=(DRAW_CATALOG_CONTENT.pool,),
     world_spaces=WORLD_SPACES,
-    social_request_types=(SPARRING_REQUEST, PARTY_INVITATION_REQUEST),
+    social_request_types=(
+        SPARRING_REQUEST,
+        PARTY_INVITATION_REQUEST,
+        PARTY_SPARRING_REQUEST,
+    ),
     party_types=(PARTY_TYPE_TRIO,),
     display_content_ids=(
         BASE_DISPLAY_CONTENT_IDS

@@ -157,7 +157,16 @@ def register_control_operation(
             },
         )
         if not resolution.applied:
-            return EffectContribution(facts=(fact,))
+            rejected = EffectFact(
+                "effect.application.rejected",
+                context.spec.definition_id,
+                {
+                    "reason": "control_resisted",
+                    "chance": resolution.chance,
+                    "roll": resolution.roll,
+                },
+            )
+            return EffectContribution(facts=(fact, rejected))
         return EffectContribution(
             granted_tags=TagSet.of(definition.tag),
             facts=(fact,),

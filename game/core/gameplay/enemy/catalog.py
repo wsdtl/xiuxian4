@@ -76,13 +76,8 @@ class EnemyCatalog:
                 raise KeyError(f"敌人 {definition.id} 引用了未知奖励档案")
             if not definition.allowed_rank_ids.issubset(rank_ids):
                 raise KeyError(f"敌人 {definition.id} 引用了未知阶位")
-            if not definition.available_behavior_ids.issubset(behavior_ids):
-                raise KeyError(f"敌人 {definition.id} 引用了未知行为")
             self._validate_spec(definition.id, definition.base_contribution, attribute_ids, ability_ids, trigger_ids, interceptor_ids, constraint_ids)
             self._validate_ai_rules(definition.id, definition.base_ai_rules, ability_ids, selector_ids)
-            for phase in definition.phases:
-                if not phase.behavior_ids.issubset(behavior_ids):
-                    raise KeyError(f"敌人阶段 {phase.id} 引用了未知行为")
         enemy_ids = frozenset(self.definitions.ids())
         scope_ids = frozenset(self.scopes.ids())
         for encounter in self.encounters:

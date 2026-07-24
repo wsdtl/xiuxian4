@@ -1,4 +1,4 @@
-"""把七十二条武器蓝图编译为可执行规则定义、随机属性和实例生成策略。"""
+"""把正式武器蓝图编译为可执行规则定义、随机属性和实例生成策略。"""
 
 from __future__ import annotations
 
@@ -42,6 +42,7 @@ from game.core.gameplay import (
     ItemizationKind,
     LoadoutItemComponent,
     ModifierLayer,
+    MinimumMagnitude,
     ModifyAttribute,
     ModifyCooldown,
     ModifyCurrentCooldowns,
@@ -345,12 +346,77 @@ def _base_damage_operations(blueprint: WeaponBlueprint) -> tuple[object, ...]:
                 ),
             ),
         )
+    if blueprint.primary == "borrowed_force":
+        borrowed = MinimumMagnitude(
+            (
+                _attack(0.38, owner="target"),
+                _attack(0.50),
+            )
+        )
+        return (
+            _damage(
+                f"operation.weapon.{key}.borrowed_force",
+                SumMagnitude((_attack(power), borrowed)),
+            ),
+        )
+    if blueprint.primary == "deferred_echo":
+        return (
+            _damage(
+                f"operation.weapon.{key}.echo_opening",
+                _attack(power),
+            ),
+        )
     return (_damage(f"operation.weapon.{key}.strike", _attack(power)),)
 
 
 def _status_content(
     blueprint: WeaponBlueprint,
 ) -> tuple[tuple[EffectDefinition, ...], tuple[TriggerDefinition, ...], tuple[EffectReference, ...]]:
+    if blueprint.primary == "deferred_echo":
+        key = blueprint.key
+        status_id = f"effect.weapon.{key}.echo_status"
+        release_id = f"effect.weapon.{key}.echo_release"
+        trigger_id = f"trigger.weapon.{key}.echo_release"
+        effects = (
+            EffectDefinition(
+                status_id,
+                tags=TagSet.of("status.negative", "status.delayed_echo"),
+                operations=(
+                    GrantTrigger(
+                        f"operation.weapon.{key}.grant_echo_release",
+                        trigger_id,
+                    ),
+                ),
+                duration_turns=1,
+                stacking=StackingPolicy.REFRESH,
+                max_stacks=1,
+                stack_by_source=True,
+            ),
+            EffectDefinition(
+                release_id,
+                operations=(
+                    _damage(
+                        f"operation.weapon.{key}.echo_release",
+                        _attack(blueprint.power * 0.85),
+                        damage_type=TRUE_DAMAGE_ID,
+                        can_critical=False,
+                        tags=TagSet.of("damage.delayed", "damage.echo"),
+                    ),
+                ),
+            ),
+        )
+        triggers = (
+            TriggerDefinition(
+                trigger_id,
+                "combat.turn.started",
+                release_id,
+                target=TriggerTarget.OWNER,
+                owner=TriggerOwner.EVENT_SOURCE,
+                source=TriggerSource.GRANT_SOURCE,
+                max_activations_per_execution=1,
+            ),
+        )
+        return effects, triggers, (EffectReference(status_id, EffectTarget.TARGET),)
     if blueprint.primary not in {"poison", "bleed", "burn"} and blueprint.support not in {"poison", "bleed", "burn"}:
         return (), (), ()
     ailment = blueprint.primary if blueprint.primary in {"poison", "bleed", "burn"} else blueprint.support

@@ -80,6 +80,8 @@ _WEAPON_DISPLAY = {
     "death_scribe": ("判官笔", "标记残血并逐次提高斩杀压力"),
     "defiant_spear": ("逆鳞枪", "濒危时爆发并保留最后血气"),
     "samsara_wheel": ("六道轮", "真实群伤并以击败延续生命"),
+    "borrowed_edge": ("移星换斗镜", "借敌方攻势反锋，并凝成短暂护体罡气"),
+    "deferred_echo": ("空桑回音璧", "一击留声，于目标下一次行动前引发回响"),
 }
 
 _AFFIX_DISPLAY = {

@@ -26,12 +26,13 @@ from launch import C, config, logger
 from launch.paths import public_url
 from message import Action, DocumentMessage, M
 
-from ..reply import send_game_reply
+from ..command_helpers import command_time, current_character_value
+from ..reply import send_command_failure, send_game_reply
 from ..presentation import current_action_action
 
 
 async def view_exploration(current: CurrentCharacterResult) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable())
         return
@@ -41,7 +42,7 @@ async def view_exploration(current: CurrentCharacterResult) -> None:
             asyncio.to_thread(
                 services.exploration.load,
                 character.id,
-                logical_time=_now(),
+                logical_time=command_time(),
             ),
             asyncio.to_thread(services.load_character_overview, character),
         )
@@ -52,7 +53,7 @@ async def view_exploration(current: CurrentCharacterResult) -> None:
 
 
 async def move(message: str, current: CurrentCharacterResult) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable())
         return
@@ -77,7 +78,7 @@ async def move(message: str, current: CurrentCharacterResult) -> None:
             services.world_travel.move,
             character.id,
             location_id,
-            logical_time=_now(),
+            logical_time=command_time(),
             intent=intent,
         )
         await send_game_reply(_movement_message(result, view))
@@ -94,7 +95,7 @@ async def stop(current: CurrentCharacterResult) -> None:
 
 
 async def summary(current: CurrentCharacterResult) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable())
         return
@@ -104,7 +105,7 @@ async def summary(current: CurrentCharacterResult) -> None:
             asyncio.to_thread(
                 services.exploration.load,
                 character.id,
-                logical_time=_now(),
+                logical_time=command_time(),
             ),
             asyncio.to_thread(services.load_character_overview, character),
         )
@@ -127,7 +128,7 @@ async def summary(current: CurrentCharacterResult) -> None:
 
 
 async def _operate(current, method_name, presenter, log_message) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable())
         return
@@ -136,7 +137,7 @@ async def _operate(current, method_name, presenter, log_message) -> None:
         result = await asyncio.to_thread(
             method,
             character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         view = current_game_services().world_view(current.character_world)
         await send_game_reply(presenter(result, view))
@@ -467,19 +468,11 @@ def _time(value: datetime) -> str:
     return value.astimezone(ZoneInfo(config.project.timezone)).strftime("%m-%d %H:%M")
 
 
-def _character(current: CurrentCharacterResult):
-    return current.character if current.status == "ok" else None
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
-
-
 async def _failed(message: str, character_id: str, exc: Exception) -> None:
-    logger.opt(colors=True, exception=exc).error(
-        C.join(C.fail(message), C.kv("character", character_id))
-    )
-    await send_game_reply(
+    await send_command_failure(
+        message,
+        character_id,
+        exc,
         M.document().section("探险", icon="world").line("当前操作没有完成，请稍后重试").build()
     )
 

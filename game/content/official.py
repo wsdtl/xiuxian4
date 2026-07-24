@@ -21,8 +21,10 @@ from .catalog.disaster import build_dimensional_disaster_catalog
 from .catalog.draw import DRAW_CATALOG_CONTENT
 from .catalog.economy import audit_market_prices
 from .catalog.enemy import (
+    ENEMY_BEHAVIOR_PROFILE_CATALOG,
     PARTY_BOSS_SOURCE_CATALOG,
     PERSONAL_BOSS_ENEMIES,
+    EnemyBehaviorProfileCatalog,
     PartyBossSourceCatalog,
 )
 from .catalog.exploration import EXPLORATION_REGION_CATALOG, ExplorationRegionCatalog
@@ -52,6 +54,7 @@ class OfficialContent:
     projector: SkinProjector
     gear_projector: GearProjector
     enemy_projector: EnemyNameProjector
+    enemy_behavior_profiles: EnemyBehaviorProfileCatalog
     exploration_regions: ExplorationRegionCatalog
     companions: CompanionCatalog
     party_bosses: PartyBossSourceCatalog
@@ -167,6 +170,7 @@ def select_world_skin(
     EXPLORATION_REGION_CATALOG.validate(catalog, runtime)
     COMPANION_CATALOG.validate(catalog, runtime)
     PARTY_BOSS_SOURCE_CATALOG.validate(catalog, runtime.world_ids())
+    ENEMY_BEHAVIOR_PROFILE_CATALOG.validate(runtime.world_ids())
     validate_enemy_narrative_identities(projector, selected_world.id, skin.id)
     return OfficialContent(
         catalog,
@@ -180,6 +184,7 @@ def select_world_skin(
             projector,
             enemy_presentation_style(skin.id, skin.version),
         ),
+        ENEMY_BEHAVIOR_PROFILE_CATALOG,
         EXPLORATION_REGION_CATALOG,
         COMPANION_CATALOG,
         PARTY_BOSS_SOURCE_CATALOG,

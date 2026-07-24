@@ -441,7 +441,9 @@ async def _dispatch(command: str, event_id: str):
 
 def _content(result) -> str:
     assert result.matched and result.matched_count == 1, result
-    assert len(result.replies) == 1, result
+    assert 1 <= len(result.replies) <= 2, result
+    if len(result.replies) == 2:
+        assert "世界篇章" in result.replies[1].message.content
     return result.replies[0].message.content
 
 

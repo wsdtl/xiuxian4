@@ -73,8 +73,8 @@ async def _main() -> None:
         "game.cmd.跃迁.service",
     ):
         module = import_module(module_name)
-        if hasattr(module, "_now"):
-            module._now = lambda clock=clock: clock[0]
+        if hasattr(module, "command_time"):
+            module.command_time = lambda clock=clock: clock[0]
 
     with TemporaryDirectory() as directory:
         services = build_game_services(
@@ -92,6 +92,11 @@ async def _main() -> None:
             assert "行纪开篇" in _content(created)
             character = _created_character(services)
             _grant_journey_items(services, character.id)
+            auto_medicine = await _dispatch(
+                "自动用药 关闭",
+                "journey-auto-medicine-off",
+            )
+            assert "关闭" in _content(auto_medicine)
 
             initial = services.load_character_overview(character).overview
             assert initial is not None

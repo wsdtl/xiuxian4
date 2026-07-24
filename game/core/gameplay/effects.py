@@ -27,6 +27,12 @@ from .registry import DefinitionRegistry
 from .tags import EMPTY_TAGS, Tag, TagSet
 
 
+_APPLICATION_REJECTION_REASONS = {
+    "effect.target_blocked": "target_blocked",
+    "effect.condition_failed": "condition_failed",
+}
+
+
 class StackingPolicy(str, Enum):
     """同一 Effect 再次施加时的处理方式。"""
 
@@ -775,6 +781,47 @@ class EffectEngine:
             for fact in facts
         )
         return EffectResult(updated, tuple(events), updated_source)
+
+    def apply_or_reject(
+        self,
+        spec: EffectSpec,
+        *,
+        source: RuleEntity,
+        target: RuleEntity,
+        context: RuleContext,
+        event: RuleEvent | None = None,
+    ) -> EffectResult:
+        """在战斗流水中把动态目标拒绝转换为结构化事实。"""
+
+        try:
+            return self.apply(
+                spec,
+                source=source,
+                target=target,
+                context=context,
+                event=event,
+            )
+        except RuleViolation as exc:
+            reason = _APPLICATION_REJECTION_REASONS.get(str(exc.failure.code))
+            if reason is None:
+                raise
+            values: dict[str, object] = {
+                "reason": reason,
+                "failure_code": str(exc.failure.code),
+            }
+            conditions = exc.failure.details.get("conditions")
+            if conditions:
+                values["conditions"] = tuple(str(value) for value in conditions)
+            rejected = RuleEvent.from_context(
+                context,
+                kind="effect.application.rejected",
+                source_id=spec.source_id,
+                target_id=target.id,
+                subject_id=spec.definition_id,
+                values=values,
+                phase=context.phase,
+            )
+            return EffectResult(target, (rejected,), source)
 
     def advance_turn(self, target: RuleEntity, context: RuleContext) -> EffectResult:
         """推进实体一回合，并为到期效果和冷却结束产生事实。"""

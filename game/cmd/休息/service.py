@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content.catalog.character import (
@@ -13,16 +12,17 @@ from game.content.catalog.character import (
     REST_MINIMUM_SECONDS,
 )
 from game.core.gameplay import HEALTH_CURRENT, SPIRIT_CURRENT
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import current_message_context
 from message import Action, DocumentMessage, M
 
-from ..reply import send_game_reply
+from ..command_helpers import command_time, current_character_value
+from ..reply import send_command_failure, send_game_reply
 from ..presentation import current_action_action
 
 
 async def start(current: CurrentCharacterResult) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable())
         return
@@ -32,7 +32,7 @@ async def start(current: CurrentCharacterResult) -> None:
             current_game_services().rest.start,
             operation_id,
             character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         await _failed("开始休息失败", character.id, exc)
@@ -41,7 +41,7 @@ async def start(current: CurrentCharacterResult) -> None:
 
 
 async def stop(current: CurrentCharacterResult) -> None:
-    character = _character(current)
+    character = current_character_value(current)
     if character is None:
         await send_game_reply(_unavailable())
         return
@@ -51,7 +51,7 @@ async def stop(current: CurrentCharacterResult) -> None:
             current_game_services().rest.stop,
             operation_id,
             character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         await _failed("结束休息失败", character.id, exc)
@@ -114,14 +114,7 @@ def _stop_message(result, view) -> DocumentMessage:
 
 
 async def _failed(title: str, character_id: str, exc: Exception) -> None:
-    logger.opt(colors=True, exception=exc).error(
-        C.join(C.fail(title), C.kv("character", character_id))
-    )
-    await send_game_reply(_unavailable())
-
-
-def _character(current: CurrentCharacterResult):
-    return current.character if current.status == "ok" else None
+    await send_command_failure(title, character_id, exc, _unavailable())
 
 
 def _view(current: CurrentCharacterResult):
@@ -139,10 +132,6 @@ def _evidence_id() -> str:
     if context is None:
         raise RuntimeError("休息命令缺少消息上下文")
     return context.identity.evidence_id
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 def _duration(seconds: int) -> str:

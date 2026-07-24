@@ -57,8 +57,8 @@ async def _main() -> None:
         )
         services.database.initialize()
         previous = install_game_services(services)
-        original_now = draw_command_service._now
-        draw_command_service._now = lambda: TIME
+        original_now = draw_command_service.command_time
+        draw_command_service.command_time = lambda: TIME
         try:
             await LocalEventHandler.run()
             await dispatch(
@@ -121,7 +121,7 @@ async def _main() -> None:
             finally:
                 draw_command_service.DRAW_ANIMATION_FILES[(1, "low")] = original_file
         finally:
-            draw_command_service._now = original_now
+            draw_command_service.command_time = original_now
             restore_game_services(previous)
 
 

@@ -28,6 +28,8 @@ def main() -> None:
     _assert_layer_public_exports()
     _assert_import_boundaries()
     _assert_game_reply_boundaries()
+    _assert_application_assembly_boundaries()
+    _assert_command_helper_boundaries()
     _assert_core_neutrality()
     _assert_world_identity_boundaries()
     print("core architecture tests passed")
@@ -146,7 +148,6 @@ def _assert_physical_layout() -> None:
             "stellar_ring.py",
             "models.py",
             "policy.py",
-            "templates.py",
         },
         "draw": {"__init__.py", "definitions.py"},
         "enemy": {
@@ -155,6 +156,7 @@ def _assert_physical_layout() -> None:
             "blueprints.py",
             "definitions.py",
             "encounters.py",
+            "loadouts.py",
             "loot.py",
             "party.py",
         },
@@ -303,6 +305,51 @@ def _assert_public_root() -> None:
         "game.core.persistence",
     )
     assert set(core.__all__) == {"CORE_LAYERS", "GAME_CORE_VERSION"}
+
+
+def _assert_application_assembly_boundaries() -> None:
+    """组合根分阶段但保持唯一公开构建入口。"""
+
+    path = ROOT / "game" / "app.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    functions = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    assert "build_game_services" in functions
+    assert {"_assemble_content", "_assemble_foundation"}.issubset(functions)
+    assert not (ROOT / "game" / "runtime").exists()
+    exploration_reporting = (
+        ROOT / "game" / "features" / "exploration" / "reporting.py"
+    )
+    reporting_source = exploration_reporting.read_text(encoding="utf-8")
+    assert "unit_of_work" not in reporting_source
+    assert "game.core.persistence" not in reporting_source
+
+
+def _assert_command_helper_boundaries() -> None:
+    """命令组件复用统一时间和角色取值，不再各自复制实现。"""
+
+    helper = ROOT / "game" / "cmd" / "command_helpers.py"
+    assert helper.is_file()
+    failures = []
+    for path in (ROOT / "game" / "cmd").glob("*/service.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        local_helpers = {
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name in {"_now", "_character"}
+        }
+        if local_helpers:
+            failures.append(
+                f"{path.relative_to(ROOT)} 重复定义命令工具：{', '.join(sorted(local_helpers))}"
+            )
+        source = path.read_text(encoding="utf-8")
+        if "datetime.now(" in source:
+            failures.append(f"{path.relative_to(ROOT)} 绕过统一命令时钟")
+    assert not failures, "\n".join(failures)
 
 
 def _assert_layer_public_exports() -> None:
@@ -500,9 +547,11 @@ def _assert_game_reply_boundaries() -> None:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            if not isinstance(node, ast.Call):
                 continue
             relative = path.relative_to(ROOT)
+            if not isinstance(node.func, ast.Attribute):
+                continue
             if node.func.attr == "inline_section":
                 failures.append(f"{relative} 手写了全局通知通栏")
             if node.func.attr == "header" and any(

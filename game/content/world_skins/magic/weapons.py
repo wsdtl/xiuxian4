@@ -80,6 +80,8 @@ _WEAPON_DISPLAY = {
     "death_scribe": ("阿努比斯判魂笔", "标记残血并逐次提高斩杀压力"),
     "defiant_spear": ("阿斯卡隆圣枪", "濒危时爆发并保留最后生命"),
     "samsara_wheel": ("伊西斯复生轮", "真实群伤并以击败延续生命"),
+    "borrowed_edge": ("雅努斯双面镜", "映照敌我威能完成反击，并形成短暂护甲"),
+    "deferred_echo": ("俄耳甫斯回响琴", "将伤害谱成第二乐句，于目标行动前奏响"),
 }
 
 _AFFIX_DISPLAY = {

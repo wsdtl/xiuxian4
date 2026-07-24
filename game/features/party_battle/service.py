@@ -175,6 +175,9 @@ class PartyBattleFeature:
                 random=context.random,
                 instance_id=f"encounter:{session_id}",
                 allowed_enemy_ids=source.enemy_ids,
+                behavior_weights=(
+                    self.content.enemy_behavior_profiles.require(source_id).behavior_weights
+                ),
             )
             challenge = PartyBattleChallengeState(
                 party.id,

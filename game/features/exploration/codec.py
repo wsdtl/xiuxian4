@@ -1,6 +1,6 @@
 """探险持久化快照的业务类型白名单。"""
 
-from game.core.gameplay import EnemyEncounterInstance, EnemyInstance
+from game.core.gameplay import EnemyEncounterInstance, EnemyInstance, EnemyPhaseLoadout
 from game.rules.exploration import (
     ExplorationBatchPlan,
     ExplorationBatchResult,
@@ -19,6 +19,7 @@ def exploration_codec_registrations() -> tuple[tuple[str, type[object]], ...]:
 
     return (
         ("product.enemy_instance", EnemyInstance),
+        ("product.enemy_phase_loadout", EnemyPhaseLoadout),
         ("product.enemy_encounter_instance", EnemyEncounterInstance),
         ("product.exploration_status", ExplorationStatus),
         ("product.exploration_stop_reason", ExplorationStopReason),

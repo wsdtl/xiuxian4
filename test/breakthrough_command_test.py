@@ -63,8 +63,8 @@ async def _main() -> None:
         )
         services.database.initialize()
         previous = install_game_services(services)
-        original_now = command_service._now
-        command_service._now = lambda: TIME
+        original_now = command_service.command_time
+        command_service.command_time = lambda: TIME
         try:
             await LocalEventHandler.run()
             await dispatch(
@@ -100,7 +100,7 @@ async def _main() -> None:
             assert f"消耗: _{token_name} x1_" in content
             assert "血气与灵力已恢复" in content
         finally:
-            command_service._now = original_now
+            command_service.command_time = original_now
             restore_game_services(previous)
 
 

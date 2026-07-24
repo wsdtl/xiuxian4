@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content import (
@@ -14,10 +13,11 @@ from game.content import (
 )
 from game.core.gameplay import CharacterState
 from game.features.breakthrough import BreakthroughResult
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import MessageContext
 from message import DocumentMessage, M
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -37,7 +37,7 @@ async def breakthrough(
             services.breakthrough.breakthrough,
             character.id,
             operation_id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -112,10 +112,6 @@ def _required_experience(character: CharacterState) -> int:
 
 def _failure(message: str) -> DocumentMessage:
     return M.document().section("境界突破", icon="notice").line(message).build()
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = ["breakthrough"]

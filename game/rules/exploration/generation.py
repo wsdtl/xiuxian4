@@ -17,9 +17,11 @@ class ExplorationBatchPlanner:
         self,
         regions: ExplorationRegionCatalog,
         encounters: EnemyEncounterGenerator,
+        behavior_profiles=None,
     ) -> None:
         self.regions = regions
         self.encounters = encounters
+        self.behavior_profiles = behavior_profiles
 
     def plan(
         self,
@@ -27,6 +29,7 @@ class ExplorationBatchPlanner:
         session_id: str,
         batch_index: int,
         region_id: str,
+        world_id: str | None = None,
         character_level: int,
         random: RandomSource,
     ) -> ExplorationBatchPlan:
@@ -55,6 +58,11 @@ class ExplorationBatchPlanner:
             if kind is ExplorationEncounterKind.BOSS
             else region.regular_enemy_ids
         )
+        behavior_weights = {}
+        if self.behavior_profiles is not None:
+            if world_id is None:
+                raise ValueError("正式探险生成缺少真实世界身份")
+            behavior_weights = self.behavior_profiles.require(world_id).behavior_weights
         encounter = self.encounters.generate(
             encounter_id,
             level=level,
@@ -62,6 +70,7 @@ class ExplorationBatchPlanner:
             random=random,
             instance_id=f"exploration:{seed}",
             allowed_enemy_ids=allowed,
+            behavior_weights=behavior_weights,
         )
         return ExplorationBatchPlan(
             session_id,

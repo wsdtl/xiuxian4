@@ -13,14 +13,12 @@ from game.core.gameplay import (
     ENEMY_RANK_BOSS_ID,
     EnemyDefinition,
     EnemyLevelProfileDefinition,
-    EnemyPhaseDefinition,
     EnemyRewardProfileDefinition,
     TagSet,
 )
 
 from ..combat.definitions import BASIC_ATTACK_ABILITY_ID
 from ..combat.stats import COMBAT_CONTROL_RESISTANCE, COMBAT_TENACITY
-from ..enemy.behaviors import ENEMY_BEHAVIOR_CONTENT
 from .cultivation import CULTIVATION_DISASTERS
 from .magic import MAGIC_DISASTERS
 from .stellar_ring import STELLAR_RING_DISASTERS
@@ -69,67 +67,26 @@ _BASIC_AI = (
         maximum_targets=1,
     ),
 )
-_ALL_BEHAVIOR_IDS = frozenset(
-    value.id for value in ENEMY_BEHAVIOR_CONTENT.behaviors
-)
-_BEHAVIOR_KEYS = tuple(
-    value.id.removeprefix("enemy.behavior.")
-    for value in ENEMY_BEHAVIOR_CONTENT.behaviors
-)
 
 
-def _enemy(definition, index: int) -> EnemyDefinition:
-    defaults = frozenset(
-        f"enemy.behavior.{value}" for value in definition.combat_behavior_keys
-    )
-    phase_keys = tuple(
-        value
-        for value in _BEHAVIOR_KEYS
-        if f"enemy.behavior.{value}" not in defaults
-    )
-    source_key = definition.source_world_id.removeprefix("world.")
-    disaster_key = definition.id.rsplit(".", 1)[-1]
-    phases = (
-        EnemyPhaseDefinition(
-            f"enemy.phase.disaster.{source_key}.{disaster_key}.second",
-            0.65,
-            frozenset(
-                {f"enemy.behavior.{phase_keys[index % len(phase_keys)]}"}
-            ),
-        ),
-        EnemyPhaseDefinition(
-            f"enemy.phase.disaster.{source_key}.{disaster_key}.final",
-            0.30,
-            frozenset(
-                {
-                    f"enemy.behavior."
-                    f"{phase_keys[(index + 9) % len(phase_keys)]}"
-                }
-            ),
-        ),
-    )
+def _enemy(definition) -> EnemyDefinition:
     return EnemyDefinition(
         definition.enemy_definition_id,
         DISASTER_ENEMY_LEVEL_PROFILE_ID,
         DISASTER_ENEMY_REWARD_PROFILE_ID,
         frozenset({ENEMY_RANK_BOSS_ID}),
-        defaults,
-        _ALL_BEHAVIOR_IDS,
-        ContributionSpec(
+        base_contribution=ContributionSpec(
             tags=TagSet.of("enemy.identity.dimensional_disaster"),
             abilities=frozenset({BASIC_ATTACK_ABILITY_ID}),
         ),
-        _BASIC_AI,
-        phases,
-        TagSet.of("enemy.identity.dimensional_disaster"),
+        base_ai_rules=_BASIC_AI,
+        tags=TagSet.of("enemy.identity.dimensional_disaster"),
     )
 
 
 DISASTER_ENEMY_DEFINITIONS = tuple(
-    _enemy(value, index)
-    for index, value in enumerate(
-        (*CULTIVATION_DISASTERS, *MAGIC_DISASTERS, *STELLAR_RING_DISASTERS)
-    )
+    _enemy(value)
+    for value in (*CULTIVATION_DISASTERS, *MAGIC_DISASTERS, *STELLAR_RING_DISASTERS)
 )
 
 

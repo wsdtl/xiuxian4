@@ -54,7 +54,16 @@ ENEMY_ENCOUNTERS = (
         ENCOUNTER_SCOPE_PERSONAL_ID,
         1,
         100,
-        (EnemySpawnDefinition(_PERSONAL_BOSS_IDS, ENEMY_RANK_BOSS_ID, 1, 1, 3),),
+        (
+            EnemySpawnDefinition(
+                _PERSONAL_BOSS_IDS,
+                ENEMY_RANK_BOSS_ID,
+                1,
+                1,
+                3,
+                (0.65, 0.30),
+            ),
+        ),
         TagSet.of("encounter.enemy.boss"),
     ),
     EnemyEncounterDefinition(
@@ -62,7 +71,16 @@ ENEMY_ENCOUNTERS = (
         ENCOUNTER_SCOPE_PARTY_ID,
         1,
         100,
-        (EnemySpawnDefinition(_PARTY_BOSS_IDS, ENEMY_RANK_BOSS_ID, 1, 1, 4),),
+        (
+            EnemySpawnDefinition(
+                _PARTY_BOSS_IDS,
+                ENEMY_RANK_BOSS_ID,
+                1,
+                1,
+                4,
+                (0.70, 0.35),
+            ),
+        ),
         TagSet.of("encounter.enemy.boss", "encounter.party"),
     ),
 )

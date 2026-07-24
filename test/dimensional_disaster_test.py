@@ -118,9 +118,9 @@ async def _main() -> None:
         services.database.initialize()
         services.activities.initialize(GLOBAL_ACTIVITY_SCOPE_ID, logical_time=TIME)
         previous = install_game_services(services)
-        original_now = disaster_command_service._now
+        original_now = disaster_command_service.command_time
         original_ticket_chance = disaster_feature_service.DIMENSIONAL_DISASTER_DRAW_TICKET_CHANCE
-        disaster_command_service._now = lambda: TIME
+        disaster_command_service.command_time = lambda: TIME
         disaster_feature_service.DIMENSIONAL_DISASTER_DRAW_TICKET_CHANCE = 1_000_000
         try:
             await LocalEventHandler.run()
@@ -237,7 +237,7 @@ async def _main() -> None:
                 if value.definition_id == DRAW_TICKET_ITEM_ID
             ) == 3
         finally:
-            disaster_command_service._now = original_now
+            disaster_command_service.command_time = original_now
             disaster_feature_service.DIMENSIONAL_DISASTER_DRAW_TICKET_CHANCE = original_ticket_chance
             restore_game_services(previous)
 

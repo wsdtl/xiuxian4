@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CharacterOverview, CharacterOverviewResult, current_game_services
 from game.content import CHARACTER_LEVEL_PROGRESSION_ID, LOADOUT_PRESET_IDS
@@ -18,12 +17,13 @@ from game.core.gameplay import (
 from game.features.world_travel import WorldLocationIntent
 from game.rules.companion import CompanionKind, CompanionSanctuaryStatus
 from game.rules.item import resolve_asset_reference
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import current_message_context
 from launch.paths import public_url
 from message import Action, DocumentMessage, M
 from message.schema import FieldSeparator
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -51,7 +51,7 @@ async def view_companions(message: str, result: CharacterOverviewResult) -> None
         view = await asyncio.to_thread(
             current_game_services().companions.view,
             overview.character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         reference = str(message or "").strip()
         reply = (
@@ -86,7 +86,7 @@ async def bind_companion(message: str, result: CharacterOverviewResult) -> None:
             overview.character.id,
             reference,
             allow_transfer=False,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         if outcome.status == "transfer_required" and outcome.roster is not None:
             await send_game_reply(_transfer_confirmation(outcome, overview))
@@ -114,7 +114,7 @@ async def confirm_bind_transfer(message: str, result: CharacterOverviewResult) -
             parts[0],
             allow_transfer=True,
             expected_revision=revision,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         await send_game_reply(_bind_result(outcome, overview))
     except (TypeError, ValueError):
@@ -133,7 +133,7 @@ async def unbind_companion(result: CharacterOverviewResult) -> None:
             current_game_services().companions.unbind_current,
             _operation_id("companion-unbind"),
             overview.character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         if outcome.status == "unbound":
             name = _companion_name(outcome.companion) if outcome.companion else "伙伴"
@@ -156,7 +156,7 @@ async def view_sanctuary(result: CharacterOverviewResult) -> None:
         view = await asyncio.to_thread(
             current_game_services().companions.view,
             overview.character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         await send_game_reply(_sanctuary_message(view.sanctuary, overview))
     except Exception as exc:
@@ -175,7 +175,7 @@ async def hunt_companion(message: str, result: CharacterOverviewResult) -> None:
             _operation_id("companion-hunt"),
             overview.character.id,
             trace_index,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         await send_game_reply(_hunt_result(outcome, overview))
     except ValueError:
@@ -193,7 +193,7 @@ async def view_people(result: CharacterOverviewResult) -> None:
         view = await asyncio.to_thread(
             current_game_services().companions.view,
             overview.character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         await send_game_reply(_people_message(view.roster, overview))
     except Exception as exc:
@@ -222,7 +222,7 @@ async def gift_person(message: str, result: CharacterOverviewResult) -> None:
             overview.character.id,
             asset.id,
             quantity,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         await send_game_reply(_gift_result(outcome, overview))
     except ValueError as exc:
@@ -241,7 +241,7 @@ async def join_person(result: CharacterOverviewResult) -> None:
             current_game_services().companions.join_person,
             _operation_id("companion-person-join"),
             overview.character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         await send_game_reply(_join_result(outcome, overview))
     except Exception as exc:
@@ -258,7 +258,7 @@ async def preview_farewell(message: str, result: CharacterOverviewResult) -> Non
         view = await asyncio.to_thread(
             current_game_services().companions.view,
             overview.character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         companion = view.roster.by_reference(reference)
         if companion is None:
@@ -308,7 +308,7 @@ async def confirm_farewell(message: str, result: CharacterOverviewResult) -> Non
             overview.character.id,
             parts[0],
             int(parts[1]),
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         reply = (
             M.document()
@@ -339,7 +339,7 @@ async def preview_abandon(result: CharacterOverviewResult) -> None:
         view = await asyncio.to_thread(
             current_game_services().companions.view,
             overview.character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         sanctuary = view.sanctuary
         if sanctuary is None or not sanctuary.active:
@@ -379,7 +379,7 @@ async def confirm_abandon(message: str, result: CharacterOverviewResult) -> None
             _operation_id("companion-abandon"),
             overview.character.id,
             int(str(message or "").strip()),
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         reply = (
             M.document().section("宠物秘境", icon="explore").line("秘境已经关闭").build()
@@ -818,10 +818,6 @@ def _failure(message: str) -> DocumentMessage:
 
 def _unavailable() -> DocumentMessage:
     return _failure("当前没有读取到角色状态，请稍后重试")
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 def _number(value: float) -> str:

@@ -10,7 +10,11 @@ from ...catalog import (
 )
 from ...catalog.combat.definitions import BASE_DAMAGE_TYPES, BASE_EFFECTS
 from ...catalog.equipment.properties import EQUIPMENT_PROPERTY_CONTENT
-from ...catalog.weapon.mechanics import WEAPON_MECHANIC_CONTENT
+from ...catalog.weapon.mechanics import (
+    WEAPON_CHARGE_EFFECT_ID,
+    WEAPON_MARK_EFFECT_ID,
+    WEAPON_MECHANIC_CONTENT,
+)
 from ..combat_mechanisms import build_combat_mechanism_entries
 from .equipment import STELLAR_RING_EQUIPMENT_ENTRIES
 from .weapons import STELLAR_RING_WEAPON_ENTRIES
@@ -42,6 +46,8 @@ _MECHANISM_ENTRIES = build_combat_mechanism_entries(
         "effect.recover_small_spirit": "小型同步剂·恢复效果",
         "effect.recover_medium_spirit": "中型同步剂·恢复效果",
         "effect.recover_large_spirit": "大型同步剂·恢复效果",
+        WEAPON_MARK_EFFECT_ID: "协同标记",
+        WEAPON_CHARGE_EFFECT_ID: "过载蓄能",
     },
     damage_names={
         "damage.physical": "物理伤害",

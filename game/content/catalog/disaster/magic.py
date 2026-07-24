@@ -5,7 +5,6 @@ from .models import (
     DISASTER_ORIGIN_ORIGINAL,
     DimensionalDisasterDefinition,
 )
-from .templates import DISASTER_BEHAVIOR_KEYS_BY_TEMPLATE
 from ..world import MAGIC_WORLD_ID
 
 
@@ -14,7 +13,6 @@ MAGIC_DISASTER_SOURCE_ID = MAGIC_WORLD_ID
 
 def _disaster(
     key: str,
-    enemy_key: str,
     origin_kind: str,
     source_note: str,
     name: str,
@@ -28,7 +26,6 @@ def _disaster(
         f"disaster.magic.{key}",
         MAGIC_DISASTER_SOURCE_ID,
         f"enemy.boss.disaster.magic.{key}",
-        DISASTER_BEHAVIOR_KEYS_BY_TEMPLATE[enemy_key],
         origin_kind,
         source_note,
         name,
@@ -43,7 +40,6 @@ def _disaster(
 MAGIC_DISASTERS = (
     _disaster(
         "fenrir",
-        "doom_fenrir",
         DISASTER_ORIGIN_DOCUMENTED,
         "《诗体埃达》《散文埃达》芬里尔传说",
         "芬里尔·噬日之狼",
@@ -55,7 +51,6 @@ MAGIC_DISASTERS = (
     ),
     _disaster(
         "jormungandr",
-        "world_leviathan",
         DISASTER_ORIGIN_DOCUMENTED,
         "北欧神话尘世巨蟒耶梦加得传说",
         "耶梦加得·环界巨蟒",
@@ -67,7 +62,6 @@ MAGIC_DISASTERS = (
     ),
     _disaster(
         "typhon",
-        "storm_dragon",
         DISASTER_ORIGIN_DOCUMENTED,
         "古希腊神话提丰传说",
         "提丰·百首风暴",
@@ -79,7 +73,6 @@ MAGIC_DISASTERS = (
     ),
     _disaster(
         "leviathan",
-        "abyss_kraken",
         DISASTER_ORIGIN_DOCUMENTED,
         "《约伯记》等文献中的利维坦传说",
         "利维坦·深渊王冠",
@@ -91,7 +84,6 @@ MAGIC_DISASTERS = (
     ),
     _disaster(
         "surtr",
-        "flame_tyrant",
         DISASTER_ORIGIN_DOCUMENTED,
         "北欧神话火巨人苏尔特尔传说",
         "苏尔特尔·焚界者",
@@ -103,7 +95,6 @@ MAGIC_DISASTERS = (
     ),
     _disaster(
         "nidhogg",
-        "ancient_tree_king",
         DISASTER_ORIGIN_DOCUMENTED,
         "北欧神话啃噬世界树根的尼德霍格传说",
         "尼德霍格·蚀根黑龙",
@@ -115,7 +106,6 @@ MAGIC_DISASTERS = (
     ),
     _disaster(
         "hecatoncheires",
-        "iron_titan",
         DISASTER_ORIGIN_DOCUMENTED,
         "古希腊神话百臂巨人传说",
         "百臂巨灵·群山投手",
@@ -127,7 +117,6 @@ MAGIC_DISASTERS = (
     ),
     _disaster(
         "starless_queen",
-        "frost_queen",
         DISASTER_ORIGIN_ORIGINAL,
         "原创星界灾厄",
         "无星女王",
@@ -139,7 +128,6 @@ MAGIC_DISASTERS = (
     ),
     _disaster(
         "ashen_bell",
-        "ash_phoenix",
         DISASTER_ORIGIN_ORIGINAL,
         "原创灰烬灾厄",
         "灰烬钟王",
@@ -151,7 +139,6 @@ MAGIC_DISASTERS = (
     ),
     _disaster(
         "thirteenth_gate",
-        "final_guardian",
         DISASTER_ORIGIN_ORIGINAL,
         "原创界门灾厄",
         "第十三门守望者",

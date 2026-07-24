@@ -72,6 +72,7 @@ from game.rules.disaster import (
     roll_draw_ticket_drop,
 )
 from game.rules.exploration import ExplorationState, ExplorationStatus
+from game.rules.encounter import EnemyEncounterGenerator
 from game.rules.battle_report import (
     BattleReportDraft,
     BattleReportSegmentDraft,
@@ -132,6 +133,10 @@ class DimensionalDisasterFeature:
             content.catalog,
             player_lineup,
             maximum_rounds=maximum_battle_rounds,
+        )
+        self.enemy_loadouts = EnemyEncounterGenerator(
+            content.catalog.enemies,
+            content_version=content.catalog.report.content_fingerprint,
         )
 
     def maintain(self, *, logical_time: datetime) -> DimensionalDisasterMaintenanceResult:
@@ -574,16 +579,26 @@ class DimensionalDisasterFeature:
                 for value in characters
             ]
             level = max(1, round(median(levels))) if levels else 1
-            enemy_definition = self.content.catalog.enemies.require(
-                definition.enemy_definition_id
+            generation_seed = f"{window.instance_id}:{definition.id}"
+            behavior_ids, phase_loadouts = self.enemy_loadouts.generate_loadout(
+                definition.enemy_definition_id,
+                behavior_count=3,
+                phase_health_ratios=(0.65, 0.30),
+                behavior_weights=(
+                    self.content.enemy_behavior_profiles.require(
+                        definition.source_world_id
+                    ).behavior_weights
+                ),
+                random=SeededRandomSource(generation_seed),
             )
             combat = DisasterCombatSnapshot(
                 definition.enemy_definition_id,
                 level,
                 ENEMY_RANK_BOSS_ID,
-                tuple(sorted(enemy_definition.default_behavior_ids)),
-                f"{window.instance_id}:{definition.id}",
+                behavior_ids,
+                generation_seed,
                 self.content.catalog.report.content_fingerprint,
+                phase_loadouts,
             )
             local_health = self.battles.enemy_maximum_health(combat, event_id)
             population_scale = max(

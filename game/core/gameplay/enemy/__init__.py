@@ -15,7 +15,7 @@ from .models import (
     EnemyEncounterInstance,
     EnemyInstance,
     EnemyLevelProfileDefinition,
-    EnemyPhaseDefinition,
+    EnemyPhaseLoadout,
     EnemyRankDefinition,
     EnemyRewardProfileDefinition,
     EnemySpawnDefinition,
@@ -29,7 +29,7 @@ from .runtime import (
 )
 
 
-ENEMY_FOUNDATION_VERSION = "enemy.foundation.v1"
+ENEMY_FOUNDATION_VERSION = "enemy.foundation.v3"
 
 
 __all__ = [
@@ -50,7 +50,7 @@ __all__ = [
     "EnemyEncounterInstance",
     "EnemyInstance",
     "EnemyLevelProfileDefinition",
-    "EnemyPhaseDefinition",
+    "EnemyPhaseLoadout",
     "EnemyRankDefinition",
     "EnemyRewardProfileDefinition",
     "EnemyRewardQuote",

@@ -1,6 +1,15 @@
-"""正式遭遇与敌人实例的确定性生成规则。"""
+"""正式遭遇与敌人实例的确定性、世界倾向构筑规则。"""
 
-from game.core.gameplay import EnemyCatalog, EnemyEncounterInstance, EnemyInstance, RandomSource
+from typing import Mapping
+
+from game.core.gameplay import (
+    EnemyCatalog,
+    EnemyEncounterInstance,
+    EnemyInstance,
+    EnemyPhaseLoadout,
+    RandomSource,
+    StableId,
+)
 
 
 class EnemyEncounterGenerator:
@@ -21,6 +30,7 @@ class EnemyEncounterGenerator:
         random: RandomSource,
         instance_id: str | None = None,
         allowed_enemy_ids: frozenset[str] | None = None,
+        behavior_weights: Mapping[StableId, int] | None = None,
     ) -> EnemyEncounterInstance:
         definition = self.catalog.encounters.require(encounter_id)
         if not definition.minimum_level <= level <= definition.maximum_level:
@@ -47,8 +57,13 @@ class EnemyEncounterGenerator:
                 desired = spawn.behavior_count
                 if desired is None:
                     desired = random.randint(rank.minimum_behaviors, rank.maximum_behaviors)
-                desired = max(desired, len(enemy.default_behavior_ids))
-                behavior_ids = self._behaviors(enemy, desired, random)
+                behavior_ids, phase_loadouts = self._loadout(
+                    enemy,
+                    desired,
+                    spawn.phase_health_ratios,
+                    behavior_weights or {},
+                    random,
+                )
                 sequence += 1
                 enemies.append(
                     EnemyInstance(
@@ -59,6 +74,7 @@ class EnemyEncounterGenerator:
                         behavior_ids,
                         f"{generation_seed}:enemy:{sequence}",
                         self.content_version,
+                        phase_loadouts,
                     )
                 )
         return EnemyEncounterInstance(
@@ -71,24 +87,70 @@ class EnemyEncounterGenerator:
             self.content_version,
         )
 
-    def _behaviors(self, enemy, desired: int, random: RandomSource) -> tuple[str, ...]:
-        selected = list(sorted(enemy.default_behavior_ids))
-        candidates = [
-            value
-            for value in sorted(enemy.available_behavior_ids)
-            if value not in selected and self._compatible(value, selected)
-        ]
-        while len(selected) < desired and candidates:
-            candidate = random.choice(tuple(candidates))
+    def generate_loadout(
+        self,
+        enemy_id: StableId,
+        *,
+        behavior_count: int,
+        phase_health_ratios: tuple[float, ...],
+        behavior_weights: Mapping[StableId, int],
+        random: RandomSource,
+    ) -> tuple[tuple[StableId, ...], tuple[EnemyPhaseLoadout, ...]]:
+        enemy = self.catalog.require(enemy_id)
+        return self._loadout(
+            enemy,
+            behavior_count,
+            phase_health_ratios,
+            behavior_weights,
+            random,
+        )
+
+    def _loadout(
+        self,
+        enemy,
+        desired: int,
+        phase_health_ratios: tuple[float, ...],
+        behavior_weights: Mapping[StableId, int],
+        random: RandomSource,
+    ) -> tuple[tuple[StableId, ...], tuple[EnemyPhaseLoadout, ...]]:
+        total = desired + len(phase_health_ratios)
+        selected = []
+        candidates = list(sorted(self.catalog.behaviors.ids()))
+        while len(selected) < total and candidates:
+            candidate = self._weighted_choice(candidates, behavior_weights, random)
             selected.append(candidate)
             candidates = [
                 value
                 for value in candidates
                 if value != candidate and self._compatible(value, selected)
             ]
-        if len(selected) < desired:
-            raise ValueError(f"敌人 {enemy.id} 无法生成 {desired} 个兼容行为")
-        return tuple(selected)
+        if len(selected) < total:
+            raise ValueError(f"敌人 {enemy.id} 无法生成 {total} 个兼容行为")
+        opening = tuple(selected[:desired])
+        phases = tuple(
+            EnemyPhaseLoadout(
+                f"enemy.phase.generated.{enemy.id.removeprefix('enemy.')}.phase_{index + 1}",
+                health_ratio,
+                (selected[desired + index],),
+            )
+            for index, health_ratio in enumerate(phase_health_ratios)
+        )
+        return opening, phases
+
+    @staticmethod
+    def _weighted_choice(
+        candidates: list[StableId],
+        weights: Mapping[StableId, int],
+        random: RandomSource,
+    ) -> StableId:
+        values = tuple((value, max(1, int(weights.get(value, 1)))) for value in candidates)
+        sampled = random.randint(1, sum(weight for _, weight in values))
+        cursor = 0
+        for value, weight in values:
+            cursor += weight
+            if sampled <= cursor:
+                return value
+        raise AssertionError("敌人行为权重采样越界")
 
     def _compatible(self, candidate_id: str, selected_ids: list[str]) -> bool:
         candidate = self.catalog.behaviors.require(candidate_id)

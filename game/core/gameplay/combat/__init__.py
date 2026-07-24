@@ -1,6 +1,6 @@
 """与具体世界皮肤和玩法组件无关的战斗伤害底座。"""
 
-COMBAT_FOUNDATION_VERSION = "combat.foundation.v5"
+COMBAT_FOUNDATION_VERSION = "combat.foundation.v6"
 
 from .engine import DamageEngine
 from .control import (

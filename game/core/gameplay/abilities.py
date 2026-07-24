@@ -306,7 +306,7 @@ class AbilityEngine:
             for target_index, destination_id in enumerate(destinations, start=1):
                 actor_state = states[actor_id]
                 destination = states[destination_id]
-                result = self.effects.apply(
+                result = self.effects.apply_or_reject(
                     EffectSpec(
                         instance_id=f"{use.use_id}:effect:{index}:target:{target_index}",
                         definition_id=reference.effect_id,

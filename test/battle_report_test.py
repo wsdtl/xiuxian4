@@ -5,19 +5,23 @@ from __future__ import annotations
 import ast
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from importlib import import_module
+import json
 from pathlib import Path
 import sqlite3
 import sys
 from tempfile import TemporaryDirectory
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.testclient import TestClient
 
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+PREVIEW_ROOT = ROOT / "design" / "previews"
+if str(PREVIEW_ROOT) not in sys.path:
+    sys.path.insert(0, str(PREVIEW_ROOT))
 
 from game.core.gameplay import ExecutionPhase, HEALTH_CURRENT, RuleEvent  # noqa: E402
 from game.core.persistence import BattleReportStore, SqliteDatabase  # noqa: E402
@@ -27,7 +31,13 @@ from game.content.world_skins.cultivation import (  # noqa: E402
     CULTIVATION_SKIN_ID,
     CULTIVATION_SKIN_VERSION,
 )
-from game.features.battle_report import BattleReportService  # noqa: E402
+from game.features.battle_report import (  # noqa: E402
+    BATTLE_EVENT_PRESENTATIONS,
+    PUBLIC_BATTLE_REPORT_SCHEMA,
+    PUBLIC_BATTLE_REPORT_VERSION,
+    BattleReportService,
+    present_battle_event,
+)
 from game.rules.battle_report import (  # noqa: E402
     BattleReportDraft,
     BattleReportFrameDraft,
@@ -40,16 +50,17 @@ from game.rules.battle_report import (  # noqa: E402
     StoredBattleEvent,
     KNOWN_BATTLE_EVENT_KINDS,
 )
+from generate_battle_report_preview import (  # noqa: E402
+    build_preview_document,
+)
 
 
-_event_text = import_module("game.cmd.战报.site")._event_text
-
-
-NOW = datetime(2026, 7, 19, 12, tzinfo=timezone.utc)
+NOW = datetime.now(timezone.utc).replace(microsecond=0)
 
 
 def main() -> None:
     _assert_all_current_events_are_rendered()
+    _assert_production_preview()
     with TemporaryDirectory() as directory:
         database = SqliteDatabase(Path(directory) / "battle-report.db")
         database.initialize()
@@ -105,18 +116,93 @@ def main() -> None:
         try:
             app = FastAPI()
             app.include_router(game_router)
+            app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
             with TestClient(app) as client:
                 response = client.get(f"/battle/{reference.share_id}")
                 assert response.status_code == 200
-                assert "第一战" in response.text and "受到 100 点伤害" in response.text
-                assert "初始效果" in response.text and "初始战斗快照" in response.text
-                assert "战斗结束状态" in response.text and "结束效果" in response.text
-                assert "动作前完整状态" in response.text and "动作后完整状态" in response.text
-                assert "实际目标 山魈" in response.text
-                assert "正面:" in response.text and "负面:" in response.text
-                assert "character-private-id" not in response.text
-                assert "enemy-private-id" not in response.text
+                assert "/static/battle-report/style.css" in response.text
+                assert "/static/battle-report/app.js" in response.text
+                assert 'script type="module"' in response.text
+                script_response = client.get("/static/battle-report/app.js")
+                assert script_response.status_code == 200
+                script = script_response.text
+                timeline_response = client.get("/static/battle-report/timeline.js")
+                ui_response = client.get("/static/battle-report/ui.js")
+                assert timeline_response.status_code == 200
+                assert ui_response.status_code == 200
+                timeline_script = timeline_response.text
+                ui_script = ui_response.text
+                assert 'const MODE_OPTIONS' in script
+                assert 'action === "mode"' in script
+                assert 'action === "segment"' in script
+                assert 'action === "snapshot"' in script
+                assert 'action === "participant-disclosure"' in script
+                assert 'action === "filter"' in script
+                assert 'label: "战斗记录"' in script
+                assert 'label: "全部事件"' in script
+                assert 'label: "原始"' not in timeline_script
+                assert 'compactNarrative' not in timeline_script
+                assert 'export function renderRawDataAccess' in timeline_script
+                assert 'details.addEventListener("toggle"' in timeline_script
+                assert 'const state' not in timeline_script
+                assert 'document.querySelector("#reportRoot")' not in timeline_script
+                assert 'export function node' in ui_script
+                assert 'const state' not in ui_script
+                assert 'function updateSegmentView()' in script
+                assert 'function updateSnapshotView()' in script
+                snapshot_update = script.split(
+                    'function updateSnapshotView()', 1
+                )[1].split('function updateFilterView()', 1)[0]
+                assert 'replaceRegion(root, ".summary-panel"' not in snapshot_update
+                assert 'replaceRegion(root, ".participant-stack"' in snapshot_update
+                assert 'disclosure.querySelector(".participant-disclosure-title span")' in snapshot_update
+                assert 'function updateParticipantDisclosure()' in script
+                assert 'content.toggleAttribute("inert", !state.participantExpanded)' in script
+                assert 'function updateFilterView()' in script
+                assert 'function selectSegment(index)' in script
+                assert 'const many = segments.length > 6' in script
+                assert 'select.dataset.action = "segment-select"' in script
+                assert 'segmentStepButton("上一片段"' in script
+                assert 'segmentStepButton("下一片段"' in script
+                combined_script = script + timeline_script + ui_script
+                assert 'document.startViewTransition' not in combined_script
+                assert 'transitionView' not in combined_script
+                assert script.count('renderReport();') == 1
+                style_response = client.get("/static/battle-report/style.css")
+                assert style_response.status_code == 200
+                assert 'prefers-reduced-motion' in style_response.text
+                assert 'scrollbar-width: none' in style_response.text
+                assert '.participant-stack {' in style_response.text
+                assert 'overflow: visible' in style_response.text
+                assert '.timeline-panel {' in style_response.text
+                assert 'font-family: var(--display-font)' not in style_response.text
+                assert '.segment-tabs.many-segments .segment-picker' in style_response.text
+                assert 'view-transition' not in style_response.text
+                assert '--stagger' not in style_response.text
+                assert "borrowed_edge" not in combined_script
+                assert "deferred_echo" not in combined_script
+
+                data_response = client.get(f"/battle/{reference.share_id}/data")
+                assert data_response.status_code == 200
+                payload = data_response.json()
+                assert payload["schema"] == PUBLIC_BATTLE_REPORT_SCHEMA
+                assert payload["version"] == PUBLIC_BATTLE_REPORT_VERSION
+                assert payload["summary"]["title"] == "探险战报"
+                segment = payload["detail"]["segments"][0]
+                assert segment["title"] == "第一战"
+                assert segment["initial_participants"][0]["effects"][0]["polarity"]
+                turn = segment["timeline"][1]
+                assert "受到 100 点伤害" in turn["events"][0]["text"]
+                assert turn["before"]["title"] == "动作前完整状态"
+                assert turn["after"]["title"] == "动作后完整状态"
+                assert any(
+                    fact["label"] == "实际目标" and fact["value"] == ["山魈"]
+                    for fact in turn["facts"]
+                )
+                assert "character-private-id" not in data_response.text
+                assert "enemy-private-id" not in data_response.text
                 assert client.get("/battle/not-found").status_code == 404
+                assert client.get("/battle/not-found/data").status_code == 404
         finally:
             restore_game_services(previous)
 
@@ -148,6 +234,61 @@ def main() -> None:
         assert service.cleanup(logical_time=NOW + timedelta(days=31)) == (0, 1)
 
     print("battle report tests passed")
+
+
+def _assert_production_preview() -> None:
+    preview_path = PREVIEW_ROOT / "battle-report-production.html"
+    assert preview_path.is_file()
+    assert not (PREVIEW_ROOT / "battle-report-humanized.html").exists()
+    preview = preview_path.read_text(encoding="utf-8")
+    assert "<style" not in preview
+    assert "maximum-scale=1, user-scalable=no" in preview
+    assert "../../static/battle-report/style.css?v=16" in preview
+    assert "../../static/battle-report/app.js?v=16" in preview
+    assert 'script type="module"' in preview
+    opening = '<script id="battleReportPreviewData" type="application/json">'
+    payload = preview.split(opening, 1)[1].split("</script>", 1)[0]
+    embedded = json.loads(payload)
+    generated = build_preview_document()
+    generated["share_id"] = embedded["share_id"]
+    assert embedded == generated
+    assert embedded["schema"] == PUBLIC_BATTLE_REPORT_SCHEMA
+    assert embedded["version"] == PUBLIC_BATTLE_REPORT_VERSION
+    assert embedded["mode_id"] == "battle.mode.party_battle"
+    assert embedded["detail"]["available"] is True
+    assert len(embedded["detail"]["segments"]) >= 1
+    assert all(segment["timeline"] for segment in embedded["detail"]["segments"])
+    assert {
+        "观潮客",
+        "砺锋客",
+        "司星者",
+    }.issubset(
+        {
+            participant["label"]
+            for participant in embedded["detail"]["segments"][0][
+                "initial_participants"
+            ]
+        }
+    )
+    assert "ability.test" not in payload
+    assert "combat.damage.dealt" in payload
+    events = [
+        event
+        for segment in embedded["detail"]["segments"]
+        for transition in segment["timeline"]
+        for event in transition["events"]
+    ]
+    phase_events = [
+        event for event in events if event["kind"] == "combat.phase.activated"
+    ]
+    assert phase_events
+    assert all(
+        event["registered"]
+        and "进入新的战斗阶段" in event["text"]
+        and "获得" in event["text"]
+        and event["raw"]["values"]["behavior_ids"]
+        for event in phase_events
+    )
 
 
 def _assert_all_current_events_are_rendered() -> None:
@@ -183,9 +324,10 @@ def _assert_all_current_events_are_rendered() -> None:
             ):
                 _add_battle_event(discovered, node.args[4].value)
     assert discovered == KNOWN_BATTLE_EVENT_KINDS
+    assert BATTLE_EVENT_PRESENTATIONS.registered_kinds == KNOWN_BATTLE_EVENT_KINDS
     view = _FallbackView()
     for kind in sorted(KNOWN_BATTLE_EVENT_KINDS):
-        text = _event_text(
+        event = present_battle_event(
             StoredBattleEvent(
                 kind,
                 "p0",
@@ -197,7 +339,63 @@ def _assert_all_current_events_are_rendered() -> None:
             {"p0": "甲", "p1": "乙"},
             view,
         )
-        assert text and "未命名战斗事件" not in text, kind
+        assert event["registered"] is True, kind
+        assert event["text"] and event["tone"] != "unknown", kind
+
+    unknown = present_battle_event(
+        StoredBattleEvent(
+            "combat.future.time_rewind",
+            "p0",
+            "p1",
+            "effect.future.time_rewind",
+            NOW,
+            {
+                "restored_health": 300,
+                "state": {"before": 100, "after": 400},
+                "operation_id": "private-operation",
+            },
+        ),
+        {"p0": "甲", "p1": "乙"},
+        view,
+    )
+    assert unknown["registered"] is False
+    assert unknown["tone"] == "unknown"
+    assert unknown["text"].startswith("甲 对 乙 触发未识别的战斗事件")
+    assert "combat.future.time_rewind" not in unknown["text"]
+    assert "effect.future.time_rewind" not in unknown["text"]
+    assert unknown["raw"]["values"]["state"] == {"before": 100, "after": 400}
+    assert unknown["raw"]["omitted_private_keys"] == ["operation_id"]
+    assert "private-operation" not in str(unknown)
+
+    rejected = present_battle_event(
+        StoredBattleEvent(
+            "effect.application.rejected",
+            "p0",
+            "p1",
+            "effect.test",
+            NOW,
+            {"reason": "control_resisted", "chance": 0.5, "roll": 0.8},
+        ),
+        {"p0": "甲", "p1": "乙"},
+        view,
+    )
+    assert rejected["registered"] is True
+    assert rejected["text"] == "乙抵抗了甲施加的效果"
+
+    revived = present_battle_event(
+        StoredBattleEvent(
+            "combat.target.revived",
+            "p0",
+            "p1",
+            "health.current",
+            NOW,
+            {"before": 0, "after": 30, "actual": 30},
+        ),
+        {"p0": "甲", "p1": "乙"},
+        view,
+    )
+    assert revived["registered"] is True
+    assert revived["text"] == "甲使乙重新投入战斗"
 
 
 def _add_battle_event(discovered: set[str], value: str) -> None:

@@ -1,4 +1,4 @@
-"""七十二把正式武器的目录、真实执行和快速平衡巡检。"""
+"""正式武器目录、真实执行、战报承接和快速平衡巡检。"""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from game.content.catalog.weapon.mechanics import (  # noqa: E402
     WEAPON_MAXIMUM_LEVEL_TABLE,
     WEAPON_MECHANIC_CONTENT,
 )
-from game.content.official import assemble_official_catalog  # noqa: E402
+from game.content.official import assemble_official_catalog, select_world_skin  # noqa: E402
 from game.content.world_skins import (  # noqa: E402
     CULTIVATION_SKIN_ID,
     MAGIC_SKIN_ID,
@@ -39,11 +39,12 @@ from game.core.gameplay import (  # noqa: E402
     Ruleset,
     SeededRandomSource,
 )
+from game.features.battle_report import present_battle_event  # noqa: E402
 from game.rules import (  # noqa: E402
     WeaponGenerationRequest,
     WeaponInstanceGenerator,
 )
-from game.rules.battle_report import KNOWN_BATTLE_EVENT_KINDS  # noqa: E402
+from game.rules.battle_report import KNOWN_BATTLE_EVENT_KINDS, StoredBattleEvent  # noqa: E402
 
 
 def main() -> None:
@@ -57,24 +58,26 @@ def main() -> None:
     _assert_mark_and_detonation_cycle(executor)
     _assert_periodic_damage(executor, catalog)
     _assert_current_cooldown_delay(executor)
+    _assert_borrowed_force_and_report_projection(executor, catalog)
+    _assert_deferred_echo_and_report_projection(executor, catalog)
     _assert_fast_balance(catalog)
     print("official weapon catalog test passed")
 
 
 def _assert_catalog_shape(catalog) -> None:
-    assert len(WEAPON_BLUEPRINTS) == 72
-    assert len(WEAPON_MECHANIC_CONTENT.items) == 72
-    assert len(WEAPON_MECHANIC_CONTENT.weapons) == 72
-    assert len(WEAPON_MECHANIC_CONTENT.abilities) == 72
-    assert len(WEAPON_MECHANIC_CONTENT.targeting) == 72
-    assert len(WEAPON_MECHANIC_CONTENT.profiles) == 72
-    assert len({value.key for value in WEAPON_BLUEPRINTS}) == 72
+    assert len(WEAPON_BLUEPRINTS) == 74
+    assert len(WEAPON_MECHANIC_CONTENT.items) == 74
+    assert len(WEAPON_MECHANIC_CONTENT.weapons) == 74
+    assert len(WEAPON_MECHANIC_CONTENT.abilities) == 74
+    assert len(WEAPON_MECHANIC_CONTENT.targeting) == 74
+    assert len(WEAPON_MECHANIC_CONTENT.profiles) == 74
+    assert len({value.key for value in WEAPON_BLUEPRINTS}) == 74
     assert len(
         {
             (value.primary, value.support, value.targeting)
             for value in WEAPON_BLUEPRINTS
         }
-    ) == 72
+    ) == 74
     expected_ability_ids = {
         f"ability.weapon.{value.key}" for value in WEAPON_BLUEPRINTS
     }
@@ -103,7 +106,7 @@ def _assert_instance_generation(catalog) -> None:
         for definition_id in catalog.weapons.definitions.ids()
         if catalog.weapons.require(definition_id).generation_profile_id is not None
     )
-    assert len(definition_ids) == 72
+    assert len(definition_ids) == 74
     replay_request = WeaponGenerationRequest(
         "weapon-replay",
         "asset-weapon-replay",
@@ -213,7 +216,7 @@ def _assert_all_weapon_triggers_execute(catalog) -> None:
         for trigger_id in catalog.triggers.ids()
         if trigger_id.startswith("trigger.weapon.")
     )
-    assert len(trigger_ids) == 22
+    assert len(trigger_ids) == 23
     for index, trigger_id in enumerate(trigger_ids):
         definition = catalog.triggers.require(trigger_id)
         owner_id = "target" if definition.owner.value == "event_target" else "actor"
@@ -334,10 +337,149 @@ def _assert_current_cooldown_delay(executor: GameplayExecutor) -> None:
     assert outcome.value.target.cooldowns["ability.basic_attack"] == 3
 
 
+def _assert_borrowed_force_and_report_projection(
+    executor: GameplayExecutor,
+    catalog,
+) -> None:
+    ability_id = "ability.weapon.borrowed_edge"
+
+    def execute(target_attack: float, use_id: str):
+        return executor.execute_ability(
+            AbilityUse(use_id, ability_id),
+            actor=_entity("actor", ability_id=ability_id, attack=100),
+            target=_entity("target", attack=target_attack),
+            context=_context(use_id, 41),
+        )
+
+    low = execute(50, "borrowed-force:low")
+    high = execute(300, "borrowed-force:high")
+    extreme = execute(10_000, "borrowed-force:extreme")
+    assert low.failure is None and low.value is not None
+    assert high.failure is None and high.value is not None
+    assert extreme.failure is None and extreme.value is not None
+    low_damage = 100_000 - low.value.target.resources["health.current"]
+    high_damage = 100_000 - high.value.target.resources["health.current"]
+    extreme_damage = 100_000 - extreme.value.target.resources["health.current"]
+    assert low_damage == 95
+    assert high_damage == extreme_damage == 126
+    assert any(
+        str(effect.definition_id) == "effect.weapon.borrowed_edge.support"
+        and effect.remaining_turns == 2
+        for effect in high.value.actor.active_effects
+    )
+
+    view = select_world_skin(catalog, CULTIVATION_SKIN_ID)
+    presented = [
+        present_battle_event(
+            StoredBattleEvent(
+                str(event.kind),
+                event.source_id,
+                event.target_id,
+                str(event.subject_id),
+                event.logical_time,
+                dict(event.values),
+                event.phase.value,
+            ),
+            {"actor": "试剑者", "target": "镜前敌"},
+            view,
+        )
+        for event in high.value.events
+    ]
+    assert all(event["registered"] for event in presented)
+    assert any("移星换斗镜·主效" in event["text"] for event in presented)
+    assert any("移星换斗镜·辅效" in event["text"] for event in presented)
+    assert any("126 点有效伤害" in event["text"] for event in presented)
+
+
+def _assert_deferred_echo_and_report_projection(
+    executor: GameplayExecutor,
+    catalog,
+) -> None:
+    ability_id = "ability.weapon.deferred_echo"
+    applied = executor.execute_ability(
+        AbilityUse("deferred-echo:apply", ability_id),
+        actor=_entity("actor", ability_id=ability_id, attack=100),
+        target=_entity("target"),
+        context=_context("deferred-echo:apply", 51),
+    )
+    assert applied.failure is None and applied.value is not None
+    assert 100_000 - applied.value.target.resources["health.current"] == 72
+    assert any(
+        str(effect.definition_id) == "effect.weapon.deferred_echo.echo_status"
+        and effect.remaining_turns == 1
+        for effect in applied.value.target.active_effects
+    )
+
+    premature_context = _context("deferred-echo:premature", 52)
+    premature_event = RuleEvent.from_context(
+        premature_context,
+        kind="combat.turn.started",
+        source_id="actor",
+        target_id="actor",
+        subject_id="combat.turn",
+    )
+    premature = catalog.trigger_engine.process(
+        (premature_event,),
+        entities={"actor": applied.value.actor, "target": applied.value.target},
+        context=premature_context,
+    )
+    health_before_echo = premature.entity("target").resources["health.current"]
+    assert health_before_echo == applied.value.target.resources["health.current"]
+
+    release_context = _context("deferred-echo:release", 53)
+    release_event = RuleEvent.from_context(
+        release_context,
+        kind="combat.turn.started",
+        source_id="target",
+        target_id="target",
+        subject_id="combat.turn",
+    )
+    released = catalog.trigger_engine.process(
+        (release_event,),
+        entities=premature.entities,
+        context=release_context,
+    )
+    echo_damage = health_before_echo - released.entity("target").resources["health.current"]
+    assert round(echo_damage, 1) == 61.2
+    assert any(
+        event.kind == "trigger.activated"
+        and str(event.subject_id) == "trigger.weapon.deferred_echo.echo_release"
+        for event in released.events
+    )
+    assert any(
+        event.kind == "combat.damage.dealt"
+        and event.values.get("damage_type") == "damage.true"
+        and round(float(event.values.get("effective_damage", 0)), 1) == 61.2
+        for event in released.events
+    )
+
+    view = select_world_skin(catalog, CULTIVATION_SKIN_ID)
+    presented = [
+        present_battle_event(
+            StoredBattleEvent(
+                str(event.kind),
+                event.source_id,
+                event.target_id,
+                str(event.subject_id),
+                event.logical_time,
+                dict(event.values),
+                event.phase.value,
+            ),
+            {"actor": "奏璧者", "target": "闻声敌"},
+            view,
+        )
+        for event in (*applied.value.events, *released.events)
+    ]
+    assert all(event["registered"] for event in presented)
+    assert any("空桑回音璧·回响标记" in event["text"] for event in presented)
+    assert any("空桑回音璧·回响结算" in event["text"] for event in presented)
+    assert any("61.2 点有效伤害" in event["text"] for event in presented)
+
+
 def _assert_fast_balance(catalog) -> None:
     static_start = perf_counter()
     static_report = WeaponBalanceAuditor().audit()
-    assert len(static_report.entries) == 72
+    assert len(static_report.entries) == 74
     assert not static_report.outliers(22.0)
     assert perf_counter() - static_start < 1.0
 
@@ -352,7 +494,7 @@ def _assert_fast_balance(catalog) -> None:
         samples_per_profile=128,
     )
     elapsed = perf_counter() - generation_start
-    assert generation_report.total_samples == 72 * 128
+    assert generation_report.total_samples == 74 * 128
     assert set(generation_report.quality_counts) == set(QUALITY_IDS)
     assert not generation_report.profiles_above_attempts(1.05)
     assert elapsed < 15.0, elapsed
@@ -383,6 +525,7 @@ def _entity(
     ability_id: str | None = None,
     cooldowns=None,
     trigger_id: str | None = None,
+    attack: float = 100,
 ) -> RuleEntity:
     active_effects = ()
     if trigger_id:
@@ -400,7 +543,7 @@ def _entity(
         base_attributes={
             "health.maximum": 100_000,
             "spirit.maximum": 1_000,
-            "combat.attack": 100,
+            "combat.attack": attack,
             "combat.defense.physical": 0,
             "combat.speed": 100,
             "combat.accuracy": 1,

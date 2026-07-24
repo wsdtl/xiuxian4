@@ -12,7 +12,7 @@ from game.content.catalog.character import CHARACTER_MAXIMUM_LEVEL
 from game.core.gameplay import EnemyEncounterInstance, StableId, stable_id
 
 
-EXPLORATION_RULESET_VERSION = "rules.exploration.v2"
+EXPLORATION_RULESET_VERSION = "rules.exploration.v3"
 EXPLORATION_AGGREGATE = "snapshot.exploration"
 
 

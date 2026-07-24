@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CharacterOverview, CharacterOverviewResult, CurrentCharacterResult, current_game_services
 from game.content.catalog.foundation import PRIMARY_CURRENCY_ID, QUALITY_IDS
@@ -17,10 +16,11 @@ from game.core.gameplay import (
     weapon_state_from_instance,
 )
 from game.rules.item import asset_reference, resolve_asset_reference
-from launch import C, config, logger
+from launch import C, logger
 from message import Action, DocumentMessage, M
 
-from ..reply import send_game_reply
+from ..command_helpers import command_time
+from ..reply import send_command_failure, send_game_reply
 
 
 async def recycle_one(message: str, result: CharacterOverviewResult) -> None:
@@ -164,7 +164,7 @@ async def confirm_recycle(message: str, result: CharacterOverviewResult) -> None
             services.economy.execute_recycle,
             overview.character.id,
             quoted.quote,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         await send_game_reply(_result_message(executed, overview))
     except (KeyError, TypeError, ValueError) as exc:
@@ -182,7 +182,7 @@ async def recycle_trophies(current: CurrentCharacterResult) -> None:
         result = await asyncio.to_thread(
             current_game_services().economy.recycle_trophies,
             character.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         view = current_game_services().world_view(current.character_world)
         builder = M.document().section(f"{COVENANT_RECYCLING_NAME}·战利品", icon="trade")
@@ -386,15 +386,13 @@ def _overview(result: CharacterOverviewResult) -> CharacterOverview | None:
     return result.overview if result.status == "ok" else None
 
 
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
-
-
 async def _failed(title: str, character_id: str, exc: Exception) -> None:
-    logger.opt(colors=True, exception=exc).error(
-        C.join(C.fail(title), C.kv("character", character_id))
+    await send_command_failure(
+        title,
+        character_id,
+        exc,
+        _failure("当前操作没有完成，请稍后重试"),
     )
-    await send_game_reply(_failure("当前操作没有完成，请稍后重试"))
 
 
 def _failure(message: str) -> DocumentMessage:

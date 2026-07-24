@@ -1,6 +1,6 @@
 """持续探险批次的跨领域原子结算。"""
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from hashlib import sha256
 
@@ -35,6 +35,7 @@ from game.rules.exploration import (
     EXPLORATION_AGGREGATE,
     EXPLORATION_RULESET_VERSION,
     EXPLORATION_VICTORY_FACT_KIND,
+    ExplorationBatchPlan,
     ExplorationBatchPlanner,
     ExplorationBatchResult,
     ExplorationRewardKind,
@@ -46,16 +47,6 @@ from game.rules.exploration import (
     record_batch,
     stop_exploration,
 )
-from game.rules.battle_report import (
-    BattleReportDraft,
-    BattleReportSegmentDraft,
-    BattleReportSummary,
-    capture_battle_participant,
-    capture_battle_round_states,
-    capture_battle_turn_states,
-    capture_battle_transitions,
-)
-
 from .medicine import ExplorationMedicineService
 from .models import (
     MAX_CATCH_UP_BATCHES,
@@ -64,9 +55,49 @@ from .models import (
     ExplorationOperationResult,
     ExplorationVictoryFact,
     ExplorationStorageKinds,
-    exploration_battle_report_id,
 )
+from .reporting import build_exploration_battle_report
 from .rewards import ExplorationRewardFactory, available_backpack_space
+
+
+@dataclass(frozen=True)
+class _BatchInputs:
+    state: ExplorationState
+    character: CharacterState
+    character_world: CharacterWorldState
+    view: object
+    inventory: InventoryState
+    loadout: LoadoutState
+    roster: CompanionRosterState
+    settings: CharacterSettingsState
+    character_level: int
+
+
+@dataclass(frozen=True)
+class _BatchSimulation:
+    plan: ExplorationBatchPlan
+    battle: object | None
+    victory: bool
+    draw: bool
+    health_after: float
+    spirit_after: float
+    health_maximum: float
+    spirit_maximum: float
+
+
+@dataclass(frozen=True)
+class _BatchRewards:
+    character_experience: int = 0
+    weapon_experience: int = 0
+    companion_experience: int = 0
+    weapon_drops: int = 0
+    equipment_drops: int = 0
+    trophy_drops: int = 0
+    medicine_drops: int = 0
+    draw_ticket_drops: int = 0
+    trophy_value: int = 0
+    references: tuple[ExplorationRewardReference, ...] = ()
+    capacity_full: bool = False
 
 
 class ExplorationSettlementService:
@@ -102,7 +133,11 @@ class ExplorationSettlementService:
             catalog.enemies,
             content_version=catalog.report.content_fingerprint,
         )
-        self.planner = ExplorationBatchPlanner(content.exploration_regions, encounters)
+        self.planner = ExplorationBatchPlanner(
+            content.exploration_regions,
+            encounters,
+            content.enemy_behavior_profiles,
+        )
         self.battles = ExplorationBattleSimulator(catalog, player_lineup)
         self.reward_factory = ExplorationRewardFactory(content)
         self.medicine = ExplorationMedicineService(
@@ -203,297 +238,51 @@ class ExplorationSettlementService:
                 f"{state.session_id}:batch:{batch_index}",
                 resolved_at,
             )
-            character = self.snapshots.require(
-                uow, self.storage.character, character_id, CharacterState
-            )
-            character_world = self.snapshots.require(
+            inputs = self._load_batch_inputs(uow, state, character_id)
+            simulation = self._simulate_batch(inputs, batch_index, context)
+            rewards = self._settle_rewards_in_uow(
                 uow,
-                self.storage.character_world,
-                character_id,
-                CharacterWorldState,
+                inputs,
+                simulation,
+                context,
             )
-            view = self.world_views.require(character_world.world_id)
-            inventory = self.snapshots.require(
-                uow, self.storage.inventory, character_id, InventoryState
-            )
-            loadout = self.snapshots.require(
-                uow, self.storage.loadout, character_id, LoadoutState
-            )
-            roster = self.snapshots.load(
+            if rewards.capacity_full:
+                self._stop_for_capacity(uow, state, character_id, resolved_at)
+                uow.commit()
+                return None
+            after_battle, medicines_used = self._apply_battle_resources_in_uow(
                 uow,
-                self.storage.companion_roster,
-                character_id,
-                CompanionRosterState,
-            ) or CompanionRosterState(character_id)
-            settings = self.snapshots.require(
-                uow,
-                CHARACTER_SETTINGS_AGGREGATE,
-                character_id,
-                CharacterSettingsState,
+                inputs,
+                simulation,
+                context,
             )
-            level = character.progressions[CHARACTER_LEVEL_PROGRESSION_ID].level
-            plan = self.planner.plan(
-                session_id=state.session_id,
-                batch_index=batch_index,
-                region_id=state.region_id,
-                character_level=level,
-                random=context.random,
-            )
-            victory = False
-            draw = False
-            battle = None
-            health_after = character.resources[HEALTH_CURRENT]
-            spirit_after = character.resources[SPIRIT_CURRENT]
-            health_maximum = float(character.core_attributes[HEALTH_MAXIMUM])
-            spirit_maximum = float(character.core_attributes[SPIRIT_MAXIMUM])
-            if plan.encounter is not None:
-                battle = self.battles.simulate(
-                    plan,
-                    character=character,
-                    inventory=inventory,
-                    loadout=loadout,
-                    roster=roster,
-                    context=context,
-                )
-                victory = battle.victory
-                draw = battle.draw
-                health_after = battle.health_after
-                spirit_after = battle.spirit_after
-                health_maximum = battle.health_maximum
-                spirit_maximum = battle.spirit_maximum
-
-            character_experience = 0
-            weapon_experience = 0
-            companion_experience = 0
-            weapon_drops = 0
-            equipment_drops = 0
-            trophy_drops = 0
-            medicine_drops = 0
-            draw_ticket_drops = 0
-            trophy_value = 0
-            reward_references = []
-            medicines_used = []
-            if victory and plan.encounter is not None:
-                quotes = tuple(
-                    self.content.catalog.enemy_threat.reward_quote(enemy)
-                    for enemy in plan.encounter.enemies
-                )
-                character_experience = sum(value.character_experience for value in quotes)
-                weapon_experience = sum(value.weapon_experience for value in quotes)
-                if battle is not None and battle.player_companion_id is not None:
-                    companion_experience = self.companion_growth.engine.exploration_experience(
-                        plan.encounter_kind.value,
-                        tuple(enemy.level for enemy in plan.encounter.enemies),
-                    )
-                rolls = sum(value.loot_rolls for value in quotes)
-                loot_state = self.snapshots.require(
-                    uow, self.storage.loot, character_id, LootState
-                )
-                region = self.content.exploration_regions.require(state.region_id)
-                loot_outcome = self.content.catalog.loot_engine.roll(
-                    LootRollCommand(
-                        f"{context.trace_id}:loot",
-                        character_id,
-                        region.loot_table_id(plan.encounter_kind.value),
-                        loot_state.revision,
-                        rolls,
-                        plan.loot_modifiers,
-                    ),
-                    state=loot_state,
-                    context=context,
-                )
-                if loot_outcome.failure or loot_outcome.value is None:
-                    raise RuntimeError(
-                        loot_outcome.failure.message if loot_outcome.failure else "探险掉落失败"
-                    )
-                reward_build = self.reward_factory.build(
-                    loot_outcome.value.receipt.awards,
-                    plan=plan,
-                    character=character,
-                    inventory=inventory,
-                    loadout=loadout,
-                    character_experience=character_experience,
-                    weapon_experience=weapon_experience,
-                    context=context,
-                )
-                remaining_space = available_backpack_space(
-                    inventory,
-                    self.content.catalog.items,
-                )
-                if (
-                    remaining_space is not None
-                    and reward_build.backpack_space > remaining_space
-                ):
-                    stopped = stop_exploration(
-                        state,
-                        ExplorationStopReason.CAPACITY_FULL,
-                        logical_time=resolved_at,
-                    )
-                    self.snapshots.update(
-                        uow,
-                        EXPLORATION_AGGREGATE,
-                        character_id,
-                        state,
-                        stopped,
-                        resolved_at,
-                    )
-                    uow.commit()
-                    return None
-                weapon_drops = reward_build.weapon_drops
-                equipment_drops = reward_build.equipment_drops
-                trophy_drops = reward_build.trophy_drops
-                medicine_drops = reward_build.medicine_drops
-                draw_ticket_drops = reward_build.draw_ticket_drops
-                trophy_value = reward_build.trophy_value
-                reward_references = list(reward_build.references)
-                self.snapshots.update(
-                    uow,
-                    self.storage.loot,
-                    character_id,
-                    loot_state,
-                    loot_outcome.value.state,
-                    resolved_at,
-                )
-                weapon_revisions = (
-                    self._weapon_revisions(uow, loadout)
-                    if weapon_experience > 0
-                    else {}
-                )
-                settlement = RewardSettlement(
-                    f"{context.trace_id}:reward",
-                    character_id,
-                    character_id,
-                    "source.exploration",
-                    f"{state.session_id}:{batch_index}",
-                    reward_build.rewards,
-                    RewardExpectations(
-                        claim_revision=self._claim_revision(uow, character_id),
-                        inventory_revision=(
-                            inventory.revision
-                            if (
-                                weapon_drops
-                                or equipment_drops
-                                or trophy_drops
-                                or medicine_drops
-                                or draw_ticket_drops
-                            )
-                            else None
-                        ),
-                        character_revisions={character_id: character.revision},
-                        weapon_revisions=weapon_revisions,
-                    ),
-                )
-                keys = self.reward_keys_factory(
-                    character_id,
-                    PRIMARY_LEDGER_ID,
-                    (character_id,),
-                    tuple(weapon_revisions),
-                )
-                reward_outcome = self.rewards.settle_in_uow(
-                    uow,
-                    settlement,
-                    keys,
-                    context=context,
-                )
-                if reward_outcome.failure:
-                    raise RuntimeError(reward_outcome.failure.message)
-                companion_growth = self.companion_growth.grant_in_uow(
-                    uow,
-                    character_id,
-                    battle.player_companion_id if battle is not None else None,
-                    companion_experience,
-                    character_level=level,
-                    logical_time=resolved_at,
-                )
-                companion_experience = (
-                    companion_growth.accepted if companion_growth is not None else 0
-                )
-
-            current_character = self.snapshots.require(
-                uow, self.storage.character, character_id, CharacterState
-            )
-            resources = dict(current_character.resources)
-            resources[HEALTH_CURRENT] = health_after
-            resources[SPIRIT_CURRENT] = spirit_after
-            after_battle = current_character
-            if resources != dict(current_character.resources):
-                after_battle = replace(
-                    current_character,
-                    resources=resources,
-                    revision=current_character.revision + 1,
-                )
-                self.snapshots.update(
-                    uow,
-                    self.storage.character,
-                    character_id,
-                    current_character,
-                    after_battle,
-                    resolved_at,
-                )
-            if victory and settings.auto_use_medicine:
-                after_battle, medicines_used = self.medicine.apply(
-                    uow,
-                    after_battle,
-                    health_maximum,
-                    spirit_maximum,
-                    context,
-                )
-
             result = ExplorationBatchResult(
-                plan=plan,
+                plan=simulation.plan,
                 resolved_at=resolved_at,
-                victory=victory,
-                draw=draw,
+                victory=simulation.victory,
+                draw=simulation.draw,
                 health_after=after_battle.resources[HEALTH_CURRENT],
                 spirit_after=after_battle.resources[SPIRIT_CURRENT],
-                character_experience=character_experience if victory else 0,
-                weapon_experience=weapon_experience if victory else 0,
-                companion_experience=companion_experience if victory else 0,
-                weapon_drops=weapon_drops,
-                equipment_drops=equipment_drops,
-                trophy_drops=trophy_drops,
-                medicine_drops=medicine_drops,
-                draw_ticket_drops=draw_ticket_drops,
-                trophy_value=trophy_value,
-                rewards=tuple(reward_references),
+                character_experience=rewards.character_experience,
+                weapon_experience=rewards.weapon_experience,
+                companion_experience=rewards.companion_experience,
+                weapon_drops=rewards.weapon_drops,
+                equipment_drops=rewards.equipment_drops,
+                trophy_drops=rewards.trophy_drops,
+                medicine_drops=rewards.medicine_drops,
+                draw_ticket_drops=rewards.draw_ticket_drops,
+                trophy_value=rewards.trophy_value,
+                rewards=rewards.references,
                 medicines_used=tuple(medicines_used),
             )
-            if (
-                victory
-                and plan.encounter is not None
-            ):
-                fact = ExplorationVictoryFact(
-                    event_id=f"{state.session_id}:batch:{batch_index}",
-                    character_id=character_id,
-                    character_name=character.name,
-                    world_id=character_world.world_id,
-                    region_id=state.region_id,
-                    encounter_kind=plan.encounter_kind.value,
-                    resolved_at=resolved_at,
-                )
-                self._append_victory_fact(uow, fact)
-                if self.settlement_observer is not None:
-                    observation = self.settlement_observer.observe_victory_in_uow(
-                        uow,
-                        fact,
-                    )
-                    if observation.reward_items:
-                        result = replace(
-                            result,
-                            rewards=(
-                                *result.rewards,
-                                *(
-                                    ExplorationRewardReference(
-                                        ExplorationRewardKind.ITEM,
-                                        definition_id,
-                                        quantity,
-                                    )
-                                    for definition_id, quantity in observation.reward_items
-                                ),
-                            ),
-                        )
+            result = self._observe_victory_in_uow(
+                uow,
+                inputs,
+                simulation,
+                result,
+            )
             reason = None
-            if plan.encounter is not None and not victory:
+            if simulation.plan.encounter is not None and not simulation.victory:
                 reason = ExplorationStopReason.DEFEATED
             elif batch_index >= MAX_EXPLORATION_BATCHES:
                 reason = ExplorationStopReason.BATCH_LIMIT
@@ -506,169 +295,356 @@ class ExplorationSettlementService:
                 next_state,
                 resolved_at,
             )
-            if battle is not None:
+            if simulation.battle is not None:
                 self.battle_reports.capture_in_uow(
                     uow,
-                    self._battle_report_draft(
+                    build_exploration_battle_report(
+                        self.content,
                         state,
                         next_state,
-                        character,
-                        roster,
-                        battle,
+                        inputs.character,
+                        inputs.roster,
+                        simulation.battle,
                         context.trace_id,
-                        view,
+                        inputs.view,
                     ),
                 )
             uow.commit()
             return result
 
-    def _battle_report_draft(
+    def _load_batch_inputs(
         self,
+        uow,
         state: ExplorationState,
-        next_state: ExplorationState,
-        character: CharacterState,
-        roster: CompanionRosterState,
-        battle,
-        segment_id: str,
-        view,
-    ) -> BattleReportDraft:
-        plan = next_state.last_result.plan
-        assert plan.encounter is not None
-        enemies = tuple(plan.encounter.enemies)
-        participants = [
-            capture_battle_participant(
-                battle.trace.initial_frame.state.entities[character.id],
-                character.name,
-                "player",
-                self.content.catalog.enemy_projector.attributes,
-            )
-        ]
-        labels = {character.id: (character.name, "player")}
-        if battle.player_companion_id is not None:
-            companion = roster.instances[battle.player_companion_id]
-            companion_name = self.content.companions.require_definition(
-                companion.definition_id
-            ).name
-            participants.append(
-                capture_battle_participant(
-                    battle.trace.initial_frame.state.entities[companion.id],
-                    companion_name,
-                    "companion",
-                    self.content.catalog.enemy_projector.attributes,
-                )
-            )
-            labels[companion.id] = (companion_name, "companion")
-        enemy_names = []
-        for enemy in enemies:
-            display = view.enemy_projector.enemy(enemy)
-            participants.append(
-                capture_battle_participant(
-                    battle.trace.initial_frame.state.entities[enemy.id],
-                    display.name,
-                    "enemy",
-                    self.content.catalog.enemy_projector.attributes,
-                )
-            )
-            enemy_names.append(display.name)
-        outcome = "探险胜利" if battle.victory else "战斗平局" if battle.draw else "探险战败"
-        final_participants = [
-            capture_battle_participant(
-                battle.trace.final_frame.state.entities[character.id],
-                character.name,
-                "player",
-                self.content.catalog.enemy_projector.attributes,
-            )
-        ]
-        if battle.player_companion_id is not None:
-            companion = roster.instances[battle.player_companion_id]
-            companion_name = self.content.companions.require_definition(
-                companion.definition_id
-            ).name
-            final_participants.append(
-                capture_battle_participant(
-                    battle.trace.final_frame.state.entities[companion.id],
-                    companion_name,
-                    "companion",
-                    self.content.catalog.enemy_projector.attributes,
-                )
-            )
-        final_participants.extend(
-            capture_battle_participant(
-                battle.trace.final_frame.state.entities[enemy.id],
-                view.enemy_projector.enemy(enemy).name,
-                "enemy",
-                self.content.catalog.enemy_projector.attributes,
-            )
-            for enemy in enemies
+        character_id: str,
+    ) -> _BatchInputs:
+        character = self.snapshots.require(
+            uow, self.storage.character, character_id, CharacterState
         )
-        return BattleReportDraft(
-            report_id=exploration_battle_report_id(state.session_id),
-            mode_id="battle.mode.exploration",
-            presentation_skin_id=str(view.skin.id),
-            presentation_skin_version=view.skin.version,
-            content_fingerprint=self.content.catalog.report.content_fingerprint,
-            summary=BattleReportSummary(
-                f"探险战报·{view.projector.name(state.location_id)}",
-                f"{next_state.victories}胜 {next_state.defeats}负",
-                (
-                    f"完成批次: {next_state.completed_batches}",
-                    f"累计经验: +{next_state.character_experience}",
-                    f"伙伴经验: +{next_state.companion_experience}",
-                    f"累计掉落: 武器 {next_state.weapon_drops}, 装备 {next_state.equipment_drops}",
+        character_world = self.snapshots.require(
+            uow,
+            self.storage.character_world,
+            character_id,
+            CharacterWorldState,
+        )
+        inventory = self.snapshots.require(
+            uow, self.storage.inventory, character_id, InventoryState
+        )
+        loadout = self.snapshots.require(
+            uow, self.storage.loadout, character_id, LoadoutState
+        )
+        roster = self.snapshots.load(
+            uow,
+            self.storage.companion_roster,
+            character_id,
+            CompanionRosterState,
+        ) or CompanionRosterState(character_id)
+        settings = self.snapshots.require(
+            uow,
+            CHARACTER_SETTINGS_AGGREGATE,
+            character_id,
+            CharacterSettingsState,
+        )
+        level = character.progressions[CHARACTER_LEVEL_PROGRESSION_ID].level
+        return _BatchInputs(
+            state,
+            character,
+            character_world,
+            self.world_views.require(character_world.world_id),
+            inventory,
+            loadout,
+            roster,
+            settings,
+            level,
+        )
+
+    def _simulate_batch(
+        self,
+        inputs: _BatchInputs,
+        batch_index: int,
+        context: RuleContext,
+    ) -> _BatchSimulation:
+        plan = self.planner.plan(
+            session_id=inputs.state.session_id,
+            batch_index=batch_index,
+            region_id=inputs.state.region_id,
+            world_id=inputs.character_world.world_id,
+            character_level=inputs.character_level,
+            random=context.random,
+        )
+        if plan.encounter is None:
+            return _BatchSimulation(
+                plan,
+                None,
+                False,
+                False,
+                inputs.character.resources[HEALTH_CURRENT],
+                inputs.character.resources[SPIRIT_CURRENT],
+                float(inputs.character.core_attributes[HEALTH_MAXIMUM]),
+                float(inputs.character.core_attributes[SPIRIT_MAXIMUM]),
+            )
+        battle = self.battles.simulate(
+            plan,
+            character=inputs.character,
+            inventory=inputs.inventory,
+            loadout=inputs.loadout,
+            roster=inputs.roster,
+            context=context,
+        )
+        return _BatchSimulation(
+            plan,
+            battle,
+            battle.victory,
+            battle.draw,
+            battle.health_after,
+            battle.spirit_after,
+            battle.health_maximum,
+            battle.spirit_maximum,
+        )
+
+    def _settle_rewards_in_uow(
+        self,
+        uow,
+        inputs: _BatchInputs,
+        simulation: _BatchSimulation,
+        context: RuleContext,
+    ) -> _BatchRewards:
+        plan = simulation.plan
+        if not simulation.victory or plan.encounter is None:
+            return _BatchRewards()
+        quotes = tuple(
+            self.content.catalog.enemy_threat.reward_quote(enemy)
+            for enemy in plan.encounter.enemies
+        )
+        character_experience = sum(value.character_experience for value in quotes)
+        weapon_experience = sum(value.weapon_experience for value in quotes)
+        companion_experience = 0
+        battle = simulation.battle
+        if battle is not None and battle.player_companion_id is not None:
+            companion_experience = self.companion_growth.engine.exploration_experience(
+                plan.encounter_kind.value,
+                tuple(enemy.level for enemy in plan.encounter.enemies),
+            )
+        loot_state = self.snapshots.require(
+            uow,
+            self.storage.loot,
+            inputs.character.id,
+            LootState,
+        )
+        region = self.content.exploration_regions.require(inputs.state.region_id)
+        loot_outcome = self.content.catalog.loot_engine.roll(
+            LootRollCommand(
+                f"{context.trace_id}:loot",
+                inputs.character.id,
+                region.loot_table_id(plan.encounter_kind.value),
+                loot_state.revision,
+                sum(value.loot_rolls for value in quotes),
+                plan.loot_modifiers,
+            ),
+            state=loot_state,
+            context=context,
+        )
+        if loot_outcome.failure or loot_outcome.value is None:
+            raise RuntimeError(
+                loot_outcome.failure.message
+                if loot_outcome.failure
+                else "探险掉落失败"
+            )
+        reward_build = self.reward_factory.build(
+            loot_outcome.value.receipt.awards,
+            plan=plan,
+            character=inputs.character,
+            inventory=inputs.inventory,
+            loadout=inputs.loadout,
+            character_experience=character_experience,
+            weapon_experience=weapon_experience,
+            context=context,
+        )
+        remaining_space = available_backpack_space(
+            inputs.inventory,
+            self.content.catalog.items,
+        )
+        if (
+            remaining_space is not None
+            and reward_build.backpack_space > remaining_space
+        ):
+            return _BatchRewards(capacity_full=True)
+
+        self.snapshots.update(
+            uow,
+            self.storage.loot,
+            inputs.character.id,
+            loot_state,
+            loot_outcome.value.state,
+            inputs.state.next_batch_at,
+        )
+        weapon_revisions = (
+            self._weapon_revisions(uow, inputs.loadout)
+            if weapon_experience > 0
+            else {}
+        )
+        has_inventory_drops = any((
+            reward_build.weapon_drops,
+            reward_build.equipment_drops,
+            reward_build.trophy_drops,
+            reward_build.medicine_drops,
+            reward_build.draw_ticket_drops,
+        ))
+        settlement = RewardSettlement(
+            f"{context.trace_id}:reward",
+            inputs.character.id,
+            inputs.character.id,
+            "source.exploration",
+            f"{inputs.state.session_id}:{plan.batch_index}",
+            reward_build.rewards,
+            RewardExpectations(
+                claim_revision=self._claim_revision(uow, inputs.character.id),
+                inventory_revision=(
+                    inputs.inventory.revision if has_inventory_drops else None
+                ),
+                character_revisions={
+                    inputs.character.id: inputs.character.revision
+                },
+                weapon_revisions=weapon_revisions,
+            ),
+        )
+        keys = self.reward_keys_factory(
+            inputs.character.id,
+            PRIMARY_LEDGER_ID,
+            (inputs.character.id,),
+            tuple(weapon_revisions),
+        )
+        reward_outcome = self.rewards.settle_in_uow(
+            uow,
+            settlement,
+            keys,
+            context=context,
+        )
+        if reward_outcome.failure:
+            raise RuntimeError(reward_outcome.failure.message)
+        companion_growth = self.companion_growth.grant_in_uow(
+            uow,
+            inputs.character.id,
+            battle.player_companion_id if battle is not None else None,
+            companion_experience,
+            character_level=inputs.character_level,
+            logical_time=inputs.state.next_batch_at,
+        )
+        return _BatchRewards(
+            character_experience=character_experience,
+            weapon_experience=weapon_experience,
+            companion_experience=(
+                companion_growth.accepted if companion_growth is not None else 0
+            ),
+            weapon_drops=reward_build.weapon_drops,
+            equipment_drops=reward_build.equipment_drops,
+            trophy_drops=reward_build.trophy_drops,
+            medicine_drops=reward_build.medicine_drops,
+            draw_ticket_drops=reward_build.draw_ticket_drops,
+            trophy_value=reward_build.trophy_value,
+            references=tuple(reward_build.references),
+        )
+
+    def _apply_battle_resources_in_uow(
+        self,
+        uow,
+        inputs: _BatchInputs,
+        simulation: _BatchSimulation,
+        context: RuleContext,
+    ):
+        current = self.snapshots.require(
+            uow,
+            self.storage.character,
+            inputs.character.id,
+            CharacterState,
+        )
+        resources = dict(current.resources)
+        resources[HEALTH_CURRENT] = simulation.health_after
+        resources[SPIRIT_CURRENT] = simulation.spirit_after
+        after_battle = current
+        if resources != dict(current.resources):
+            after_battle = replace(
+                current,
+                resources=resources,
+                revision=current.revision + 1,
+            )
+            self.snapshots.update(
+                uow,
+                self.storage.character,
+                current.id,
+                current,
+                after_battle,
+                inputs.state.next_batch_at,
+            )
+        medicines_used = ()
+        if simulation.victory and inputs.settings.auto_use_medicine:
+            after_battle, medicines_used = self.medicine.apply(
+                uow,
+                after_battle,
+                simulation.health_maximum,
+                simulation.spirit_maximum,
+                context,
+            )
+        return after_battle, medicines_used
+
+    def _observe_victory_in_uow(
+        self,
+        uow,
+        inputs: _BatchInputs,
+        simulation: _BatchSimulation,
+        result: ExplorationBatchResult,
+    ) -> ExplorationBatchResult:
+        if not simulation.victory or simulation.plan.encounter is None:
+            return result
+        fact = ExplorationVictoryFact(
+            event_id=f"{inputs.state.session_id}:batch:{simulation.plan.batch_index}",
+            character_id=inputs.character.id,
+            character_name=inputs.character.name,
+            world_id=inputs.character_world.world_id,
+            region_id=inputs.state.region_id,
+            encounter_kind=simulation.plan.encounter_kind.value,
+            resolved_at=inputs.state.next_batch_at,
+        )
+        self._append_victory_fact(uow, fact)
+        if self.settlement_observer is None:
+            return result
+        observation = self.settlement_observer.observe_victory_in_uow(uow, fact)
+        if not observation.reward_items:
+            return result
+        return replace(
+            result,
+            rewards=(
+                *result.rewards,
+                *(
+                    ExplorationRewardReference(
+                        ExplorationRewardKind.ITEM,
+                        definition_id,
+                        quantity,
+                    )
+                    for definition_id, quantity in observation.reward_items
                 ),
             ),
-            segment=BattleReportSegmentDraft(
-                segment_id=segment_id,
-                title=f"第 {plan.batch_index} 批·{', '.join(enemy_names)}",
-                participants=tuple(participants),
-                events=battle.trace.events,
-                outcome=outcome,
-                started_at=next_state.last_result.resolved_at,
-                finished_at=next_state.last_result.resolved_at,
-                final_participants=tuple(final_participants),
-                round_states=capture_battle_round_states(
-                    battle.trace,
-                    {
-                        **labels,
-                        **{
-                            enemy.id: (
-                                view.enemy_projector.enemy(enemy).name,
-                                "enemy",
-                            )
-                            for enemy in enemies
-                        },
-                    },
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                turn_states=capture_battle_turn_states(
-                    battle.trace,
-                    {
-                        **labels,
-                        **{
-                            enemy.id: (
-                                view.enemy_projector.enemy(enemy).name,
-                                "enemy",
-                            )
-                            for enemy in enemies
-                        },
-                    },
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                transitions=capture_battle_transitions(
-                    battle.trace,
-                    {
-                        **labels,
-                        **{
-                            enemy.id: (
-                                view.enemy_projector.enemy(enemy).name,
-                                "enemy",
-                            )
-                            for enemy in enemies
-                        },
-                    },
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-            ),
+        )
+
+    def _stop_for_capacity(
+        self,
+        uow,
+        state: ExplorationState,
+        character_id: str,
+        resolved_at: datetime,
+    ) -> None:
+        stopped = stop_exploration(
+            state,
+            ExplorationStopReason.CAPACITY_FULL,
+            logical_time=resolved_at,
+        )
+        self.snapshots.update(
+            uow,
+            EXPLORATION_AGGREGATE,
+            character_id,
+            state,
+            stopped,
+            resolved_at,
         )
 
     def _weapon_revisions(self, uow, loadout: LoadoutState) -> dict[str, int]:

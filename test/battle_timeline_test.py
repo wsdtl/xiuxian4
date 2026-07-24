@@ -65,6 +65,7 @@ def main() -> None:
     _assert_periodic_damage_source_and_expiry()
     _assert_control_skip_and_expiry()
     _assert_victory_and_invalid_actor()
+    _assert_turn_start_victory_before_targeting()
     _assert_random_rollback_and_max_round_draw()
     _assert_speed_action_frequency()
     print("battle timeline test: OK")
@@ -166,6 +167,33 @@ def _build_engine() -> tuple[BattleEngine, EffectEngine]:
             duration_turns=1,
         )
     )
+    effects.register(
+        EffectDefinition(
+            "effect.turn_start.self_destruct",
+            operations=(
+                DealDamage(
+                    "operation.turn_start.self_destruct",
+                    "damage.physical",
+                    FixedMagnitude(100),
+                    can_miss=False,
+                    can_critical=False,
+                    can_block=False,
+                ),
+            ),
+        )
+    )
+    effects.register(
+        EffectDefinition(
+            "effect.turn_start.self_destruct_state",
+            operations=(
+                GrantTrigger(
+                    "operation.turn_start.self_destruct_state",
+                    "trigger.turn_start.self_destruct",
+                ),
+            ),
+            duration_turns=None,
+        )
+    )
     effect_engine = EffectEngine(effects, resolver, resources, operations=handlers)
 
     triggers = DefinitionRegistry[TriggerDefinition]("Trigger")
@@ -177,6 +205,17 @@ def _build_engine() -> tuple[BattleEngine, EffectEngine]:
             owner=TriggerOwner.EVENT_TARGET,
             target=TriggerTarget.OWNER,
             source=TriggerSource.GRANT_SOURCE,
+        )
+    )
+    triggers.register(
+        TriggerDefinition(
+            "trigger.turn_start.self_destruct",
+            event_kind="combat.turn.started",
+            effect_id="effect.turn_start.self_destruct",
+            owner=TriggerOwner.ANY,
+            target=TriggerTarget.OWNER,
+            source=TriggerSource.OWNER,
+            max_activations_per_execution=1,
         )
     )
     abilities = DefinitionRegistry[AbilityDefinition]("Ability")
@@ -559,6 +598,52 @@ def _assert_victory_and_invalid_actor() -> None:
         event for event in victory.value.events if event.kind == "combat.battle.finished"
     )
     assert finished.values["winning_teams"] == ("team.hero",)
+
+
+def _assert_turn_start_victory_before_targeting() -> None:
+    engine, effects = _build_engine()
+    hero = _entity(
+        "hero",
+        speed=20,
+        abilities=("ability.strike",),
+    )
+    enemy = _entity("enemy", health=20, speed=10)
+    enemy = effects.apply(
+        EffectSpec(
+            "turn-start-self-destruct",
+            "effect.turn_start.self_destruct_state",
+            enemy.id,
+        ),
+        source=enemy,
+        target=enemy,
+        context=_context("battle.turn_start_finish.apply"),
+    ).target
+    state = _start(
+        engine,
+        {"hero": hero, "enemy": enemy},
+        {"hero": "team.hero", "enemy": "team.enemy"},
+        {"hero": 0, "enemy": 0},
+        "battle.turn_start_finish",
+    )
+    outcome = engine.execute_turn(
+        state,
+        BattleAction(
+            "action.never_executed",
+            "hero",
+            "ability.strike",
+            TargetRequest("target.enemy.first"),
+        ),
+        context=_context("battle.turn_start_finish.turn"),
+    )
+    assert outcome.ok and outcome.value
+    assert outcome.value.state.status is BattleStatus.FINISHED
+    assert outcome.value.state.winning_teams == ("team.hero",)
+    assert outcome.value.resolved_target_ids == ()
+    assert not any(event.kind == "ability.started" for event in outcome.value.events)
+    finished = next(
+        event for event in outcome.value.events if event.kind == "combat.battle.finished"
+    )
+    assert finished.values["reason"] == "turn_start_effect"
 
 
 def _assert_random_rollback_and_max_round_draw() -> None:

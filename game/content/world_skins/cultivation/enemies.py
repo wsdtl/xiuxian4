@@ -11,7 +11,7 @@ from game.core.gameplay import (
 
 from ...catalog.enemy.blueprints import (
     BEHAVIOR_BLUEPRINTS,
-    BOSS_BEHAVIOR_KEYS_BY_TEMPLATE,
+    BOSS_TEMPLATE_KEYS,
     CULTIVATION_PARTY_BOSS_BLUEPRINTS,
     MAGIC_PARTY_BOSS_BLUEPRINTS,
     STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
@@ -148,7 +148,7 @@ _BEHAVIOR_DISPLAY = {
 
 def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], dict[str, str]]:
     regular_keys = tuple(value.key for value in REGULAR_ENEMY_BLUEPRINTS)
-    boss_names = dict(zip(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE, _BOSS_NAMES))
+    boss_names = dict(zip(BOSS_TEMPLATE_KEYS, _BOSS_NAMES))
     boss_blueprints = (
         *PERSONAL_BOSS_BLUEPRINTS,
         *CULTIVATION_PARTY_BOSS_BLUEPRINTS,
@@ -156,7 +156,7 @@ def _build_entries() -> tuple[dict[str, SkinEntry], dict[str, tuple[str, ...]], 
         *STELLAR_RING_PARTY_BOSS_BLUEPRINTS,
     )
     behavior_keys = {value.key for value in BEHAVIOR_BLUEPRINTS}
-    if len(_REGULAR_NAMES) != len(regular_keys) or len(_BOSS_NAMES) != len(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE):
+    if len(_REGULAR_NAMES) != len(regular_keys) or len(_BOSS_NAMES) != len(BOSS_TEMPLATE_KEYS):
         raise ValueError("太玄界敌人名称必须完整覆盖正式敌人身份")
     if set(_BEHAVIOR_DISPLAY) != behavior_keys:
         raise ValueError("太玄界行为名称必须完整覆盖正式行为模板")

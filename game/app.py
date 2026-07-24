@@ -11,8 +11,10 @@ from zoneinfo import ZoneInfo
 from game.content import (
     DIMENSIONAL_DISASTER_BATTLE_ROUNDS,
     DEFAULT_WORLD_ID,
+    DimensionalDisasterCatalog,
     OfficialContent,
     PLAYABLE_WORLD_DEFINITIONS,
+    WORLD_LORE_CATALOG,
     WorldViewCatalog,
     assemble_official_catalog,
     build_dimensional_disaster_catalog,
@@ -24,6 +26,7 @@ from game.core.gameplay import (
     CharacterItemUseEngine,
     CharacterProjector,
     CharacterState,
+    ContentRuntime,
     InventoryEngine,
     InventoryAbilityExecutor,
     InscriptionEngine,
@@ -107,6 +110,10 @@ from game.features.world_progress import (
     WorldProgressStorageKinds,
     world_progress_codec_registrations,
 )
+from game.features.world_lore import (
+    WorldLoreFeature,
+    world_lore_codec_registrations,
+)
 from game.features.world_travel import (
     WorldTravelFeature,
     WorldTravelStorageKinds,
@@ -186,11 +193,16 @@ from game.features.party_battle import (
     PartyBattleStorageKinds,
     party_battle_codec_registrations,
 )
+from game.features.party_sparring import (
+    PartySparringFeature,
+    PartySparringStorageKinds,
+)
 from game.features.party.service import PARTY_SCOPE_ID
 from game.rules.exploration import EXPLORATION_AGGREGATE
 from game.rules.world_progress import WORLD_PROGRESS_AGGREGATE
 from game.rules.economy import MARKET_AGGREGATE
 from game.rules.sparring import SparringBattleSimulator
+from game.rules.party_sparring import PartySparringBattleSimulator
 from launch import C, OnEvent, config, logger
 from launch.adapter import MessageIdentity
 
@@ -227,10 +239,12 @@ class GameServices:
     dimensional_disasters: DimensionalDisasterFeature
     party: PartyFeature
     party_battles: PartyBattleFeature
+    party_sparring: PartySparringFeature
     companions: CompanionFeature
     player_lineup: PlayerBattleLineupProjector
     exploration: ExplorationFeature
     world_progress: WorldProgressFeature
+    world_lore: WorldLoreFeature
     world_travel: WorldTravelFeature
     rest: RestFeature
     sparring: SparringFeature
@@ -498,37 +512,51 @@ _message_flow_store: MessageFlowStore | None = None
 _message_flow_store_overridden = False
 
 
-def build_game_services(
-    *,
-    database_path: Path | str | None = None,
-    busy_timeout_ms: int | None = None,
-    identity_secret: str | None = None,
-    world_id: str = DEFAULT_WORLD_ID,
-) -> GameServices:
-    """组装一次完整服务集合；数据库初始化由生命周期显式执行。"""
+@dataclass(frozen=True)
+class _ContentAssembly:
+    catalog: ContentRuntime
+    world_views: WorldViewCatalog
+    content: OfficialContent
+    disasters: DimensionalDisasterCatalog
+    global_activities: GlobalActivityCatalog
+    workflow: CharacterCreationWorkflow
+    snapshots: SnapshotRepository
 
-    secret = str(
-        identity_secret
-        if identity_secret is not None
-        else config.get("ACCOUNT_IDENTITY_SECRET", "")
-    ).strip()
-    if len(secret.encode("utf-8")) < 16:
-        raise ValueError("ACCOUNT_IDENTITY_SECRET 至少需要 16 字节")
-    database = SqliteDatabase(
-        database_path or config.database.path,
-        busy_timeout_ms=(
-            busy_timeout_ms
-            if busy_timeout_ms is not None
-            else config.database.busy_timeout_ms
-        ),
-    )
+
+@dataclass(frozen=True)
+class _FoundationAssembly:
+    inventory_engine: InventoryEngine
+    inventory_protection: PersistedInventoryProtectionService
+    character_projector: CharacterProjector
+    player_combat: PlayerCombatProjector
+    companion_engine: CompanionEngine
+    companion_growth: CompanionGrowthEngine
+    companion_growth_settlement: CompanionGrowthSettlement
+    companion_combat: CompanionCombatProjector
+    player_lineup: PlayerBattleLineupProjector
+    item_use: PersistedItemUseService
+    character_item_use: PersistedCharacterItemUseService
+    weapon_engine: WeaponEngine
+    weapon_item_use: PersistedWeaponItemUseService
+    special_item_use: SpecialItemUseService
+    equipment_blueprints: EquipmentBlueprintFeature
+    covenant_exchange: CovenantExchangeFeature
+    actions: PersistedActionService
+    inscriptions: PersistedInscriptionService
+    loadouts: PersistedLoadoutService
+    ledger_engine: LedgerEngine
+    reward_settlement: PersistedRewardSettlementService
+
+
+def _assemble_content(world_id: str) -> _ContentAssembly:
     catalog = assemble_official_catalog()
     world_views = WorldViewCatalog(catalog, PLAYABLE_WORLD_DEFINITIONS)
     content = world_views.require(world_id)
-    disaster_catalog = build_dimensional_disaster_catalog()
-    disaster_catalog.validate(catalog, world_views.world_ids())
-    for warning in disaster_catalog.audit().warnings:
+    disasters = build_dimensional_disaster_catalog()
+    disasters.validate(catalog, world_views.world_ids())
+    for warning in disasters.audit().warnings:
         logger.opt(colors=True).warning(C.warn(warning))
+
     registered_global_activities = GlobalActivityCatalog()
     for registration in global_activity_catalog.registrations():
         registered_global_activities.register(registration)
@@ -537,6 +565,7 @@ def build_game_services(
             content.catalog.activities,
             view.projector,
         )
+
     workflow = CharacterCreationWorkflow(
         CharacterCreationPlanner(
             content.catalog,
@@ -551,6 +580,7 @@ def build_game_services(
                 *breakthrough_codec_registrations(),
                 *exploration_codec_registrations(),
                 *world_progress_codec_registrations(),
+                *world_lore_codec_registrations(),
                 *rest_codec_registrations(),
                 *economy_codec_registrations(),
                 *lottery_codec_registrations(),
@@ -563,6 +593,22 @@ def build_game_services(
             )
         )
     )
+    return _ContentAssembly(
+        catalog,
+        world_views,
+        content,
+        disasters,
+        registered_global_activities,
+        workflow,
+        snapshots,
+    )
+
+
+def _assemble_foundation(
+    database: SqliteDatabase,
+    content: OfficialContent,
+    snapshots: SnapshotRepository,
+) -> _FoundationAssembly:
     inventory_engine = InventoryEngine(content.catalog.items)
     inventory_protection = PersistedInventoryProtectionService(
         database,
@@ -595,7 +641,7 @@ def build_game_services(
         player_combat,
         companion_combat,
     )
-    item_use_service = PersistedItemUseService(
+    item_use = PersistedItemUseService(
         database,
         CharacterItemUseEngine(
             InventoryAbilityExecutor(
@@ -611,7 +657,7 @@ def build_game_services(
         ),
         snapshots,
     )
-    character_item_use_service = PersistedCharacterItemUseService(
+    character_item_use = PersistedCharacterItemUseService(
         database,
         content.catalog.items,
         inventory_engine,
@@ -619,14 +665,14 @@ def build_game_services(
         snapshots,
     )
     weapon_engine = WeaponEngine(content.catalog.weapons)
-    weapon_item_use_service = PersistedWeaponItemUseService(
+    weapon_item_use = PersistedWeaponItemUseService(
         database,
         content.catalog.items,
         inventory_engine,
         weapon_engine,
         snapshots,
     )
-    special_item_use_service = SpecialItemUseService(
+    special_item_use = SpecialItemUseService(
         database,
         content.catalog.items,
         inventory_engine,
@@ -647,12 +693,12 @@ def build_game_services(
         inventory_engine,
         INVENTORY_AGGREGATE,
     )
-    action_service = PersistedActionService(
+    actions = PersistedActionService(
         database,
         content.catalog.action_engine,
         snapshots,
     )
-    inscription_service = PersistedInscriptionService(
+    inscriptions = PersistedInscriptionService(
         database,
         InscriptionEngine(
             content.catalog.items,
@@ -661,7 +707,7 @@ def build_game_services(
         ),
         snapshots,
     )
-    loadout_service = PersistedLoadoutService(
+    loadouts = PersistedLoadoutService(
         database,
         LoadoutEngine(
             content.catalog.equipment.slots,
@@ -682,6 +728,85 @@ def build_game_services(
         reward_engine,
         snapshots,
     )
+    return _FoundationAssembly(
+        inventory_engine,
+        inventory_protection,
+        character_projector,
+        player_combat,
+        companion_engine,
+        companion_growth,
+        companion_growth_settlement,
+        companion_combat,
+        player_lineup,
+        item_use,
+        character_item_use,
+        weapon_engine,
+        weapon_item_use,
+        special_item_use,
+        equipment_blueprints,
+        covenant_exchange,
+        actions,
+        inscriptions,
+        loadouts,
+        ledger_engine,
+        reward_settlement,
+    )
+
+
+def build_game_services(
+    *,
+    database_path: Path | str | None = None,
+    busy_timeout_ms: int | None = None,
+    identity_secret: str | None = None,
+    world_id: str = DEFAULT_WORLD_ID,
+) -> GameServices:
+    """组装一次完整服务集合；数据库初始化由生命周期显式执行。"""
+
+    secret = str(
+        identity_secret
+        if identity_secret is not None
+        else config.get("ACCOUNT_IDENTITY_SECRET", "")
+    ).strip()
+    if len(secret.encode("utf-8")) < 16:
+        raise ValueError("ACCOUNT_IDENTITY_SECRET 至少需要 16 字节")
+    database = SqliteDatabase(
+        database_path or config.database.path,
+        busy_timeout_ms=(
+            busy_timeout_ms
+            if busy_timeout_ms is not None
+            else config.database.busy_timeout_ms
+        ),
+    )
+    content_assembly = _assemble_content(world_id)
+    catalog = content_assembly.catalog
+    world_views = content_assembly.world_views
+    content = content_assembly.content
+    disaster_catalog = content_assembly.disasters
+    registered_global_activities = content_assembly.global_activities
+    workflow = content_assembly.workflow
+    snapshots = content_assembly.snapshots
+    foundation = _assemble_foundation(database, content, snapshots)
+    inventory_engine = foundation.inventory_engine
+    inventory_protection = foundation.inventory_protection
+    character_projector = foundation.character_projector
+    player_combat = foundation.player_combat
+    companion_engine = foundation.companion_engine
+    companion_growth = foundation.companion_growth
+    companion_growth_settlement = foundation.companion_growth_settlement
+    companion_combat = foundation.companion_combat
+    player_lineup = foundation.player_lineup
+    item_use_service = foundation.item_use
+    character_item_use_service = foundation.character_item_use
+    weapon_engine = foundation.weapon_engine
+    weapon_item_use_service = foundation.weapon_item_use
+    special_item_use_service = foundation.special_item_use
+    equipment_blueprints = foundation.equipment_blueprints
+    covenant_exchange = foundation.covenant_exchange
+    action_service = foundation.actions
+    inscription_service = foundation.inscriptions
+    loadout_service = foundation.loadouts
+    ledger_engine = foundation.ledger_engine
+    reward_settlement = foundation.reward_settlement
     world_progress = WorldProgressFeature(
         database,
         content,
@@ -696,6 +821,13 @@ def build_game_services(
             reward_claim=REWARD_CLAIM_AGGREGATE,
         ),
         RewardSettlementStorageKeys,
+    )
+    world_lore = WorldLoreFeature(
+        database,
+        WORLD_LORE_CATALOG,
+        snapshots,
+        world_progress.view,
+        world_views.world_ids(),
     )
     battle_reports = BattleReportService(database, BattleReportStore(database))
     build_trials = BuildTrialFeature(
@@ -952,16 +1084,35 @@ def build_game_services(
         party_scope_id=PARTY_SCOPE_ID,
         timezone=config.project.timezone,
     )
+    party_sparring = PartySparringFeature(
+        database,
+        content,
+        world_views,
+        snapshots,
+        social,
+        battle_reports,
+        PartySparringBattleSimulator(content.catalog, player_lineup),
+        PartySparringStorageKinds(
+            party=PARTY_AGGREGATE,
+            character=CHARACTER_AGGREGATE,
+            inventory=INVENTORY_AGGREGATE,
+            loadout=LOADOUT_AGGREGATE,
+            companion_roster=COMPANION_ROSTER_AGGREGATE,
+            character_world=CHARACTER_WORLD_AGGREGATE,
+        ),
+        party_scope_id=PARTY_SCOPE_ID,
+    )
     sparring = SparringFeature(
         database,
         content,
         world_views,
         snapshots,
         social,
-        characters,
         battle_reports,
         SparringBattleSimulator(content.catalog, player_lineup),
         SparringStorageKinds(
+            character=CHARACTER_AGGREGATE,
+            character_world=CHARACTER_WORLD_AGGREGATE,
             inventory=INVENTORY_AGGREGATE,
             loadout=LOADOUT_AGGREGATE,
             companion_roster=COMPANION_ROSTER_AGGREGATE,
@@ -996,10 +1147,12 @@ def build_game_services(
         dimensional_disasters=dimensional_disasters,
         party=party,
         party_battles=party_battles,
+        party_sparring=party_sparring,
         companions=companions,
         player_lineup=player_lineup,
         exploration=exploration,
         world_progress=world_progress,
+        world_lore=world_lore,
         world_travel=world_travel,
         rest=rest,
         sparring=sparring,

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 
@@ -18,6 +19,7 @@ from game.app import build_game_services, install_game_services, restore_game_se
 from game.cmd import 切磋 as sparring_component  # noqa: E402,F401
 from game.cmd import 角色 as character_component  # noqa: E402,F401
 from game.core.persistence import CHARACTER_AGGREGATE  # noqa: E402
+from game.core.gameplay import SocialRequestStatus  # noqa: E402
 from game.features.sparring import sparring_social_scope_id  # noqa: E402
 from launch.adapter.local import LocalEventHandler, dispatch  # noqa: E402
 from launch.adapter.qq import QqEventHandler  # noqa: E402
@@ -73,6 +75,31 @@ async def _main() -> None:
             )
             assert "找不到这份切磋请求" in forbidden.replies[0].message.content
 
+            with patch.object(
+                services.battle_reports,
+                "capture_in_uow",
+                side_effect=RuntimeError("injected report failure"),
+            ):
+                try:
+                    services.sparring.accept_request(
+                        "sparring-atomic-failure",
+                        request_id,
+                        defender,
+                        logical_time=datetime.now(TIMEZONE),
+                    )
+                except RuntimeError as exc:
+                    assert str(exc) == "injected report failure"
+                else:
+                    raise AssertionError("战报写入失败应中止切磋事务")
+            pending_state = services.sparring.social.load(
+                sparring_social_scope_id(defender.id)
+            )
+            assert pending_state is not None
+            assert pending_state.requests[request_id].status is SocialRequestStatus.PENDING
+            assert services.battle_reports.reference(
+                f"battle-report:sparring:{request_id}"
+            ) is None
+
             accepted = await _dispatch(
                 "player-b",
                 accept_command,
@@ -97,6 +124,8 @@ async def _main() -> None:
             )
             assert view is not None and view.detail_available
             assert view.mode_id == "battle.mode.sparring"
+            assert view.segments[0].round_states
+            assert view.segments[0].turn_states
             assert view.segments[0].transitions
             assert any(
                 transition.kind == "turn"

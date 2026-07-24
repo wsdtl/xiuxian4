@@ -83,8 +83,14 @@ class BattleReportService:
         return BattleReportReference(draft.report_id, share_id)
 
     def reference(self, report_id: str) -> BattleReportReference | None:
-        value = self.store.reference(report_id)
-        return BattleReportReference(*value) if value is not None else None
+        with self.database.unit_of_work(write=False) as uow:
+            return self.reference_in_uow(uow, report_id)
+
+    def reference_in_uow(self, uow, report_id: str) -> BattleReportReference | None:
+        row = self.store.header_in_uow(uow, str(report_id or "").strip())
+        if row is None:
+            return None
+        return BattleReportReference(row.report_id, row.share_id)
 
     def load_public(
         self,

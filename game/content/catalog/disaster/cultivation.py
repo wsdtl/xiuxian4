@@ -5,7 +5,6 @@ from .models import (
     DISASTER_ORIGIN_ORIGINAL,
     DimensionalDisasterDefinition,
 )
-from .templates import DISASTER_BEHAVIOR_KEYS_BY_TEMPLATE
 from ..world import TAIXUAN_WORLD_ID
 
 
@@ -14,7 +13,6 @@ CULTIVATION_DISASTER_SOURCE_ID = TAIXUAN_WORLD_ID
 
 def _disaster(
     key: str,
-    enemy_key: str,
     origin_kind: str,
     source_note: str,
     name: str,
@@ -28,7 +26,6 @@ def _disaster(
         f"disaster.cultivation.{key}",
         CULTIVATION_DISASTER_SOURCE_ID,
         f"enemy.boss.disaster.cultivation.{key}",
-        DISASTER_BEHAVIOR_KEYS_BY_TEMPLATE[enemy_key],
         origin_kind,
         source_note,
         name,
@@ -43,7 +40,6 @@ def _disaster(
 CULTIVATION_DISASTERS = (
     _disaster(
         "xiangliu",
-        "nine_headed_plague",
         DISASTER_ORIGIN_DOCUMENTED,
         "《山海经·海外北经》相柳传说",
         "相柳·九泉蚀主",
@@ -55,7 +51,6 @@ CULTIVATION_DISASTERS = (
     ),
     _disaster(
         "hanba",
-        "drought_incarnate",
         DISASTER_ORIGIN_DOCUMENTED,
         "《山海经·大荒北经》女魃传说",
         "旱魃·赤地天女",
@@ -67,7 +62,6 @@ CULTIVATION_DISASTERS = (
     ),
     _disaster(
         "wuzhiqi",
-        "river_rebel",
         DISASTER_ORIGIN_DOCUMENTED,
         "唐代《古岳渎经》无支祁传说",
         "无支祁·淮涡水君",
@@ -79,7 +73,6 @@ CULTIVATION_DISASTERS = (
     ),
     _disaster(
         "jiuying",
-        "venom_world_serpent",
         DISASTER_ORIGIN_DOCUMENTED,
         "《淮南子·本经训》九婴传说",
         "九婴·水火灾主",
@@ -91,7 +84,6 @@ CULTIVATION_DISASTERS = (
     ),
     _disaster(
         "zhulong",
-        "twilight_dragon",
         DISASTER_ORIGIN_DOCUMENTED,
         "《山海经·大荒北经》烛龙传说",
         "烛九阴·幽明龙祖",
@@ -103,7 +95,6 @@ CULTIVATION_DISASTERS = (
     ),
     _disaster(
         "xingtian",
-        "headless_warrior",
         DISASTER_ORIGIN_DOCUMENTED,
         "《山海经·海外西经》刑天传说",
         "刑天·不息战魄",
@@ -115,7 +106,6 @@ CULTIVATION_DISASTERS = (
     ),
     _disaster(
         "qiongqi",
-        "winged_omen",
         DISASTER_ORIGIN_DOCUMENTED,
         "《山海经》《左传》穷奇传说",
         "穷奇·食忠凶神",
@@ -127,7 +117,6 @@ CULTIVATION_DISASTERS = (
     ),
     _disaster(
         "bridge_lantern",
-        "soul_ferryman",
         DISASTER_ORIGIN_ORIGINAL,
         "原创岁时旧愿",
         "旧桥挑灯客",
@@ -139,7 +128,6 @@ CULTIVATION_DISASTERS = (
     ),
     _disaster(
         "nameless_official",
-        "celestial_rebel",
         DISASTER_ORIGIN_ORIGINAL,
         "原创天律灾厄",
         "失名天官",
@@ -151,7 +139,6 @@ CULTIVATION_DISASTERS = (
     ),
     _disaster(
         "inverted_mountain",
-        "realm_breaker",
         DISASTER_ORIGIN_ORIGINAL,
         "原创界域灾厄",
         "倒悬山主",

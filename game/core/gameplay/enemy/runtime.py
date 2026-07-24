@@ -12,7 +12,7 @@ from ..ids import StableId
 from ..tags import TagSet
 from ..valuation import ValuationEngine
 from .catalog import EnemyCatalog
-from .models import EnemyDefinition, EnemyInstance, EnemyPhaseDefinition
+from .models import EnemyDefinition, EnemyInstance, EnemyPhaseLoadout
 
 
 @dataclass(frozen=True)
@@ -95,7 +95,7 @@ class EnemyCombatProjector:
         self,
         entity: RuleEntity,
         instance: EnemyInstance,
-        phase: EnemyPhaseDefinition,
+        phase: EnemyPhaseLoadout,
     ) -> tuple[RuleEntity, tuple[BattleAiRule, ...]]:
         behaviors = tuple(self.catalog.behaviors.require(value) for value in sorted(phase.behavior_ids))
         base_attributes = dict(entity.base_attributes)
@@ -118,13 +118,13 @@ class EnemyCombatProjector:
 
     @staticmethod
     def pending_phases(
-        definition: EnemyDefinition,
+        instance: EnemyInstance,
         health_ratio: float,
         active_phase_ids: frozenset[StableId],
-    ) -> tuple[EnemyPhaseDefinition, ...]:
+    ) -> tuple[EnemyPhaseLoadout, ...]:
         return tuple(
             phase
-            for phase in definition.phases
+            for phase in instance.phase_loadouts
             if phase.id not in active_phase_ids and health_ratio <= phase.health_ratio
         )
 
@@ -154,17 +154,23 @@ class EnemyCombatProjector:
             granted_target_constraints=spec.target_constraints,
         )
 
-    @staticmethod
-    def _validate_instance(instance, definition, rank, behaviors) -> None:
+    def _validate_instance(self, instance, definition, rank, behaviors) -> None:
         if instance.rank_id not in definition.allowed_rank_ids:
             raise ValueError(f"敌人 {definition.id} 不允许阶位 {instance.rank_id}")
-        if not set(instance.behavior_ids).issubset(definition.available_behavior_ids):
-            raise ValueError(f"敌人 {definition.id} 实例包含不可用行为")
+        phase_behavior_ids = {
+            behavior_id
+            for phase in instance.phase_loadouts
+            for behavior_id in phase.behavior_ids
+        }
+        all_behavior_ids = set(instance.behavior_ids) | phase_behavior_ids
         if not rank.minimum_behaviors <= len(behaviors) <= rank.maximum_behaviors:
             raise ValueError(f"敌人阶位 {rank.id} 的行为数量无效")
-        behavior_ids = set(instance.behavior_ids)
-        for behavior in behaviors:
-            if behavior.incompatible_behavior_ids & behavior_ids:
+        all_behaviors = tuple(
+            self.catalog.behaviors.require(value)
+            for value in sorted(all_behavior_ids)
+        )
+        for behavior in all_behaviors:
+            if behavior.incompatible_behavior_ids & all_behavior_ids:
                 raise ValueError(f"敌人实例包含互斥行为：{behavior.id}")
 
 

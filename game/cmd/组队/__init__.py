@@ -6,7 +6,7 @@ from launch.adapter import Depends
 
 from ..command import GameCommand, HelpSpec
 from ..dependencies import current_character
-from . import service
+from . import battle, party, sparring
 
 
 @GameCommand.handler(
@@ -19,7 +19,7 @@ from . import service
     ),
 )
 async def view(current=Depends(current_character)) -> None:
-    await service.view(current)
+    await party.view(current)
 
 
 @GameCommand.handler(
@@ -33,7 +33,7 @@ async def view(current=Depends(current_character)) -> None:
     ),
 )
 async def create(current=Depends(current_character)) -> None:
-    await service.create(current)
+    await party.create(current)
 
 
 @GameCommand.handler(
@@ -47,7 +47,7 @@ async def create(current=Depends(current_character)) -> None:
     ),
 )
 async def invite(message: str = "", current=Depends(current_character)) -> None:
-    await service.invite(message, current)
+    await party.invite(message, current)
 
 
 @GameCommand.handler(
@@ -60,7 +60,7 @@ async def invite(message: str = "", current=Depends(current_character)) -> None:
     ),
 )
 async def accept(message: str = "", current=Depends(current_character)) -> None:
-    await service.accept(message, current)
+    await party.accept(message, current)
 
 
 @GameCommand.handler(
@@ -73,7 +73,7 @@ async def accept(message: str = "", current=Depends(current_character)) -> None:
     ),
 )
 async def reject(message: str = "", current=Depends(current_character)) -> None:
-    await service.reject(message, current)
+    await party.reject(message, current)
 
 
 @GameCommand.handler(
@@ -87,7 +87,7 @@ async def reject(message: str = "", current=Depends(current_character)) -> None:
     ),
 )
 async def leave(current=Depends(current_character)) -> None:
-    await service.leave(current)
+    await party.leave(current)
 
 
 @GameCommand.handler(
@@ -100,7 +100,7 @@ async def leave(current=Depends(current_character)) -> None:
     ),
 )
 async def kick(message: str = "", current=Depends(current_character)) -> None:
-    await service.kick(message, current)
+    await party.kick(message, current)
 
 
 @GameCommand.handler(
@@ -113,7 +113,7 @@ async def kick(message: str = "", current=Depends(current_character)) -> None:
     ),
 )
 async def transfer(message: str = "", current=Depends(current_character)) -> None:
-    await service.transfer(message, current)
+    await party.transfer(message, current)
 
 
 @GameCommand.handler(
@@ -127,7 +127,7 @@ async def transfer(message: str = "", current=Depends(current_character)) -> Non
     ),
 )
 async def disband(current=Depends(current_character)) -> None:
-    await service.preview_disband(current)
+    await party.preview_disband(current)
 
 
 @GameCommand.handler(cmd="party_disband_confirm", hidden=True)
@@ -135,7 +135,7 @@ async def confirm_disband(
     message: str = "",
     current=Depends(current_character),
 ) -> None:
-    await service.confirm_disband(message, current)
+    await party.confirm_disband(message, current)
 
 
 @GameCommand.handler(
@@ -148,7 +148,7 @@ async def confirm_disband(
     ),
 )
 async def ready(current=Depends(current_character)) -> None:
-    await service.set_ready(current, True)
+    await battle.set_ready(current, True)
 
 
 @GameCommand.handler(
@@ -161,7 +161,7 @@ async def ready(current=Depends(current_character)) -> None:
     ),
 )
 async def unready(current=Depends(current_character)) -> None:
-    await service.set_ready(current, False)
+    await battle.set_ready(current, False)
 
 
 @GameCommand.handler(
@@ -174,7 +174,7 @@ async def unready(current=Depends(current_character)) -> None:
     ),
 )
 async def party_battle_view(current=Depends(current_character)) -> None:
-    await service.party_battle_view(current)
+    await battle.view(current)
 
 
 @GameCommand.handler(
@@ -187,7 +187,7 @@ async def party_battle_view(current=Depends(current_character)) -> None:
     ),
 )
 async def select_party_battle(message: str = "", current=Depends(current_character)) -> None:
-    await service.select_party_battle(message, current)
+    await battle.select(message, current)
 
 
 @GameCommand.handler(
@@ -201,7 +201,53 @@ async def select_party_battle(message: str = "", current=Depends(current_charact
     ),
 )
 async def start_party_battle(current=Depends(current_character)) -> None:
-    await service.start_party_battle(current)
+    await battle.start(current)
+
+
+@GameCommand.handler(
+    cmd="组队切磋",
+    help=HelpSpec(
+        category="战斗与社交",
+        summary="由队长向另一支队伍发起无损切磋",
+        usage=("组队切磋 玩家",),
+        side_effect="双方各自以当前一至三名成员和已绑定伙伴参战，不产生奖励或持久消耗",
+        order=180,
+    ),
+)
+async def party_sparring(message: str = "", current=Depends(current_character)) -> None:
+    await sparring.challenge(message, current)
+
+
+@GameCommand.handler(
+    cmd="接受组队切磋",
+    help=HelpSpec(
+        category="战斗与社交",
+        summary="由受邀队伍的队长接受组队切磋",
+        usage=("接受组队切磋 请求编号",),
+        order=190,
+    ),
+)
+async def accept_party_sparring(
+    message: str = "",
+    current=Depends(current_character),
+) -> None:
+    await sparring.accept(message, current)
+
+
+@GameCommand.handler(
+    cmd="拒绝组队切磋",
+    help=HelpSpec(
+        category="战斗与社交",
+        summary="由受邀队伍的队长拒绝组队切磋",
+        usage=("拒绝组队切磋 请求编号",),
+        order=200,
+    ),
+)
+async def reject_party_sparring(
+    message: str = "",
+    current=Depends(current_character),
+) -> None:
+    await sparring.reject(message, current)
 
 
 __all__ = []

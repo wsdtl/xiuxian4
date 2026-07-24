@@ -187,9 +187,8 @@ class ExplorationBattleSimulator:
                 HEALTH_MAXIMUM
             )
             ratio = entity.resources[HEALTH_CURRENT] / maximum if maximum > 0 else 0.0
-            definition = self.content.enemies.require(instance.definition_id)
             pending = self.content.enemy_projector.pending_phases(
-                definition,
+                instance,
                 ratio,
                 next_active[enemy_id],
             )
@@ -213,6 +212,7 @@ class ExplorationBattleSimulator:
                             "health_ratio": ratio,
                             "threshold": phase.health_ratio,
                             "behavior_count": len(phase.behavior_ids),
+                            "behavior_ids": tuple(phase.behavior_ids),
                         },
                     )
                 )

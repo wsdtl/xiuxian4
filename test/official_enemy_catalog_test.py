@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 from game.content import build_official_content  # noqa: E402
 from game.content.catalog import (  # noqa: E402
+    PERSONAL_BOSS_ENCOUNTER_ID,
     PERSONAL_ELITE_ENCOUNTER_ID,
     PERSONAL_NORMAL_ENCOUNTER_ID,
 )
@@ -46,7 +47,7 @@ from game.rules.battle_report import KNOWN_BATTLE_EVENT_KINDS  # noqa: E402
 
 def main() -> None:
     assert BATTLE_AI_FOUNDATION_VERSION == "combat-ai.foundation.v2"
-    assert ENEMY_FOUNDATION_VERSION == "enemy.foundation.v1"
+    assert ENEMY_FOUNDATION_VERSION == "enemy.foundation.v3"
     cultivation = build_official_content()
     magic = build_official_content("skin.magic")
     catalog = cultivation.catalog
@@ -79,6 +80,11 @@ def main() -> None:
     assert not personal_ids & party_ids
     assert not personal_ids & disaster_ids
     assert not party_ids & disaster_ids
+    assert all(
+        not hasattr(value, field_name)
+        for value in catalog.enemies.definitions
+        for field_name in ("default_behavior_ids", "available_behavior_ids", "phases")
+    )
 
     shared_enemy = catalog.abilities.require("ability.enemy.heavy_strike")
     shared_weapon = catalog.abilities.require("ability.weapon.mountain_cleaver")
@@ -95,17 +101,39 @@ def main() -> None:
         level=36,
         generation_seed="elite-demo",
         random=SeededRandomSource("elite-demo"),
+        behavior_weights=cultivation.enemy_behavior_profiles.require(
+            cultivation.world.id
+        ).behavior_weights,
     )
     repeated = generator.generate(
         PERSONAL_ELITE_ENCOUNTER_ID,
         level=36,
         generation_seed="elite-demo",
         random=SeededRandomSource("elite-demo"),
+        behavior_weights=cultivation.enemy_behavior_profiles.require(
+            cultivation.world.id
+        ).behavior_weights,
     )
     assert first == repeated
     assert len(first.enemies) == 1
     elite = first.enemies[0]
     assert len(elite.behavior_ids) == 2
+
+    same_identity_builds = set()
+    for index in range(24):
+        generated = generator.generate(
+            PERSONAL_ELITE_ENCOUNTER_ID,
+            level=36,
+            generation_seed=f"elite-variety:{index}",
+            random=SeededRandomSource(f"elite-variety:{index}"),
+            allowed_enemy_ids=frozenset({elite.definition_id}),
+            behavior_weights=cultivation.enemy_behavior_profiles.require(
+                cultivation.world.id
+            ).behavior_weights,
+        ).enemies[0]
+        same_identity_builds.add(generated.behavior_ids)
+        _assert_compatible_loadout(catalog, generated)
+    assert len(same_identity_builds) > 1
 
     cultivation_name = cultivation.enemy_projector.enemy(elite).name
     magic_name = magic.enemy_projector.enemy(elite).name
@@ -113,17 +141,35 @@ def main() -> None:
     assert cultivation_name == cultivation.enemy_projector.enemy(elite).name
     assert cultivation_name != magic_name
 
-    boss = EnemyInstance(
-        "enemy-instance-boss",
-        "enemy.boss.nine_headed_plague",
-        50,
-        "enemy.rank.boss",
-        tuple(sorted(PERSONAL_BOSS_ENEMIES[0].default_behavior_ids)),
-        "boss-demo",
-        catalog.report.content_fingerprint,
+    boss_encounter = generator.generate(
+        PERSONAL_BOSS_ENCOUNTER_ID,
+        level=50,
+        generation_seed="boss-demo",
+        random=SeededRandomSource("boss-demo"),
+        allowed_enemy_ids=frozenset({"enemy.boss.nine_headed_plague"}),
+        behavior_weights=cultivation.enemy_behavior_profiles.require(
+            cultivation.world.id
+        ).behavior_weights,
     )
+    boss = boss_encounter.enemies[0]
+    assert len(boss.behavior_ids) == 3
+    assert len(boss.phase_loadouts) == 2
+    assert len(
+        {
+            *boss.behavior_ids,
+            *(behavior_id for phase in boss.phase_loadouts for behavior_id in phase.behavior_ids),
+        }
+    ) == 5
     assert cultivation.enemy_projector.enemy(boss).name == "化蛇·洪涛妖君"
     assert magic.enemy_projector.enemy(boss).name == "九头蛇·沼泽暴君"
+    _assert_compatible_loadout(catalog, boss)
+
+    known_behaviors = set(catalog.enemies.behaviors.ids())
+    for world_id in cultivation.worlds.world_ids():
+        weights = cultivation.enemy_behavior_profiles.require(world_id).behavior_weights
+        assert set(weights) == known_behaviors
+        assert all(weight > 0 for weight in weights.values())
+        assert max(weights.values()) > min(weights.values())
 
     reward = EnemyDefeatRewardPlanner(catalog.enemy_threat).quote(first.enemies)
     assert reward.character_experience > 0
@@ -240,13 +286,28 @@ def _assert_all_behavior_abilities_execute(content) -> None:
         assert not unknown, (behavior.id, unknown)
         covered.add(behavior.id)
     assert covered == set(catalog.enemies.behaviors.ids())
-    phase_behavior_ids = {
-        behavior_id
-        for enemy in catalog.enemies.definitions
-        for phase in enemy.phases
-        for behavior_id in phase.behavior_ids
-    }
-    assert phase_behavior_ids.issubset(covered)
+    assert all(
+        set(profile.behavior_weights) == covered
+        for profile in (
+            content.enemy_behavior_profiles.require(world_id)
+            for world_id in content.worlds.world_ids()
+        )
+    )
+
+
+def _assert_compatible_loadout(catalog, enemy: EnemyInstance) -> None:
+    behavior_ids = [
+        *enemy.behavior_ids,
+        *(
+            behavior_id
+            for phase in enemy.phase_loadouts
+            for behavior_id in phase.behavior_ids
+        ),
+    ]
+    assert len(behavior_ids) == len(set(behavior_ids))
+    for behavior_id in behavior_ids:
+        behavior = catalog.enemies.behaviors.require(behavior_id)
+        assert not behavior.incompatible_behavior_ids.intersection(behavior_ids)
 
 
 def _effect_combatant(entity_id: str, ability_id: str | None = None) -> RuleEntity:

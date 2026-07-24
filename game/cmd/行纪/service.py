@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CharacterOverview, CharacterOverviewResult, current_game_services
 from game.content.catalog import PRIMARY_CURRENCY_ID
 from game.content.catalog.world import LOCATION_FUNCTION_EXPLORATION
 from game.content.catalog.world_progress import WORLD_PROGRESS_DEFINITION
-from launch import C, config, logger
+from launch import C, logger
 from message import DocumentMessage, M
 from message.schema import FieldSeparator
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -64,7 +64,7 @@ async def view_world_progress_ranking(
             services.world_progress.ranking_view,
             overview.character.id,
             world_id=view.world.id if view else None,
-            logical_time=_now(),
+            logical_time=command_time(),
             limit=10,
         )
         reply = _ranking(ranking, view)
@@ -214,10 +214,6 @@ def _overview(result: CharacterOverviewResult) -> CharacterOverview | None:
 
 def _failure(message: str) -> DocumentMessage:
     return M.document().section("行纪", icon="notice").line(message).build()
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = ["view_world_progress", "view_world_progress_ranking"]

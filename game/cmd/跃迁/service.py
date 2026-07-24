@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content import DIMENSION_SHIFT_ITEM_ID
 from game.rules.character import WorldShiftResult
-from launch import C, config, logger
+from launch import C, logger
 from message import Action, DocumentMessage, M
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 from ..presentation import current_action_action
 
@@ -39,7 +39,7 @@ async def dimension_shift(
             services.shift_character_world,
             character.id,
             target.world.id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -129,10 +129,6 @@ def _unavailable() -> DocumentMessage:
         .line("当前没有读取到世界连接状态，请稍后重试")
         .build()
     )
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = ["dimension_shift"]

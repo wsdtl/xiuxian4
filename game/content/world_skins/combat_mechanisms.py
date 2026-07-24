@@ -18,6 +18,8 @@ _EFFECT_SUFFIXES = {
     "bleed_status": "流血状态",
     "bleed_tick": "流血结算",
     "blood_cost": "血契代价",
+    "echo_status": "回响标记",
+    "echo_release": "回响结算",
     "tier_1": "一阶",
     "tier_2": "二阶",
     "tier_3": "三阶",
@@ -34,6 +36,7 @@ _TRIGGER_SUFFIXES = {
     "burn_tick": "灼烧触发",
     "poison_tick": "毒伤触发",
     "bleed_tick": "流血触发",
+    "echo_release": "回响",
     "tier_1": "一阶触发",
     "tier_2": "二阶触发",
     "tier_3": "三阶触发",
@@ -115,7 +118,10 @@ def _owned_name(
         owner = owner_entries.get(owner_id)
         owner_name = owner.name if owner is not None else owner_key
         suffix = ".".join(parts[3:])
-        return f"{owner_name}·{suffixes.get(suffix, suffix.replace('_', ' '))}{fallback}"
+        visible_suffix = suffixes.get(suffix)
+        if visible_suffix is not None:
+            return f"{owner_name}·{visible_suffix}"
+        return f"{owner_name}·{suffix.replace('_', ' ')}{fallback}"
     return f"{content_id.rsplit('.', 1)[-1]}·{fallback}"
 
 

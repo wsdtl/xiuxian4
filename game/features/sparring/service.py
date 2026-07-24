@@ -30,9 +30,11 @@ from game.rules.battle_report import (
     BattleReportSegmentDraft,
     BattleReportSummary,
     capture_battle_participant,
+    capture_battle_round_states,
     capture_battle_transitions,
+    capture_battle_turn_states,
 )
-from game.rules.character import CHARACTER_WORLD_AGGREGATE, CharacterWorldState
+from game.rules.character import CharacterWorldState
 from game.rules.companion import CompanionRosterState
 from game.rules.sparring import SparringBattleSimulator
 
@@ -50,6 +52,8 @@ class SparringRequestResult:
 
 @dataclass(frozen=True)
 class SparringStorageKinds:
+    character: str
+    character_world: str
     inventory: str
     loadout: str
     companion_roster: str
@@ -78,7 +82,6 @@ class SparringFeature:
         world_views,
         snapshots,
         social,
-        characters,
         battle_reports,
         simulator: SparringBattleSimulator,
         storage: SparringStorageKinds,
@@ -88,7 +91,6 @@ class SparringFeature:
         self.world_views = world_views
         self.snapshots = snapshots
         self.social = social
-        self.characters = characters
         self.battle_reports = battle_reports
         self.simulator = simulator
         self.storage = storage
@@ -177,47 +179,49 @@ class SparringFeature:
         *,
         logical_time: datetime,
     ) -> SparringResult:
-        state = self.social.load(sparring_social_scope_id(defender.id))
-        request = state.requests.get(request_id) if state is not None else None
-        if request is None or request.kind_id != SPARRING_REQUEST_ID:
-            return SparringResult("unknown", failure_message="找不到这份切磋请求")
-        if request.recipient_id != defender.id:
-            return SparringResult("forbidden", request=request, failure_message="只有应战者可以接受切磋")
-        if logical_time >= request.expires_at:
-            return SparringResult("expired", request=request, failure_message="切磋请求已经过期")
-        challenger = self.characters.load_character(request.sender_id)
-        if challenger is None:
-            return SparringResult("unavailable", request=request, failure_message="挑战者角色已不存在")
-        report_id = self._report_id(request.id)
-        existing = self.battle_reports.reference(report_id)
-        if request.status is SocialRequestStatus.ACCEPTED and existing is not None:
-            return SparringResult("replayed", request, existing, challenger, defender)
-        if (
-            challenger.resources[HEALTH_CURRENT] <= 0
-            or defender.resources[HEALTH_CURRENT] <= 0
-        ):
-            return SparringResult(
-                "unavailable",
-                request,
-                failure_message="双方血气必须大于 0 才能切磋",
+        scope_id = sparring_social_scope_id(defender.id)
+        with self.database.unit_of_work() as uow:
+            state = self.social.load_in_uow(uow, scope_id)
+            request = state.requests.get(request_id) if state is not None else None
+            if request is None or request.kind_id != SPARRING_REQUEST_ID:
+                return SparringResult("unknown", failure_message="找不到这份切磋请求")
+            if request.recipient_id != defender.id:
+                return SparringResult("forbidden", request=request, failure_message="只有应战者可以接受切磋")
+            if logical_time >= request.expires_at:
+                return SparringResult("expired", request=request, failure_message="切磋请求已经过期")
+            challenger = self.snapshots.load(
+                uow,
+                self.storage.character,
+                request.sender_id,
+                CharacterState,
             )
-        if request.status is SocialRequestStatus.ACCEPTED:
-            accepted = request
-        elif request.status is SocialRequestStatus.PENDING:
-            accepted = self._resolve(
-                f"{operation_id}:accept",
-                request,
-                SocialRequestStatus.ACCEPTED,
-                defender,
-                logical_time=logical_time,
+            if challenger is None:
+                return SparringResult("unavailable", request=request, failure_message="挑战者角色已不存在")
+            defender = self.snapshots.require(
+                uow,
+                self.storage.character,
+                defender.id,
+                CharacterState,
             )
-            if accepted is None:
-                return SparringResult("failed", request=request, failure_message="切磋请求已被其他操作处理")
-        else:
-            return SparringResult("terminal", request=request, failure_message="切磋请求已经处理")
-        try:
-            challenger_inventory, challenger_loadout, challenger_dimension, challenger_roster = self._snapshot_bundle(challenger.id)
-            defender_inventory, defender_loadout, defender_dimension, defender_roster = self._snapshot_bundle(defender.id)
+            report_id = self._report_id(request.id)
+            existing = self.battle_reports.reference_in_uow(uow, report_id)
+            if request.status is SocialRequestStatus.ACCEPTED and existing is not None:
+                return SparringResult("replayed", request, existing, challenger, defender)
+            if (
+                challenger.resources[HEALTH_CURRENT] <= 0
+                or defender.resources[HEALTH_CURRENT] <= 0
+            ):
+                return SparringResult(
+                    "unavailable",
+                    request,
+                    failure_message="双方血气必须大于 0 才能切磋",
+                )
+            if request.status is not SocialRequestStatus.PENDING:
+                return SparringResult("terminal", request=request, failure_message="切磋请求已经处理")
+            challenger_bundle = self._snapshot_bundle(uow, challenger.id)
+            defender_bundle = self._snapshot_bundle(uow, defender.id)
+            challenger_inventory, challenger_loadout, challenger_dimension, challenger_roster = challenger_bundle
+            defender_inventory, defender_loadout, defender_dimension, defender_roster = defender_bundle
             outcome = self.simulator.simulate(
                 challenger,
                 challenger_inventory,
@@ -230,7 +234,7 @@ class SparringFeature:
                 battle_id=f"battle:{request.id}",
                 context=_context(f"{request.id}:battle", logical_time, "battle"),
             )
-            report = self._capture_report(
+            draft = self._battle_report_draft(
                 request,
                 challenger,
                 defender,
@@ -241,20 +245,36 @@ class SparringFeature:
                 outcome,
                 logical_time,
             )
-        except Exception as exc:
-            return SparringResult("failed", accepted, failure_message=f"切磋战斗失败：{exc}")
-        return SparringResult(
-            "accepted",
-            accepted,
-            report,
-            challenger,
-            defender,
-            None if outcome.draw else (
-                challenger.id if outcome.challenger_victory else defender.id
-            ),
-            outcome.draw,
-            outcome.turns,
-        )
+            command = SocialCommand(
+                f"{operation_id}:accept",
+                defender.id,
+                state.revision,
+                ResolveSocialRequest(request.id, SocialRequestStatus.ACCEPTED),
+            )
+            resolved = self.social.execute_in_uow(
+                uow,
+                scope_id,
+                command,
+                context=_context(command.id, logical_time, "resolve"),
+                state=state,
+            )
+            if resolved.failure or resolved.value is None:
+                return SparringResult("failed", request=request, failure_message="切磋请求已被其他操作处理")
+            accepted = resolved.value.execution.state.requests[request.id]
+            report = self.battle_reports.capture_in_uow(uow, draft)
+            uow.commit()
+            return SparringResult(
+                "accepted",
+                accepted,
+                report,
+                challenger,
+                defender,
+                None if outcome.draw else (
+                    challenger.id if outcome.challenger_victory else defender.id
+                ),
+                outcome.draw,
+                outcome.turns,
+            )
 
     def _resolve(self, operation_id, request, status, defender, *, logical_time):
         scope_id = sparring_social_scope_id(defender.id)
@@ -275,35 +295,34 @@ class SparringFeature:
             return None
         return outcome.value.execution.state.requests[request.id]
 
-    def _snapshot_bundle(self, character_id):
-        with self.database.unit_of_work(write=False) as uow:
-            inventory = self.snapshots.require(
-                uow,
-                self.storage.inventory,
-                character_id,
-                InventoryState,
-            )
-            loadout = self.snapshots.require(
-                uow,
-                self.storage.loadout,
-                character_id,
-                LoadoutState,
-            )
-            dimension = self.snapshots.require(
-                uow,
-                CHARACTER_WORLD_AGGREGATE,
-                character_id,
-                CharacterWorldState,
-            )
-            roster = self.snapshots.load(
-                uow,
-                self.storage.companion_roster,
-                character_id,
-                CompanionRosterState,
-            ) or CompanionRosterState(character_id)
+    def _snapshot_bundle(self, uow, character_id):
+        inventory = self.snapshots.require(
+            uow,
+            self.storage.inventory,
+            character_id,
+            InventoryState,
+        )
+        loadout = self.snapshots.require(
+            uow,
+            self.storage.loadout,
+            character_id,
+            LoadoutState,
+        )
+        dimension = self.snapshots.require(
+            uow,
+            self.storage.character_world,
+            character_id,
+            CharacterWorldState,
+        )
+        roster = self.snapshots.load(
+            uow,
+            self.storage.companion_roster,
+            character_id,
+            CompanionRosterState,
+        ) or CompanionRosterState(character_id)
         return inventory, loadout, dimension, roster
 
-    def _capture_report(
+    def _battle_report_draft(
         self,
         request,
         challenger,
@@ -356,7 +375,7 @@ class SparringFeature:
         else:
             winner = challenger.name if outcome.challenger_victory else defender.name
             result_text = f"{winner} 切磋获胜"
-        draft = BattleReportDraft(
+        return BattleReportDraft(
             report_id=self._report_id(request.id),
             mode_id="battle.mode.sparring",
             presentation_skin_id=str(skin.skin.id),
@@ -380,6 +399,16 @@ class SparringFeature:
                 started_at=logical_time,
                 finished_at=logical_time,
                 final_participants=final_participants,
+                round_states=capture_battle_round_states(
+                    outcome.trace,
+                    labels,
+                    self.content.catalog.enemy_projector.attributes,
+                ),
+                turn_states=capture_battle_turn_states(
+                    outcome.trace,
+                    labels,
+                    self.content.catalog.enemy_projector.attributes,
+                ),
                 transitions=capture_battle_transitions(
                     outcome.trace,
                     labels,
@@ -387,7 +416,6 @@ class SparringFeature:
                 ),
             ),
         )
-        return self.battle_reports.capture(draft)
 
     @staticmethod
     def _report_id(request_id: str) -> str:

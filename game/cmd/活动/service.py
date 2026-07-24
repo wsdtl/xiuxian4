@@ -19,6 +19,7 @@ from launch import C, config, logger
 from message import DocumentMessage, M
 from message.schema import FieldSeparator
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 from ..reply_intents import WORLD_EVENT_DETAIL_INTENT, reply_intents
 
@@ -46,7 +47,7 @@ async def _load_activities(
     try:
         return await asyncio.to_thread(
             current_game_services().load_global_activity_views,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -150,10 +151,6 @@ def _unavailable_message() -> DocumentMessage:
 
 def _time(value: datetime) -> str:
     return value.astimezone(ZoneInfo(config.project.timezone)).strftime("%m-%d %H:%M")
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = ["view_world_events"]

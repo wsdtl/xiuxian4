@@ -42,7 +42,7 @@ from game.content.official import (  # noqa: E402
     select_world_skin,
 )
 from game.content.world_skins import MAGIC_SKIN_ID  # noqa: E402
-from game.cmd.战报.site import _content_name  # noqa: E402
+from game.features.battle_report import resolve_battle_content_name  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
     ActiveEffect,
     AbilityUse,
@@ -130,7 +130,7 @@ def _assert_world_skin_projection(catalog) -> None:
             blueprint_names.append(blueprint_name)
             assert set_name in blueprint_name
             for pieces in (2, 3, 4):
-                bonus_name = _content_name(
+                bonus_name = resolve_battle_content_name(
                     view,
                     f"{set_id}.bonus.pieces_{pieces}",
                     "未命名效果",

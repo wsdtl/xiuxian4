@@ -33,6 +33,9 @@ from .catalog import (
     PARTY_INVITATION_REQUEST,
     PARTY_INVITATION_REQUEST_ID,
     PARTY_INVITATION_REQUEST_LIFETIME_SECONDS,
+    PARTY_SPARRING_REQUEST,
+    PARTY_SPARRING_REQUEST_ID,
+    PARTY_SPARRING_REQUEST_LIFETIME_SECONDS,
     PARTY_TYPE_TRIO,
     PARTY_TYPE_TRIO_ID,
     CHARACTER_LEVEL_EXPERIENCE_REQUIREMENTS,
@@ -200,6 +203,12 @@ from .worlds import (
     WORLD_MAP_ANCHORS,
     WORLD_PACKAGE,
     WORLD_PACKAGE_ID,
+)
+from .world_lore import (
+    WORLD_LORE_CATALOG,
+    WorldLoreCatalog,
+    WorldLoreDefinition,
+    WorldLoreRecord,
 )
 
 MAP_ANCHORS = WORLD_MAP_ANCHORS
@@ -379,6 +388,10 @@ __all__ = [
     "WORLD_LOCATION_BINDINGS",
     "WORLD_PACKAGE",
     "WORLD_PACKAGE_ID",
+    "WORLD_LORE_CATALOG",
+    "WorldLoreCatalog",
+    "WorldLoreDefinition",
+    "WorldLoreRecord",
     "WORLD_SKIN_PACKAGE",
     "WORLD_SKIN_PACKAGE_ID",
     "assemble_official_catalog",

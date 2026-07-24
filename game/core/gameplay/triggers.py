@@ -193,7 +193,7 @@ class TriggerEngine:
                             continue
                     session.activations[activation_key] = count + 1
                     session.sequence += 1
-                    result = self.effects.apply(
+                    result = self.effects.apply_or_reject(
                         EffectSpec(
                             instance_id=f"{context.trace_id}:trigger:{session.sequence}",
                             definition_id=definition.effect_id,

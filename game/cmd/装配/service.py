@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import CurrentCharacterResult, current_game_services
 from game.content import LOADOUT_PRESET_IDS
@@ -24,11 +23,12 @@ from game.core.gameplay import (
 )
 from game.rules import game_operation_context
 from game.rules.item import asset_reference, resolve_asset_reference
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import current_message_context
 from message import DocumentMessage, M
 from message.schema import FieldSeparator
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 
 
@@ -145,7 +145,7 @@ async def _execute(
             transaction,
             inventory_id=character.id,
             character_id=character.id,
-            context=game_operation_context(transaction.id, logical_time=_now()),
+            context=game_operation_context(transaction.id, logical_time=command_time()),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -375,10 +375,6 @@ def _unavailable() -> DocumentMessage:
     return M.document().section("装配", icon="notice").line(
         "当前没有读取到装配状态，请稍后重试"
     ).build()
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = ["equip", "presets", "unequip", "view_loadout"]

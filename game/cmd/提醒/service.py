@@ -17,6 +17,7 @@ from launch import C, config, logger
 from message import DocumentMessage, M
 from message.schema import FieldSeparator
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 from ..reply_intents import NOTIFICATION_READ_INTENT, reply_intents
 
@@ -56,7 +57,7 @@ async def mark_notification_read(
             current.character,
             notification_id,
             revision,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -83,7 +84,7 @@ async def _load_details(
         return await asyncio.to_thread(
             current_game_services().load_player_reminder_details,
             current.character,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -195,10 +196,6 @@ def _unavailable_message(title: str) -> DocumentMessage:
 
 def _time(value: datetime) -> str:
     return value.astimezone(ZoneInfo(config.project.timezone)).strftime("%m-%d %H:%M")
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = ["mark_notification_read", "view_notifications", "view_pending_actions"]

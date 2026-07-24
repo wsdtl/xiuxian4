@@ -28,7 +28,6 @@ class EnemyBehaviorBlueprint:
 @dataclass(frozen=True)
 class EnemyIdentityBlueprint:
     key: str
-    behavior_keys: tuple[str, ...]
     boss: bool = False
 
 
@@ -68,68 +67,19 @@ BEHAVIOR_BLUEPRINTS = (
 )
 
 
-REGULAR_ENEMY_BLUEPRINTS = (
-    EnemyIdentityBlueprint("mountain_ape", ("heavy_strike",)),
-    EnemyIdentityBlueprint("moon_wolf", ("rapid_attack",)),
-    EnemyIdentityBlueprint("fox_trickster", ("evasion",)),
-    EnemyIdentityBlueprint("venom_spider", ("poison",)),
-    EnemyIdentityBlueprint("cave_serpent", ("bleed",)),
-    EnemyIdentityBlueprint("corpse_guard", ("heavy_armor",)),
-    EnemyIdentityBlueprint("drowned_spirit", ("slow",)),
-    EnemyIdentityBlueprint("painted_wraith", ("volatile",)),
-    EnemyIdentityBlueprint("night_raider", ("combo",)),
-    EnemyIdentityBlueprint("blood_drinker", ("lifesteal",)),
-    EnemyIdentityBlueprint("dream_eater", ("sleep",)),
-    EnemyIdentityBlueprint("stone_guardian", ("block",)),
-    EnemyIdentityBlueprint("wind_hunter", ("rapid_attack",)),
-    EnemyIdentityBlueprint("frost_stalker", ("freeze",)),
-    EnemyIdentityBlueprint("treasure_boar", ("charged_burst",)),
-    EnemyIdentityBlueprint("cliff_screecher", ("splash",)),
-    EnemyIdentityBlueprint("war_ape", ("sacrifice",)),
-    EnemyIdentityBlueprint("river_mimic", ("counter",)),
-    EnemyIdentityBlueprint("plague_beast", ("poison",)),
-    EnemyIdentityBlueprint("flame_bird", ("burn",)),
-    EnemyIdentityBlueprint("thunder_beast", ("stun",)),
-    EnemyIdentityBlueprint("giant_serpent", ("heavy_strike",)),
-    EnemyIdentityBlueprint("shadow_cat", ("evasion",)),
-    EnemyIdentityBlueprint("horned_brute", ("sunder",)),
-    EnemyIdentityBlueprint("grave_knight", ("death_guard",)),
-    EnemyIdentityBlueprint("mist_witch", ("slow",)),
-    EnemyIdentityBlueprint("bone_archer", ("piercing",)),
-    EnemyIdentityBlueprint("marsh_lurker", ("mark_detonation",)),
-    EnemyIdentityBlueprint("ember_hound", ("burn",)),
-    EnemyIdentityBlueprint("ice_elemental", ("freeze",)),
-    EnemyIdentityBlueprint("storm_elemental", ("area_attack",)),
-    EnemyIdentityBlueprint("earth_elemental", ("heavy_armor",)),
-    EnemyIdentityBlueprint("shadow_elemental", ("true_damage",)),
-    EnemyIdentityBlueprint("forest_guardian", ("regeneration",)),
-    EnemyIdentityBlueprint("blood_mage", ("lifesteal",)),
-    EnemyIdentityBlueprint("curse_caster", ("cooldown_lock",)),
-    EnemyIdentityBlueprint("shield_bearer", ("shield",)),
-    EnemyIdentityBlueprint("pack_leader", ("follow_up",)),
-    EnemyIdentityBlueprint("soul_reaper", ("execute",)),
-    EnemyIdentityBlueprint("iron_colossus", ("block",)),
-    EnemyIdentityBlueprint("sky_predator", ("splash",)),
-    EnemyIdentityBlueprint("deep_crawler", ("poison",)),
-    EnemyIdentityBlueprint("mirror_spirit", ("counter",)),
-    EnemyIdentityBlueprint("chain_warden", ("taunt",)),
-    EnemyIdentityBlueprint("ruin_sentinel", ("shield",)),
-    EnemyIdentityBlueprint("star_gazer", ("mark_detonation",)),
-    EnemyIdentityBlueprint("void_priest", ("resource_drain",)),
-    EnemyIdentityBlueprint("frost_witch", ("freeze",)),
-    EnemyIdentityBlueprint("plague_shaman", ("poison",)),
-    EnemyIdentityBlueprint("flame_raider", ("burn",)),
-    EnemyIdentityBlueprint("thunder_caller", ("stun",)),
-    EnemyIdentityBlueprint("abyss_stalker", ("true_damage",)),
-    EnemyIdentityBlueprint("moon_specter", ("evasion",)),
-    EnemyIdentityBlueprint("sun_guardian", ("shield",)),
-    EnemyIdentityBlueprint("chaos_spawn", ("volatile",)),
-    EnemyIdentityBlueprint("time_watcher", ("cooldown_lock",)),
-    EnemyIdentityBlueprint("fate_weaver", ("mark_detonation",)),
-    EnemyIdentityBlueprint("death_scribe", ("execute",)),
-    EnemyIdentityBlueprint("realm_wanderer", ("area_attack",)),
-    EnemyIdentityBlueprint("ancient_guardian", ("heavy_armor",)),
+REGULAR_ENEMY_KEYS = (
+    "mountain_ape", "moon_wolf", "fox_trickster", "venom_spider", "cave_serpent", "corpse_guard",
+    "drowned_spirit", "painted_wraith", "night_raider", "blood_drinker", "dream_eater", "stone_guardian",
+    "wind_hunter", "frost_stalker", "treasure_boar", "cliff_screecher", "war_ape", "river_mimic",
+    "plague_beast", "flame_bird", "thunder_beast", "giant_serpent", "shadow_cat", "horned_brute",
+    "grave_knight", "mist_witch", "bone_archer", "marsh_lurker", "ember_hound", "ice_elemental",
+    "storm_elemental", "earth_elemental", "shadow_elemental", "forest_guardian", "blood_mage", "curse_caster",
+    "shield_bearer", "pack_leader", "soul_reaper", "iron_colossus", "sky_predator", "deep_crawler",
+    "mirror_spirit", "chain_warden", "ruin_sentinel", "star_gazer", "void_priest", "frost_witch",
+    "plague_shaman", "flame_raider", "thunder_caller", "abyss_stalker", "moon_specter", "sun_guardian",
+    "chaos_spawn", "time_watcher", "fate_weaver", "death_scribe", "realm_wanderer", "ancient_guardian",
 )
+REGULAR_ENEMY_BLUEPRINTS = tuple(EnemyIdentityBlueprint(key) for key in REGULAR_ENEMY_KEYS)
 
 
 PERSONAL_BOSS_KEYS = (
@@ -171,46 +121,14 @@ DISASTER_TEMPLATE_KEYS = (
 )
 
 
-_BOSS_BEHAVIOR_SETS = (
-    ("poison", "area_attack", "mark_detonation"),
-    ("lifesteal", "heavy_strike", "taunt"),
-    ("burn", "charged_burst", "splash"),
-    ("rapid_attack", "combo", "evasion"),
-    ("heavy_armor", "counter", "death_guard"),
-    ("execute", "resource_drain", "true_damage"),
-    ("volatile", "cooldown_lock", "mark_detonation"),
-    ("freeze", "shield", "area_attack"),
-)
+def _boss_blueprints(keys: tuple[str, ...]) -> tuple[EnemyIdentityBlueprint, ...]:
+    return tuple(EnemyIdentityBlueprint(key, True) for key in keys)
 
 
-def _boss_blueprints(keys: tuple[str, ...], *, offset: int) -> tuple[EnemyIdentityBlueprint, ...]:
-    return tuple(
-        EnemyIdentityBlueprint(
-            key,
-            _BOSS_BEHAVIOR_SETS[(offset + index) % len(_BOSS_BEHAVIOR_SETS)],
-            True,
-        )
-        for index, key in enumerate(keys)
-    )
-
-
-PERSONAL_BOSS_BLUEPRINTS = _boss_blueprints(PERSONAL_BOSS_KEYS, offset=0)
-CULTIVATION_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(
-    CULTIVATION_PARTY_BOSS_KEYS,
-    offset=len(PERSONAL_BOSS_KEYS),
-)
-MAGIC_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(
-    MAGIC_PARTY_BOSS_KEYS,
-    offset=len(PERSONAL_BOSS_KEYS) + len(CULTIVATION_PARTY_BOSS_KEYS),
-)
-STELLAR_RING_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(
-    STELLAR_RING_PARTY_BOSS_KEYS,
-    offset=(
-        len(PERSONAL_BOSS_KEYS)
-        + len(CULTIVATION_PARTY_BOSS_KEYS)
-        + len(MAGIC_PARTY_BOSS_KEYS)
-    ),
-)
+PERSONAL_BOSS_BLUEPRINTS = _boss_blueprints(PERSONAL_BOSS_KEYS)
+CULTIVATION_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(CULTIVATION_PARTY_BOSS_KEYS)
+MAGIC_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(MAGIC_PARTY_BOSS_KEYS)
+STELLAR_RING_PARTY_BOSS_BLUEPRINTS = _boss_blueprints(STELLAR_RING_PARTY_BOSS_KEYS)
 PARTY_BOSS_BLUEPRINTS = (
     *CULTIVATION_PARTY_BOSS_BLUEPRINTS,
     *MAGIC_PARTY_BOSS_BLUEPRINTS,
@@ -225,12 +143,7 @@ _ALL_BOSS_TEMPLATE_KEYS = (
     *STELLAR_RING_PARTY_BOSS_KEYS,
     *DISASTER_TEMPLATE_KEYS,
 )
-BOSS_BEHAVIOR_KEYS_BY_TEMPLATE = MappingProxyType(
-    {
-        blueprint.key: blueprint.behavior_keys
-        for blueprint in _boss_blueprints(_ALL_BOSS_TEMPLATE_KEYS, offset=0)
-    }
-)
+BOSS_TEMPLATE_KEYS = tuple(_ALL_BOSS_TEMPLATE_KEYS)
 
 
 def _validate() -> None:
@@ -240,7 +153,6 @@ def _validate() -> None:
         raise ValueError("首批敌人身份必须包含 60 个普通身份")
     if len(PERSONAL_BOSS_BLUEPRINTS) != 30 or len(PARTY_BOSS_BLUEPRINTS) != 30:
         raise ValueError("正式个人首领必须为 30 个，组队首领必须为 30 个")
-    behavior_keys = {value.key for value in BEHAVIOR_BLUEPRINTS}
     identity_keys = [
         value.key
         for value in (
@@ -251,16 +163,7 @@ def _validate() -> None:
     ]
     if len(identity_keys) != len(set(identity_keys)):
         raise ValueError("敌人身份稳定键不能重复")
-    if any(
-        not set(value.behavior_keys).issubset(behavior_keys)
-        for value in (
-            *REGULAR_ENEMY_BLUEPRINTS,
-            *PERSONAL_BOSS_BLUEPRINTS,
-            *PARTY_BOSS_BLUEPRINTS,
-        )
-    ):
-        raise ValueError("敌人身份引用了未知行为蓝图")
-    if set(BOSS_BEHAVIOR_KEYS_BY_TEMPLATE) != set(_ALL_BOSS_TEMPLATE_KEYS):
+    if len(BOSS_TEMPLATE_KEYS) != len(set(BOSS_TEMPLATE_KEYS)):
         raise ValueError("首领战斗模板键不能重复或缺失")
 
 
@@ -269,7 +172,7 @@ _validate()
 
 __all__ = [
     "BEHAVIOR_BLUEPRINTS",
-    "BOSS_BEHAVIOR_KEYS_BY_TEMPLATE",
+    "BOSS_TEMPLATE_KEYS",
     "CULTIVATION_PARTY_BOSS_BLUEPRINTS",
     "CULTIVATION_PARTY_BOSS_KEYS",
     "DISASTER_TEMPLATE_KEYS",
@@ -281,6 +184,7 @@ __all__ = [
     "PERSONAL_BOSS_BLUEPRINTS",
     "PERSONAL_BOSS_KEYS",
     "REGULAR_ENEMY_BLUEPRINTS",
+    "REGULAR_ENEMY_KEYS",
     "STELLAR_RING_PARTY_BOSS_BLUEPRINTS",
     "STELLAR_RING_PARTY_BOSS_KEYS",
 ]

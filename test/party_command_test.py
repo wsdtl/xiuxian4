@@ -40,6 +40,9 @@ async def _main() -> None:
         "组队挑战",
         "选择组队挑战",
         "开始组队挑战",
+        "组队切磋",
+        "接受组队切磋",
+        "拒绝组队切磋",
     )
     for command in commands:
         assert len(LocalEventHandler.exact_rules[command]) == 1
@@ -89,6 +92,32 @@ async def _main() -> None:
             await _dispatch("party-c", accept_c, "party-accept-c")
             full = await _dispatch("party-a", "邀请组队 party-d", "party-full")
             assert "队伍人数已经达到上限" in full.replies[0].message.content
+
+            await _dispatch("party-d", "创建队伍", "party-d-create")
+            sparring = await _dispatch(
+                "party-a",
+                "组队切磋 party-d",
+                "party-sparring-create",
+            )
+            assert "3 vs 1" in sparring.replies[0].message.content
+            accept_sparring = next(
+                value.data
+                for value in sparring.replies[0].message.actions
+                if value.label == "接受"
+            )
+            denied_sparring = await _dispatch(
+                "party-b",
+                accept_sparring,
+                "party-sparring-denied",
+            )
+            assert "只有受邀队伍的队长" in denied_sparring.replies[0].message.content
+            completed_sparring = await _dispatch(
+                "party-d",
+                accept_sparring,
+                "party-sparring-accept",
+            )
+            assert "组队切磋结果" in completed_sparring.replies[0].message.content
+            assert "查看完整战报" in completed_sparring.replies[0].message.content
 
             selected = await _dispatch(
                 "party-a",

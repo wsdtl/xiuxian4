@@ -54,8 +54,8 @@ async def _main() -> None:
         "game.cmd.回收",
     ):
         module = import_module(module_name)
-        if hasattr(module, "_now"):
-            module._now = lambda clock=clock: clock[0]
+        if hasattr(module, "command_time"):
+            module.command_time = lambda clock=clock: clock[0]
 
     with TemporaryDirectory() as directory:
         services = build_game_services(

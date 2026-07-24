@@ -124,6 +124,7 @@ def _assert_exploration(services, character, overview, roster, companion_id) -> 
             session_id="companion-exploration",
             batch_index=index,
             region_id=region.id,
+            world_id=overview.character_world.world_id,
             character_level=level,
             random=SeededRandomSource(f"companion-exploration:{index}"),
         )
@@ -171,14 +172,25 @@ def _assert_sparring(
 
 def _assert_disaster(services, character, overview, roster, companion_id) -> None:
     disaster = services.dimensional_disasters.disasters.definitions()[0]
-    enemy = services.content.catalog.enemies.require(disaster.enemy_definition_id)
+    behavior_ids, phase_loadouts = (
+        services.dimensional_disasters.enemy_loadouts.generate_loadout(
+            disaster.enemy_definition_id,
+            behavior_count=3,
+            phase_health_ratios=(0.65, 0.30),
+            behavior_weights=services.content.enemy_behavior_profiles.require(
+                disaster.source_world_id
+            ).behavior_weights,
+            random=SeededRandomSource("companion-disaster-seed"),
+        )
+    )
     combat = DisasterCombatSnapshot(
         disaster.enemy_definition_id,
         1,
         ENEMY_RANK_BOSS_ID,
-        tuple(sorted(enemy.default_behavior_ids)),
+        behavior_ids,
         "companion-disaster-seed",
         services.content.catalog.report.content_fingerprint,
+        phase_loadouts,
     )
     outcome = services.dimensional_disasters.battles.simulate(
         combat,

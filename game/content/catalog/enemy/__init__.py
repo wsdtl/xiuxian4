@@ -59,6 +59,11 @@ from .loot import (
     ENEMY_LOOT_TABLES,
     PARTY_BOSS_LOOT_TABLE_ID,
 )
+from .loadouts import (
+    ENEMY_BEHAVIOR_PROFILE_CATALOG,
+    EnemyBehaviorProfileCatalog,
+    EnemyBehaviorProfileDefinition,
+)
 
 
 ENEMY_DISPLAY_CONTENT_IDS = (
@@ -90,6 +95,7 @@ __all__ = [
     "CULTIVATION_PARTY_BOSS_ENEMIES",
     "ENCOUNTER_SCOPES",
     "ENEMY_BEHAVIOR_CONTENT",
+    "ENEMY_BEHAVIOR_PROFILE_CATALOG",
     "ENEMY_DEFINITIONS",
     "ENEMY_DISPLAY_CONTENT_IDS",
     "ENEMY_ENCOUNTERS",
@@ -115,6 +121,8 @@ __all__ = [
     "REGULAR_ENEMIES",
     "REGULAR_ENEMY_BLUEPRINTS",
     "STANDARD_ENEMY_LEVEL_PROFILE",
+    "EnemyBehaviorProfileCatalog",
+    "EnemyBehaviorProfileDefinition",
     "PartyBossSourceCatalog",
     "PartyBossSourceDefinition",
 ]

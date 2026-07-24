@@ -58,6 +58,7 @@ class HealingResolution:
     overheal: float
     before: float
     after: float
+    revived: bool
 
 
 class RecoveryEngine:
@@ -108,6 +109,7 @@ class RecoveryEngine:
             overheal=max(0.0, modified - actual),
             before=before,
             after=before + actual,
+            revived=before <= definition.minimum and before + actual > definition.minimum,
         )
 
     def resolve_shield(
@@ -182,24 +184,37 @@ def register_recovery_operations(
             source=context.source,
             target=context.target,
         )
-        return EffectContribution(
-            resource_deltas={engine.stats.health_resource: resolution.actual},
-            facts=(
+        facts = [
+            EffectFact(
+                "combat.healing.resolved",
+                engine.stats.health_resource,
+                {
+                    "operation_id": operation.id,
+                    "requested": resolution.requested,
+                    "multiplier": resolution.multiplier,
+                    "modified": resolution.modified,
+                    "actual": resolution.actual,
+                    "overheal": resolution.overheal,
+                    "before": resolution.before,
+                    "after": resolution.after,
+                },
+            )
+        ]
+        if resolution.revived:
+            facts.append(
                 EffectFact(
-                    "combat.healing.resolved",
+                    "combat.target.revived",
                     engine.stats.health_resource,
                     {
-                        "operation_id": operation.id,
-                        "requested": resolution.requested,
-                        "multiplier": resolution.multiplier,
-                        "modified": resolution.modified,
-                        "actual": resolution.actual,
-                        "overheal": resolution.overheal,
                         "before": resolution.before,
                         "after": resolution.after,
+                        "actual": resolution.actual,
                     },
-                ),
-            ),
+                )
+            )
+        return EffectContribution(
+            resource_deltas={engine.stats.health_resource: resolution.actual},
+            facts=tuple(facts),
         )
 
     def shield(operation: GrantShield, context: EffectOperationContext) -> EffectContribution:

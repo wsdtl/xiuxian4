@@ -115,18 +115,23 @@ class EnemyBehaviorDefinition:
 
 
 @dataclass(frozen=True)
-class EnemyPhaseDefinition:
+class EnemyPhaseLoadout:
+    """An instance-owned phase plan generated together with the encounter."""
+
     id: StableId
     health_ratio: float
-    behavior_ids: frozenset[StableId]
+    behavior_ids: tuple[StableId, ...]
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "id", stable_id(self.id, field="enemy phase id"))
         if not 0 < self.health_ratio < 1:
-            raise ValueError("敌人阶段血量阈值必须位于 0 到 1")
-        behaviors = _stable_ids(self.behavior_ids, field_name="enemy behavior id")
-        if not behaviors:
-            raise ValueError("敌人阶段必须至少授予一个行为")
+            raise ValueError("敌人实例阶段血量阈值必须位于 0 到 1")
+        behaviors = tuple(
+            stable_id(value, field="enemy behavior id")
+            for value in self.behavior_ids
+        )
+        if not behaviors or len(behaviors) != len(set(behaviors)):
+            raise ValueError("敌人实例阶段必须包含不重复的行为")
         object.__setattr__(self, "behavior_ids", behaviors)
 
 
@@ -154,11 +159,8 @@ class EnemyDefinition:
     level_profile_id: StableId
     reward_profile_id: StableId
     allowed_rank_ids: frozenset[StableId]
-    default_behavior_ids: frozenset[StableId] = frozenset()
-    available_behavior_ids: frozenset[StableId] = frozenset()
     base_contribution: ContributionSpec = ContributionSpec()
     base_ai_rules: tuple[BattleAiRule, ...] = ()
-    phases: tuple[EnemyPhaseDefinition, ...] = ()
     tags: TagSet = EMPTY_TAGS
 
     def __post_init__(self) -> None:
@@ -166,20 +168,10 @@ class EnemyDefinition:
         object.__setattr__(self, "level_profile_id", stable_id(self.level_profile_id, field="enemy level profile id"))
         object.__setattr__(self, "reward_profile_id", stable_id(self.reward_profile_id, field="enemy reward profile id"))
         allowed = _stable_ids(self.allowed_rank_ids, field_name="enemy rank id")
-        defaults = _stable_ids(self.default_behavior_ids, field_name="enemy behavior id")
-        available = _stable_ids(self.available_behavior_ids, field_name="enemy behavior id")
         if not allowed:
             raise ValueError("敌人必须允许至少一个阶位")
-        if not defaults.issubset(available):
-            raise ValueError("敌人默认行为必须属于可用行为集合")
-        phases = tuple(sorted(self.phases, key=lambda value: value.health_ratio, reverse=True))
-        if len({value.id for value in phases}) != len(phases):
-            raise ValueError("同一敌人的阶段 ID 不能重复")
         object.__setattr__(self, "allowed_rank_ids", allowed)
-        object.__setattr__(self, "default_behavior_ids", defaults)
-        object.__setattr__(self, "available_behavior_ids", available)
         object.__setattr__(self, "base_ai_rules", tuple(self.base_ai_rules))
-        object.__setattr__(self, "phases", phases)
 
 
 @dataclass(frozen=True)
@@ -201,6 +193,7 @@ class EnemySpawnDefinition:
     minimum_count: int = 1
     maximum_count: int = 1
     behavior_count: int | None = None
+    phase_health_ratios: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         enemies = _stable_ids(self.enemy_ids, field_name="enemy id")
@@ -212,6 +205,16 @@ class EnemySpawnDefinition:
             raise ValueError("敌人生成数量边界无效")
         if self.behavior_count is not None and self.behavior_count < 0:
             raise ValueError("敌人生成行为数量不能小于 0")
+        ratios = tuple(float(value) for value in self.phase_health_ratios)
+        if any(not 0 < value < 1 for value in ratios):
+            raise ValueError("敌人生成阶段阈值必须位于 0 到 1")
+        if len(ratios) != len(set(ratios)):
+            raise ValueError("敌人生成阶段阈值不能重复")
+        object.__setattr__(
+            self,
+            "phase_health_ratios",
+            tuple(sorted(ratios, reverse=True)),
+        )
 
 
 @dataclass(frozen=True)
@@ -243,6 +246,7 @@ class EnemyInstance:
     behavior_ids: tuple[StableId, ...]
     generation_seed: str
     content_version: str
+    phase_loadouts: tuple[EnemyPhaseLoadout, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.id.strip() or not self.generation_seed.strip() or not self.content_version.strip():
@@ -255,6 +259,17 @@ class EnemyInstance:
         if len(behaviors) != len(set(behaviors)):
             raise ValueError("敌人实例行为不能重复")
         object.__setattr__(self, "behavior_ids", behaviors)
+        phases = tuple(
+            sorted(self.phase_loadouts, key=lambda value: value.health_ratio, reverse=True)
+        )
+        if len({value.id for value in phases}) != len(phases):
+            raise ValueError("敌人实例阶段 ID 不能重复")
+        all_behaviors = [*behaviors]
+        for phase in phases:
+            all_behaviors.extend(phase.behavior_ids)
+        if len(all_behaviors) != len(set(all_behaviors)):
+            raise ValueError("敌人开场与阶段行为不能重复")
+        object.__setattr__(self, "phase_loadouts", phases)
 
 
 @dataclass(frozen=True)
@@ -293,7 +308,7 @@ __all__ = [
     "EnemyEncounterInstance",
     "EnemyInstance",
     "EnemyLevelProfileDefinition",
-    "EnemyPhaseDefinition",
+    "EnemyPhaseLoadout",
     "EnemyRankDefinition",
     "EnemyRewardProfileDefinition",
     "EnemySpawnDefinition",

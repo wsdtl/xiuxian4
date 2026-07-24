@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from game.app import (
     PlayerReplyState,
@@ -14,7 +13,7 @@ from game.app import (
 )
 from game.core.gameplay import SkinProjector
 from game.rules.activity import resolve_global_activity_presentation
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import MessageIdentity, current_message_context, manager
 from message import DocumentMessage, Message, rich
 from message.schema import (
@@ -28,6 +27,7 @@ from message.schema import (
 )
 
 from .presentation import character_header_color, character_header_parts
+from .command_helpers import command_time
 from .reply_intents import (
     NOTIFICATIONS_INTENT,
     PENDING_ACTIONS_INTENT,
@@ -88,9 +88,23 @@ async def send_game_reply(message: Message) -> bool:
     decorated = await _decorate_current_player_reply(
         message,
         context.identity,
-        logical_time=_now(),
+        logical_time=command_time(),
     )
     return await manager.send(decorated, context.client_id)
+
+
+async def send_command_failure(
+    title: str,
+    character_id: str,
+    exc: Exception,
+    fallback: Message,
+) -> None:
+    """统一记录命令异常并发送由组件决定的降级回复。"""
+
+    logger.opt(colors=True, exception=exc).error(
+        C.join(C.fail(title), C.kv("character", character_id))
+    )
+    await send_game_reply(fallback)
 
 
 async def _decorate_current_player_reply(
@@ -180,8 +194,4 @@ def _activity_content(
     return tuple(parts)
 
 
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
-
-
-__all__ = ["GameReplyComposer", "send_game_reply"]
+__all__ = ["GameReplyComposer", "send_command_failure", "send_game_reply"]

@@ -27,7 +27,7 @@ from game.content.world_skins import (  # noqa: E402
     MAGIC_SKIN_ID,
     STELLAR_RING_SKIN_ID,
 )
-from game.cmd.战报.site import _content_name  # noqa: E402
+from game.features.battle_report import resolve_battle_content_name  # noqa: E402
 from game.core.gameplay import (  # noqa: E402
     INSCRIPTION_DATA_KEY,
     InscriptionData,
@@ -140,7 +140,7 @@ def main() -> None:
         set_id = equipment_set_id("army_breaker")
         set_name = view.projector.name(set_id)
         for pieces in (2, 3, 4):
-            bonus_name = _content_name(
+            bonus_name = resolve_battle_content_name(
                 view,
                 f"{set_id}.bonus.pieces_{pieces}",
                 "未命名效果",

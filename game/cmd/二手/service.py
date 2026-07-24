@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from math import ceil
-from zoneinfo import ZoneInfo
 
 from game.app import CharacterOverview, CharacterOverviewResult, current_game_services
 from game.content.catalog.foundation import PRIMARY_CURRENCY_ID
@@ -23,10 +22,11 @@ from game.core.gameplay import (
 )
 from game.rules.economy import quote_market_tax
 from game.rules.item import resolve_asset_reference
-from launch import C, config, logger
+from launch import C, logger
 from message import Action, DocumentMessage, M
 
-from ..reply import send_game_reply
+from ..command_helpers import command_time
+from ..reply import send_command_failure, send_game_reply
 
 
 PAGE_SIZE = 20
@@ -57,7 +57,7 @@ async def market(message: str, result: CharacterOverviewResult) -> None:
                 page = _page(parts[1])
         listings = await asyncio.to_thread(
             current_game_services().economy.listings,
-            logical_time=_now(),
+            logical_time=command_time(),
             slot_id=slot_id,
             category=category,
         )
@@ -75,7 +75,7 @@ async def my_listings(message: str, result: CharacterOverviewResult) -> None:
         page = _page(message or "1")
         listings = await asyncio.to_thread(
             current_game_services().economy.listings,
-            logical_time=_now(),
+            logical_time=command_time(),
             seller_id=overview.character.id,
         )
         await send_game_reply(_listing_page("我的上架", listings, page, overview))
@@ -146,7 +146,7 @@ async def confirm_listing(message: str, result: CharacterOverviewResult) -> None
             services.economy.open_listing,
             overview.character.id,
             quoted.quote,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         builder = M.document().section("上架", icon="trade")
         if opened.status == "listed" and opened.listing is not None:
@@ -176,7 +176,7 @@ async def cancel_listing(message: str, result: CharacterOverviewResult) -> None:
             current_game_services().economy.cancel_listing,
             overview.character.id,
             listing_id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         builder = M.document().section("下架", icon="trade")
         if closed.status == "cancelled" and closed.listing is not None:
@@ -201,7 +201,7 @@ async def buy(message: str, result: CharacterOverviewResult) -> None:
             current_game_services().economy.quote_purchase,
             overview.character.id,
             listing_id,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         await send_game_reply(_purchase_quote_message(quoted, overview))
     except ValueError as exc:
@@ -223,7 +223,7 @@ async def confirm_purchase(message: str, result: CharacterOverviewResult) -> Non
             services.economy.quote_purchase,
             overview.character.id,
             parts[0],
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         if quoted.quote is None or quoted.quote.id != parts[1]:
             await send_game_reply(_failure("购买报价已经变化，请重新确认"))
@@ -232,7 +232,7 @@ async def confirm_purchase(message: str, result: CharacterOverviewResult) -> Non
             services.economy.purchase,
             overview.character.id,
             quoted.quote,
-            logical_time=_now(),
+            logical_time=command_time(),
         )
         builder = M.document().section("归航成交", icon="trade")
         if purchased.status == "purchased" and purchased.quote is not None:
@@ -258,7 +258,7 @@ async def tax(result: CharacterOverviewResult) -> None:
         return
     summary = await asyncio.to_thread(
         current_game_services().economy.tax_summary,
-        logical_time=_now(),
+        logical_time=command_time(),
     )
     currency = _view(overview).projector.name(PRIMARY_CURRENCY_ID)
     await send_game_reply(
@@ -274,7 +274,7 @@ async def tax(result: CharacterOverviewResult) -> None:
 async def _listing_detail(listing_id: str, overview: CharacterOverview) -> None:
     listings = await asyncio.to_thread(
         current_game_services().economy.listings,
-        logical_time=_now(),
+        logical_time=command_time(),
     )
     listing = next((value for value in listings if value.id == listing_id.upper()), None)
     if listing is None:
@@ -433,15 +433,13 @@ def _overview(result: CharacterOverviewResult) -> CharacterOverview | None:
     return result.overview if result.status == "ok" else None
 
 
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
-
-
 async def _failed(title: str, character_id: str, exc: Exception) -> None:
-    logger.opt(colors=True, exception=exc).error(
-        C.join(C.fail(title), C.kv("character", character_id))
+    await send_command_failure(
+        title,
+        character_id,
+        exc,
+        _failure("当前操作没有完成，请稍后重试"),
     )
-    await send_game_reply(_failure("当前操作没有完成，请稍后重试"))
 
 
 def _failure(message: str) -> DocumentMessage:

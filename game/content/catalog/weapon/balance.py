@@ -1,4 +1,4 @@
-"""七十二把武器的静态价值估算与快速横向审计。"""
+"""正式武器的静态价值估算与快速横向审计。"""
 
 from __future__ import annotations
 
@@ -33,6 +33,8 @@ PRIMARY_HIT_FACTORS: Mapping[str, float] = MappingProxyType(
         "mark": 1.0,
         "self_cost": 1.0,
         "volatile": 1.05,
+        "borrowed_force": 1.50,
+        "deferred_echo": 1.85,
     }
 )
 
@@ -59,6 +61,8 @@ PRIMARY_VALUES: Mapping[str, ValueVector] = MappingProxyType(
         "mark": ValueVector(offense=4, volatility=4),
         "self_cost": ValueVector(offense=7, volatility=8),
         "volatile": ValueVector(offense=4, volatility=14),
+        "borrowed_force": ValueVector(offense=7, volatility=5),
+        "deferred_echo": ValueVector(offense=8, tempo=5, volatility=3),
     }
 )
 

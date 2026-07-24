@@ -183,9 +183,8 @@ class DimensionalDisasterBattleSimulator:
             HEALTH_MAXIMUM
         )
         ratio = entity.resources[HEALTH_CURRENT] / maximum if maximum > 0 else 0.0
-        definition = self.content.enemies.require(instance.definition_id)
         pending = self.content.enemy_projector.pending_phases(
-            definition,
+            instance,
             ratio,
             active_phases,
         )
@@ -212,6 +211,7 @@ class DimensionalDisasterBattleSimulator:
                         "health_ratio": ratio,
                         "threshold": phase.health_ratio,
                         "behavior_count": len(phase.behavior_ids),
+                        "behavior_ids": tuple(phase.behavior_ids),
                     },
                 )
             )
@@ -232,6 +232,7 @@ class DimensionalDisasterBattleSimulator:
             combat.behavior_ids,
             combat.generation_seed,
             combat.content_version,
+            combat.phase_loadouts,
         )
 
 

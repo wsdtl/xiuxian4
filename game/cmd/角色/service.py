@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from math import ceil
-from zoneinfo import ZoneInfo
 
 from game.content import (
     CHARACTER_LEVEL_PROGRESSION_ID,
@@ -63,10 +62,11 @@ from game.app import (
     message_identity_evidence,
 )
 from game.rules.character import CharacterCreationReceipt, CharacterSettingsState
-from launch import C, config, logger
+from launch import C, logger
 from launch.adapter import current_message_context
 from message import Action, DocumentMessage, M
 
+from ..command_helpers import command_time
 from ..reply import send_game_reply
 from ..presentation import (
     character_header_color,
@@ -91,7 +91,7 @@ async def create_character(requested_name: str) -> None:
     context = current_message_context()
     if context is None:
         raise RuntimeError("创建角色缺少当前消息上下文")
-    logical_time = _now()
+    logical_time = command_time()
     evidence = message_identity_evidence(
         context.identity,
         logical_time=logical_time,
@@ -157,7 +157,7 @@ async def mood(message: str, current: CurrentCharacterResult) -> None:
                 services.set_mood_header_enabled,
                 current.character.id,
                 enabled,
-                logical_time=_now(),
+                logical_time=command_time(),
             )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -192,7 +192,7 @@ async def auto_medicine(message: str, current: CurrentCharacterResult) -> None:
                 services.set_auto_use_medicine,
                 current.character.id,
                 requested,
-                logical_time=_now(),
+                logical_time=command_time(),
             )
     except Exception as exc:
         logger.opt(colors=True, exception=exc).error(
@@ -377,7 +377,7 @@ def _mood_message(
     *,
     invalid: bool = False,
 ) -> DocumentMessage:
-    now_value = _now()
+    now_value = command_time()
     color = character_header_color(settings, now_value)
     builder = (
         M.document()
@@ -789,7 +789,7 @@ def _action_text(overview: CharacterOverview, view) -> str:
     running = overview.action.running()
     if running:
         record = running[0]
-        remaining_seconds = max(0, int((record.completes_at - _now()).total_seconds()))
+        remaining_seconds = max(0, int((record.completes_at - command_time()).total_seconds()))
         remaining_minutes = ceil(remaining_seconds / 60)
         return f"{_projected_name(record.definition_id, view)} | 剩余 {remaining_minutes} 分钟"
     completed = overview.action.completed()
@@ -807,10 +807,6 @@ def _number(value: float) -> str:
 
 def _resource_name(projector, resource_id: str) -> str:
     return projector.name(resource_id).removeprefix("当前")
-
-
-def _now() -> datetime:
-    return datetime.now(ZoneInfo(config.project.timezone))
 
 
 __all__ = [
