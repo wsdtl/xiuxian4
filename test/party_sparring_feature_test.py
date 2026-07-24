@@ -158,15 +158,21 @@ def main() -> None:
             assert report.mode_id == "battle.mode.party_sparring"
             assert len(report.segments) == 1
             segment = report.segments[0]
-            assert len(segment.participants) == (
+            assert len(segment.combatants) == (
                 challenger_size + defender_size + (1 if companion_id else 0)
             )
             assert segment.events
             assert segment.transitions
-            assert segment.turn_states
-            challenger_world = before[leader.id]["world"]
-            expected_skin = services.world_views.require(challenger_world.world_id).skin.id
-            assert report.presentation_skin_id == expected_skin
+            assert all(value.after.participants for value in segment.transitions)
+            character_projections = {
+                value.label: value.projection_id
+                for value in segment.combatants
+                if value.unit_kind == "character"
+            }
+            assert character_projections == {
+                character.name: str(before[character.id]["world"].world_id)
+                for character in all_characters
+            }
 
             replayed = services.party_sparring.accept_request(
                 f"spar-{sequence}-replay",

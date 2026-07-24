@@ -15,6 +15,8 @@ from game.rules.battle_report import (
     encode_segment,
 )
 
+from .assembly import BattleReportBuilder
+
 
 DETAIL_RETENTION = timedelta(days=7)
 SUMMARY_RETENTION = timedelta(days=30)
@@ -23,9 +25,10 @@ SUMMARY_RETENTION = timedelta(days=30)
 class BattleReportService:
     """一张报告主表和一张片段表承接所有战斗模式。"""
 
-    def __init__(self, database, store) -> None:
+    def __init__(self, database, store, builder: BattleReportBuilder) -> None:
         self.database = database
         self.store = store
+        self.builder = builder
 
     def capture(self, draft: BattleReportDraft) -> BattleReportReference:
         with self.database.unit_of_work() as uow:
@@ -46,8 +49,6 @@ class BattleReportService:
                 report_id=draft.report_id,
                 share_id=share_id,
                 mode_id=draft.mode_id,
-                presentation_skin_id=draft.presentation_skin_id,
-                presentation_skin_version=draft.presentation_skin_version,
                 content_fingerprint=draft.content_fingerprint,
                 summary_payload=_encode_summary(draft.summary),
                 started_at=started_at.isoformat(),
@@ -110,8 +111,6 @@ class BattleReportService:
         return BattleReportView(
             share_id=row.share_id,
             mode_id=row.mode_id,
-            presentation_skin_id=row.presentation_skin_id,
-            presentation_skin_version=row.presentation_skin_version,
             content_fingerprint=row.content_fingerprint,
             summary=_decode_summary(row.summary_payload),
             started_at=datetime.fromisoformat(row.started_at),
@@ -130,18 +129,14 @@ class BattleReportService:
     def _validate_identity(row, draft: BattleReportDraft) -> None:
         expected = (
             draft.mode_id,
-            draft.presentation_skin_id,
-            draft.presentation_skin_version,
             draft.content_fingerprint,
         )
         actual = (
             row.mode_id,
-            row.presentation_skin_id,
-            row.presentation_skin_version,
             row.content_fingerprint,
         )
         if actual != expected:
-            raise ValueError("同一战报身份对应了不同模式、皮肤或内容版本")
+            raise ValueError("同一战报身份对应了不同模式或内容版本")
 
     def _new_share_id(self, uow) -> str:
         while True:
@@ -156,6 +151,7 @@ def _encode_summary(summary: BattleReportSummary) -> str:
             "title": summary.title,
             "outcome": summary.outcome,
             "lines": summary.lines,
+            "tone": summary.tone,
         },
         ensure_ascii=False,
         separators=(",", ":"),
@@ -168,6 +164,7 @@ def _decode_summary(payload: str) -> BattleReportSummary:
         str(value["title"]),
         str(value["outcome"]),
         tuple(str(item) for item in value.get("lines", ())),
+        str(value["tone"]),
     )
 
 

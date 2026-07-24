@@ -20,6 +20,7 @@ class DimensionalDisasterStorageKinds:
     loadout: str
     companion_roster: str
     reward_claim: str
+    inscription_preference: str
 
 
 @dataclass(frozen=True)

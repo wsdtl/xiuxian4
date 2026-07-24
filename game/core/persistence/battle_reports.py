@@ -10,8 +10,6 @@ class BattleReportHeaderRow:
     report_id: str
     share_id: str
     mode_id: str
-    presentation_skin_id: str
-    presentation_skin_version: int
     content_fingerprint: str
     summary_payload: str
     started_at: str
@@ -36,8 +34,7 @@ class BattleReportStore:
     def header_in_uow(self, uow, report_id: str) -> BattleReportHeaderRow | None:
         row = uow.connection.execute(
             """
-            SELECT report_id, share_id, mode_id, presentation_skin_id,
-                   presentation_skin_version, content_fingerprint,
+            SELECT report_id, share_id, mode_id, content_fingerprint,
                    summary_payload, started_at, finished_at,
                    detail_expires_at, summary_expires_at
             FROM battle_report WHERE report_id = ?
@@ -53,8 +50,6 @@ class BattleReportStore:
         report_id: str,
         share_id: str,
         mode_id: str,
-        presentation_skin_id: str,
-        presentation_skin_version: int,
         content_fingerprint: str,
         summary_payload: str,
         started_at: str,
@@ -66,19 +61,16 @@ class BattleReportStore:
         uow.connection.execute(
             """
             INSERT INTO battle_report(
-                report_id, share_id, mode_id, presentation_skin_id,
-                presentation_skin_version, content_fingerprint,
+                report_id, share_id, mode_id, content_fingerprint,
                 summary_payload, started_at, finished_at,
                 detail_expires_at, summary_expires_at,
                 uncompressed_bytes, compressed_bytes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
             """,
             (
                 report_id,
                 share_id,
                 mode_id,
-                presentation_skin_id,
-                presentation_skin_version,
                 content_fingerprint,
                 summary_payload,
                 started_at,
@@ -177,8 +169,7 @@ class BattleReportStore:
         with self.database.unit_of_work(write=False) as uow:
             row = uow.connection.execute(
                 """
-                SELECT report_id, share_id, mode_id, presentation_skin_id,
-                       presentation_skin_version, content_fingerprint,
+                SELECT report_id, share_id, mode_id, content_fingerprint,
                        summary_payload, started_at, finished_at,
                        detail_expires_at, summary_expires_at
                 FROM battle_report
@@ -235,8 +226,6 @@ def _header(row) -> BattleReportHeaderRow:
         str(row["report_id"]),
         str(row["share_id"]),
         str(row["mode_id"]),
-        str(row["presentation_skin_id"]),
-        int(row["presentation_skin_version"]),
         str(row["content_fingerprint"]),
         str(row["summary_payload"]),
         str(row["started_at"]),

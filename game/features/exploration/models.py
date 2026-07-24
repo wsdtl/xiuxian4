@@ -59,6 +59,7 @@ class ExplorationStorageKinds:
     weapon: str
     world: str
     character_world: str
+    inscription_preference: str
 
 
 __all__ = [

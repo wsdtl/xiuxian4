@@ -46,7 +46,7 @@ export function renderFacts(facts, className) {
   return node(
     "div",
     className,
-    facts.map((fact) => node("span", "", `${fact.label}: ${displayValue(fact.value)}`)),
+    facts.map((fact) => node("span", "", `${fact.label}: ${fact.display ?? displayValue(fact.value)}`)),
   );
 }
 
@@ -58,58 +58,79 @@ export function rawBlock(value) {
   return node("pre", "raw-event", JSON.stringify(value, null, 2));
 }
 
-export function names(values) {
-  return values.length ? values.map((item) => item.name).join("、") : "无";
-}
-
-export function namedValues(values) {
-  return values.length
-    ? values.map((item) => `${item.name} ${formatNumber(item.value)}`).join("、")
-    : "无";
-}
-
-export function effectNames(values) {
-  return values.length
-    ? values
-        .map((item) => `${item.name}${item.stacks > 1 ? ` ×${item.stacks}` : ""} (${item.duration})`)
-        .join("、")
-    : "无";
-}
-
-export function cooldownNames(values) {
-  return values.length
-    ? values.map((item) => `${item.name} ${item.turns} 回合`).join("、")
-    : "无";
-}
-
-export function renderEffectChips(effects) {
-  if (!effects.length) {
-    return node("p", "effect-empty", "当前无持续状态");
-  }
+export function renderGauge(gauge, reverse = false) {
+  const values = node("span", "bar-value", gauge.display);
+  const title = node("span", "bar-label", gauge.label);
+  const bar = node("div", `vital-bar tone-${safeToken(gauge.tone)}`);
+  const fill = node("span", "vital-fill");
+  fill.style.setProperty("--fill", `${percentage(gauge.current, gauge.maximum)}%`);
+  bar.append(fill);
   return node(
     "div",
-    "effect-chips",
-    effects.slice(0, 6).map((effect) => {
-      const stacks = effect.stacks > 1 ? ` ×${effect.stacks}` : "";
-      return node(
-        "span",
-        `effect-chip ${effect.polarity || "neutral"}`,
-        `${effect.name}${stacks}`,
-      );
-    }),
+    `bar-row${reverse ? " reverse" : ""}`,
+    reverse ? [values, bar, title] : [title, bar, values],
   );
 }
 
-export function fraction(value) {
-  if (value?.current == null || value?.maximum == null) {
-    return "无";
-  }
-  return `${formatNumber(value.current)}/${formatNumber(value.maximum)}`;
+export function renderStatusGroup(group) {
+  const items = group.items || [];
+  const content = items.length
+    ? node(
+        "div",
+        "effect-chips",
+        items.map((item) =>
+          node(
+            "span",
+            `effect-chip tone-${safeToken(item.tone)}`,
+            item.display ? `${item.label} · ${item.display}` : item.label,
+          ),
+        ),
+      )
+    : node("p", "effect-empty", group.empty_text || "");
+  return node("section", "participant-effect-group", [
+    node("h3", "participant-group-label", group.label),
+    content,
+  ]);
+}
+
+export function renderDetailGroups(groups) {
+  return node(
+    "div",
+    "detail-grid",
+    groups.map((group) => detailLine(group.label, groupText(group))),
+  );
+}
+
+export function renderParticipantRecord(participant) {
+  const details = node("details", "participant-record");
+  details.append(node("summary", "", participant.detail_label));
+  details.append(renderDetailGroups(participant.detail_groups || []));
+  return details;
+}
+
+export function renderSnapshotParticipant(participant) {
+  const details = node("details", "participant-details");
+  details.append(
+    node("summary", "", [
+      node("strong", "", participant.label),
+      node(
+        "span",
+        "",
+        (participant.gauges || []).map((gauge) => `${gauge.label} ${gauge.display}`).join(" · "),
+      ),
+    ]),
+  );
+  const body = node("div", "snapshot-participant-body");
+  (participant.gauges || []).forEach((gauge) => body.append(renderGauge(gauge)));
+  body.append(renderStatusGroup(participant.status_group));
+  body.append(renderDetailGroups(participant.detail_groups || []));
+  details.append(body);
+  return details;
 }
 
 export function displayValue(value) {
   if (Array.isArray(value)) {
-    return value.length ? value.map(displayValue).join("、") : "无";
+    return value.map(displayValue).join("、");
   }
   if (value && typeof value === "object") {
     return Object.entries(value)
@@ -119,10 +140,7 @@ export function displayValue(value) {
   if (typeof value === "number") {
     return formatNumber(value);
   }
-  if (typeof value === "boolean") {
-    return value ? "是" : "否";
-  }
-  return value == null || value === "" ? "无" : String(value);
+  return value == null ? "" : String(value);
 }
 
 export function percentage(current, maximum) {
@@ -156,27 +174,17 @@ export function formatTime(value) {
   }).format(date);
 }
 
-export function durationText(start, finish) {
-  const milliseconds = new Date(finish).getTime() - new Date(start).getTime();
-  if (!Number.isFinite(milliseconds) || milliseconds < 0) {
-    return "时长未知";
-  }
-  if (milliseconds === 0) {
-    return "";
-  }
-  const seconds = milliseconds / 1000;
-  return seconds < 60
-    ? `用时 ${formatNumber(seconds)} 秒`
-    : `用时 ${formatNumber(seconds / 60)} 分钟`;
+export function safeToken(value) {
+  const token = String(value || "neutral").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  return token || "neutral";
 }
 
-export function outcomeTone(value) {
-  const text = String(value || "");
-  if (/胜|完成|成功/.test(text)) {
-    return "victory";
+function groupText(group) {
+  const items = group.items || [];
+  if (!items.length) {
+    return group.empty_text || "";
   }
-  if (/败|失败|覆灭/.test(text)) {
-    return "defeat";
-  }
-  return "neutral";
+  return items
+    .map((item) => (item.display ? `${item.label} ${item.display}` : item.label))
+    .join("、");
 }

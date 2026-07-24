@@ -19,6 +19,7 @@ from game.core.gameplay import (
     ActionSlotKind,
     ActionState,
     CharacterState,
+    InscriptionPreference,
     InventoryState,
     LoadoutState,
     LootRollCommand,
@@ -35,14 +36,9 @@ from game.core.gameplay import (
 )
 from game.rules.battle_report import (
     BattleReportDraft,
-    BattleReportSegmentDraft,
     BattleReportSummary,
-    capture_battle_participant,
-    capture_battle_round_states,
-    capture_battle_transitions,
-    capture_battle_turn_states,
 )
-from game.rules.character import PRIMARY_LEDGER_ID
+from game.rules.character import CharacterWorldState, PRIMARY_LEDGER_ID
 from game.rules.companion import CompanionRosterState
 from game.rules.encounter import EnemyEncounterGenerator
 from game.rules.exploration import ExplorationState, ExplorationStatus
@@ -74,6 +70,8 @@ class PartyBattleStorageKinds:
     exploration: str
     reward_claim: str
     weapon: str
+    character_world: str
+    inscription_preference: str
 
 
 class PartyBattleFeature:
@@ -452,6 +450,7 @@ class PartyBattleFeature:
             report = self.battle_reports.capture_in_uow(
                 uow,
                 self._battle_report(
+                    uow,
                     challenge,
                     members,
                     bundles,
@@ -508,6 +507,7 @@ class PartyBattleFeature:
 
     def _battle_report(
         self,
+        uow,
         challenge,
         members,
         bundles,
@@ -516,77 +516,71 @@ class PartyBattleFeature:
         report_id,
         logical_time,
     ):
-        labels: dict[str, tuple[str, str]] = {
-            member.id: (member.name, "team.party") for member in members
-        }
-        for member, (_inventory, _loadout, roster) in zip(members, bundles):
+        combatants = []
+        for member, (inventory, loadout, roster) in zip(members, bundles):
+            character_world = self.snapshots.require(
+                uow,
+                self.storage.character_world,
+                member.id,
+                CharacterWorldState,
+            )
+            inscription_preference = self.snapshots.load(
+                uow,
+                self.storage.inscription_preference,
+                member.id,
+                InscriptionPreference,
+            )
+            combatants.append(
+                self.battle_reports.builder.character(
+                    member,
+                    character_world,
+                    inventory,
+                    loadout,
+                    team_id="team.party",
+                    team_label="行者队伍",
+                    inscription_preference=inscription_preference,
+                )
+            )
             lineup = battle.lineups[member.id]
             if lineup.companion is not None:
                 instance = lineup.companion
-                label = instance.companion_id
-                if instance.companion_id in roster.instances:
-                    companion = roster.instances[instance.companion_id]
-                    label = self.content.companions.require_definition(companion.definition_id).name
-                labels[instance.companion_id] = (label, "team.party")
-        enemy_id = challenge.encounter.enemies[0].id
-        labels[enemy_id] = (enemy_name, "team.enemy")
-        initial = battle.trace.initial_frame.state
-        final = battle.trace.final_frame.state
-        participants = tuple(
-            capture_battle_participant(
-                initial.entities[entity_id],
-                label,
-                team_id,
-                self.content.catalog.enemy_projector.attributes,
+                companion = roster.instances[instance.companion_id]
+                combatants.append(
+                    self.battle_reports.builder.companion(
+                        companion,
+                        team_id="team.party",
+                        team_label="行者队伍",
+                    )
+                )
+        enemy = challenge.encounter.enemies[0]
+        combatants.append(
+            self.battle_reports.builder.enemy(
+                enemy,
+                challenge.source_world_id,
+                enemy_name,
+                team_id="team.enemy",
+                team_label="组队首领",
             )
-            for entity_id, (label, team_id) in labels.items()
-        )
-        final_participants = tuple(
-            capture_battle_participant(
-                final.entities[entity_id],
-                label,
-                team_id,
-                self.content.catalog.enemy_projector.attributes,
-            )
-            for entity_id, (label, team_id) in labels.items()
         )
         outcome = "组队胜利" if battle.victory else "战斗平局" if battle.draw else "组队战败"
-        view = self.world_views.require(challenge.source_world_id)
         return BattleReportDraft(
             report_id=report_id,
             mode_id="battle.mode.party_battle",
-            presentation_skin_id=str(view.skin.id),
-            presentation_skin_version=view.skin.version,
             content_fingerprint=self.content.catalog.report.content_fingerprint,
             summary=BattleReportSummary(
                 f"组队挑战·{enemy_name}",
                 outcome,
                 (f"挑战等级: {challenge.level}", f"参战玩家: {len(members)}", f"战斗行动: {battle.turns}"),
+                "victory" if battle.victory else "neutral" if battle.draw else "defeat",
             ),
-            segment=BattleReportSegmentDraft(
+            segment=self.battle_reports.builder.segment(
                 segment_id=f"{challenge.session_id}:attempt:{challenge.attempt_count + 1}",
                 title=enemy_name,
-                participants=participants,
-                events=battle.trace.events,
+                trace=battle.trace,
+                combatants=combatants,
                 outcome=outcome,
                 started_at=logical_time,
                 finished_at=logical_time,
-                final_participants=final_participants,
-                round_states=capture_battle_round_states(
-                    battle.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                turn_states=capture_battle_turn_states(
-                    battle.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                transitions=capture_battle_transitions(
-                    battle.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
             ),
         )
 

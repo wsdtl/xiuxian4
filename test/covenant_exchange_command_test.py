@@ -138,8 +138,8 @@ async def _main() -> None:
             segment = report.segments[0]
             assert segment.transitions and segment.final_participants
             assert any(
-                participant.label == character.name
-                for participant in segment.participants
+                combatant.label == character.name
+                for combatant in segment.combatants
             )
             history = await _dispatch(
                 "exchange-user",

@@ -23,6 +23,7 @@ class CompanionStorageKinds:
     roster: str
     sanctuary: str
     world: str
+    inscription_preference: str
 
 
 @dataclass(frozen=True)

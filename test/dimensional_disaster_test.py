@@ -162,13 +162,20 @@ async def _main() -> None:
                 logical_time=TIME,
             )
             assert battle_report is not None and battle_report.segments
-            assert battle_report.presentation_skin_id == str(
-                services.world_views.require(target_world).skin.id
-            )
             first_segment = battle_report.segments[0]
-            assert first_segment.round_states
+            character_manifest = next(
+                value for value in first_segment.combatants
+                if value.unit_kind == "character"
+            )
+            disaster_manifest = next(
+                value for value in first_segment.combatants
+                if value.unit_kind == "dimensional_disaster"
+            )
+            assert character_manifest.projection_id == str(target_world)
+            assert disaster_manifest.projection_id == str(event.source_world_id)
+            assert first_segment.transitions
             assert first_segment.final_participants
-            assert all(state.participants for state in first_segment.round_states)
+            assert all(value.after.participants for value in first_segment.transitions)
             replay = await _dispatch("player-a", "讨伐灾厄", "challenge-a-1")
             assert "重复消息" in replay.replies[0].message.content
             assert "战斗掉落" in replay.replies[0].message.content

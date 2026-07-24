@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from game.core.gameplay import (
     CharacterState,
+    InscriptionPreference,
     InventoryState,
     LoadoutState,
     RuleContext,
@@ -13,12 +14,7 @@ from game.core.gameplay import (
 )
 from game.rules.battle_report import (
     BattleReportDraft,
-    BattleReportSegmentDraft,
     BattleReportSummary,
-    capture_battle_participant,
-    capture_battle_round_states,
-    capture_battle_transitions,
-    capture_battle_turn_states,
 )
 from game.rules.build_trial import BuildTrialBattleSimulator
 from game.rules.character import CharacterWorldState
@@ -64,9 +60,14 @@ class BuildTrialFeature:
         existing = self.battle_reports.reference(report_id)
         if existing is not None:
             return BuildTrialResult("replayed", mode, existing)
-        character, character_world, inventory, loadout, roster = self._snapshot_bundle(
-            character_id
-        )
+        (
+            character,
+            character_world,
+            inventory,
+            loadout,
+            roster,
+            inscription_preference,
+        ) = self._snapshot_bundle(character_id)
         context = RuleContext(
             trace_id=f"build-trial:{operation_id}",
             rule_version=BUILD_TRIAL_RULE_VERSION,
@@ -93,7 +94,10 @@ class BuildTrialFeature:
                 mode,
                 character,
                 character_world,
+                inventory,
+                loadout,
                 roster,
+                inscription_preference,
                 outcome,
                 logical_time,
             )
@@ -132,7 +136,20 @@ class BuildTrialFeature:
                 character_id,
                 CompanionRosterState,
             ) or CompanionRosterState(character_id)
-        return character, character_world, inventory, loadout, roster
+            inscription_preference = self.snapshots.load(
+                uow,
+                self.storage.inscription_preference,
+                character_id,
+                InscriptionPreference,
+            )
+        return (
+            character,
+            character_world,
+            inventory,
+            loadout,
+            roster,
+            inscription_preference,
+        )
 
     def _battle_report(
         self,
@@ -141,47 +158,50 @@ class BuildTrialFeature:
         mode,
         character,
         character_world,
+        inventory,
+        loadout,
         roster,
+        inscription_preference,
         outcome,
         logical_time,
     ) -> BattleReportDraft:
         view = self.world_views.require(character_world.world_id)
-        labels = {character.id: (character.name, "player")}
+        combatants = [
+            self.battle_reports.builder.character(
+                character,
+                character_world,
+                inventory,
+                loadout,
+                team_id="player",
+                team_label="试炼者一方",
+                inscription_preference=inscription_preference,
+            )
+        ]
         if outcome.companion_id is not None:
             companion = roster.instances[outcome.companion_id]
-            definition = self.content.companions.require_definition(
-                companion.definition_id
+            combatants.append(
+                self.battle_reports.builder.companion(
+                    companion,
+                    team_id="player",
+                    team_label="试炼者一方",
+                )
             )
-            labels[outcome.companion_id] = (definition.name, "companion")
         for index, entity_id in enumerate(outcome.enemy_entity_ids, start=1):
             name = (
                 mode.target_name
                 if mode.target_count == 1
                 else f"{mode.target_name}{index}号"
             )
-            labels[entity_id] = (name, "trial_target")
-
-        initial = outcome.trace.initial_frame.state
-        final = outcome.trace.final_frame.state
-        attributes = self.content.catalog.enemy_projector.attributes
-        initial_participants = tuple(
-            capture_battle_participant(
-                initial.entities[entity_id],
-                label,
-                role,
-                attributes,
+            combatants.append(
+                self.battle_reports.builder.world_actor(
+                    entity_id,
+                    name,
+                    character_world.world_id,
+                    team_id="trial_target",
+                    team_label="试炼目标",
+                    unit_kind="trial_target",
+                )
             )
-            for entity_id, (label, role) in labels.items()
-        )
-        final_participants = tuple(
-            capture_battle_participant(
-                final.entities[entity_id],
-                label,
-                role,
-                attributes,
-            )
-            for entity_id, (label, role) in labels.items()
-        )
         result_text = _result_text(mode.id, outcome)
         metrics = outcome.metrics
         summary = BattleReportSummary(
@@ -193,38 +213,21 @@ class BuildTrialFeature:
                 f"阵容行动: {metrics.player_actions}",
                 f"暴击/触发: {metrics.critical_hits}/{metrics.trigger_activations}",
             ),
+            "victory" if outcome.completed else "defeat",
         )
         return BattleReportDraft(
             report_id=report_id,
             mode_id=f"battle.mode.build_trial.{mode.id.removeprefix('trial.mode.')}",
-            presentation_skin_id=str(view.skin.id),
-            presentation_skin_version=view.skin.version,
             content_fingerprint=self.content.catalog.report.content_fingerprint,
             summary=summary,
-            segment=BattleReportSegmentDraft(
+            segment=self.battle_reports.builder.segment(
                 segment_id=operation_id,
                 title=f"{character.name}·{mode.name}构筑试炼",
-                participants=initial_participants,
-                events=outcome.trace.events,
+                trace=outcome.trace,
+                combatants=combatants,
                 outcome=result_text,
                 started_at=logical_time,
                 finished_at=logical_time,
-                final_participants=final_participants,
-                round_states=capture_battle_round_states(
-                    outcome.trace,
-                    labels,
-                    attributes,
-                ),
-                turn_states=capture_battle_turn_states(
-                    outcome.trace,
-                    labels,
-                    attributes,
-                ),
-                transitions=capture_battle_transitions(
-                    outcome.trace,
-                    labels,
-                    attributes,
-                ),
             ),
         )
 

@@ -124,9 +124,11 @@ async def _main() -> None:
             )
             assert view is not None and view.detail_available
             assert view.mode_id == "battle.mode.sparring"
-            assert view.segments[0].round_states
-            assert view.segments[0].turn_states
             assert view.segments[0].transitions
+            assert all(
+                transition.after.participants
+                for transition in view.segments[0].transitions
+            )
             assert any(
                 transition.kind == "turn"
                 for transition in view.segments[0].transitions

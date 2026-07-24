@@ -36,6 +36,7 @@ from game.core.gameplay import (
     CreateActivity,
     FinalizeActivity,
     InscriptionMediumData,
+    InscriptionPreference,
     InstanceItemReward,
     InventoryState,
     JoinActivity,
@@ -75,12 +76,7 @@ from game.rules.exploration import ExplorationState, ExplorationStatus
 from game.rules.encounter import EnemyEncounterGenerator
 from game.rules.battle_report import (
     BattleReportDraft,
-    BattleReportSegmentDraft,
     BattleReportSummary,
-    capture_battle_participant,
-    capture_battle_round_states,
-    capture_battle_turn_states,
-    capture_battle_transitions,
 )
 
 from .battle import DimensionalDisasterBattleSimulator
@@ -271,6 +267,12 @@ class DimensionalDisasterFeature:
                 normalized_character_id,
                 CompanionRosterState,
             ) or CompanionRosterState(normalized_character_id)
+            inscription_preference = self.snapshots.load(
+                uow,
+                self.storage.inscription_preference,
+                normalized_character_id,
+                InscriptionPreference,
+            )
             context = _context(normalized_operation_id, logical_time)
             battle = self.battles.simulate(
                 event.combat,
@@ -431,12 +433,15 @@ class DimensionalDisasterFeature:
                 self._battle_report_draft(
                     event,
                     character,
+                    character_world,
+                    inventory,
+                    loadout,
+                    inscription_preference,
                     roster,
                     battle,
                     receipt,
                     normalized_operation_id,
                     logical_time,
-                    self.world_views.require(character_world.world_id),
                 ),
             )
             uow.commit()
@@ -452,37 +457,51 @@ class DimensionalDisasterFeature:
         self,
         event,
         character,
+        character_world,
+        inventory,
+        loadout,
+        inscription_preference,
         roster,
         battle,
         receipt,
         operation_id: str,
         logical_time: datetime,
-        presentation,
     ) -> BattleReportDraft:
         outcome = "讨伐胜利" if battle.player_victory else "战斗结束"
         enemy_id = f"enemy:{event.event_id}"
-        labels = {character.id: (character.name, "player")}
+        combatants = [
+            self.battle_reports.builder.character(
+                character,
+                character_world,
+                inventory,
+                loadout,
+                team_id="player",
+                team_label="归航行者",
+                inscription_preference=inscription_preference,
+            )
+        ]
         if battle.player_companion_id is not None:
             companion = roster.instances[battle.player_companion_id]
-            labels[companion.id] = (
-                self.content.companions.require_definition(companion.definition_id).name,
-                "companion",
+            combatants.append(
+                self.battle_reports.builder.companion(
+                    companion,
+                    team_id="player",
+                    team_label="归航行者",
+                )
             )
-        labels[enemy_id] = (event.narrative.name, "enemy")
-        participants = tuple(
-            capture_battle_participant(
-                battle.trace.initial_frame.state.entities[entity_id],
-                name,
-                role,
-                self.content.catalog.enemy_projector.attributes,
+        combatants.append(
+            self.battle_reports.builder.world_actor(
+                enemy_id,
+                event.narrative.name,
+                event.source_world_id,
+                team_id="enemy",
+                team_label="次元灾厄",
+                unit_kind="dimensional_disaster",
             )
-            for entity_id, (name, role) in labels.items()
         )
         return BattleReportDraft(
             report_id=self._battle_report_id(operation_id),
             mode_id="battle.mode.dimensional_disaster",
-            presentation_skin_id=str(presentation.skin.id),
-            presentation_skin_version=presentation.skin.version,
             content_fingerprint=self.content.catalog.report.content_fingerprint,
             summary=BattleReportSummary(
                 f"讨伐灾厄·{event.narrative.name}",
@@ -492,39 +511,16 @@ class DimensionalDisasterFeature:
                     f"灾厄血量: {receipt.shared_health_after}/{event.maximum_health}",
                     f"战斗行动: {receipt.turns}",
                 ),
+                "victory" if battle.player_victory else "neutral",
             ),
-            segment=BattleReportSegmentDraft(
+            segment=self.battle_reports.builder.segment(
                 segment_id=operation_id,
                 title=event.narrative.name,
-                participants=participants,
-                events=battle.trace.events,
+                trace=battle.trace,
+                combatants=combatants,
                 outcome=outcome,
                 started_at=logical_time,
                 finished_at=logical_time,
-                final_participants=tuple(
-                    capture_battle_participant(
-                        battle.trace.final_frame.state.entities[entity_id],
-                        name,
-                        role,
-                        self.content.catalog.enemy_projector.attributes,
-                    )
-                    for entity_id, (name, role) in labels.items()
-                ),
-                round_states=capture_battle_round_states(
-                    battle.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                turn_states=capture_battle_turn_states(
-                    battle.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                transitions=capture_battle_transitions(
-                    battle.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
             ),
         )
 

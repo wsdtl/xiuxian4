@@ -17,6 +17,7 @@ from game.content import (  # noqa: E402
     COMPANION_CATALOG,
     COMPANION_EXPERIENCE_REQUIREMENTS,
     CULTIVATION_SKIN_ID,
+    MAGIC_WORLD_ID,
     TAIXUAN_WORLD_ID,
     LOADOUT_PRESET_IDS,
     build_official_content,
@@ -112,6 +113,22 @@ def main() -> None:
     assert next_roster.by_reference("c1") == companion
     assert companion.definition_id in next_roster.captured_definition_ids
     assert companion.level == 1 and companion.experience == 0
+    companion_projector = CompanionCombatProjector(
+        content.catalog,
+        content.companions,
+    )
+    companion_projection = companion_projector.project(companion)
+    assert companion_projection.entity.tags.has(
+        f"companion.origin.{companion.origin_world_id}"
+    )
+    try:
+        companion_projector.project(
+            replace(companion, origin_world_id=MAGIC_WORLD_ID)
+        )
+    except ValueError as exc:
+        assert str(exc) == "伙伴实例来源世界与内容定义不一致"
+    else:
+        raise AssertionError("来源世界损坏的伙伴实例不应进入战斗投影")
     assert len(COMPANION_EXPERIENCE_REQUIREMENTS) == 99
     assert COMPANION_EXPERIENCE_REQUIREMENTS[0] == 83
     assert COMPANION_EXPERIENCE_REQUIREMENTS[9] == 380

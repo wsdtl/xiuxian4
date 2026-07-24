@@ -1,4 +1,4 @@
-"""统一战报压缩、幂等、公开读取和保留期测试。"""
+"""统一战报压缩、世界语义冻结、公开展示和保留期测试。"""
 
 from __future__ import annotations
 
@@ -23,36 +23,52 @@ PREVIEW_ROOT = ROOT / "design" / "previews"
 if str(PREVIEW_ROOT) not in sys.path:
     sys.path.insert(0, str(PREVIEW_ROOT))
 
-from game.core.gameplay import ExecutionPhase, HEALTH_CURRENT, RuleEvent  # noqa: E402
-from game.core.persistence import BattleReportStore, SqliteDatabase  # noqa: E402
 from game.app import build_game_services, install_game_services, restore_game_services  # noqa: E402
 from game.cmd import router as game_router  # noqa: E402
-from game.content.world_skins.cultivation import (  # noqa: E402
-    CULTIVATION_SKIN_ID,
-    CULTIVATION_SKIN_VERSION,
+from game.content import (  # noqa: E402
+    MAGIC_WORLD_ID,
+    RARE_QUALITY_ID,
+    STELLAR_RING_WORLD_ID,
+    TAIXUAN_WORLD_ID,
 )
+from game.content.catalog.combat.stats import SHIELD_CURRENT  # noqa: E402
+from game.core.gameplay import (  # noqa: E402
+    COMBAT_ATTACK,
+    COMBAT_DEFENSE,
+    ExecutionPhase,
+    HEALTH_CURRENT,
+    HEALTH_MAXIMUM,
+    RuleEvent,
+    SPIRIT_CURRENT,
+    SPIRIT_MAXIMUM,
+)
+from game.core.persistence import SqliteDatabase  # noqa: E402
 from game.features.battle_report import (  # noqa: E402
     BATTLE_EVENT_PRESENTATIONS,
     PUBLIC_BATTLE_REPORT_SCHEMA,
     PUBLIC_BATTLE_REPORT_VERSION,
-    BattleReportService,
     present_battle_event,
 )
 from game.rules.battle_report import (  # noqa: E402
+    KNOWN_BATTLE_EVENT_KINDS,
+    BattleReportCombatantDraft,
     BattleReportDraft,
+    BattleReportEffectDraft,
     BattleReportFrameDraft,
+    BattleReportGear,
     BattleReportParticipantDraft,
-    BattleReportRoundStateDraft,
     BattleReportSegmentDraft,
     BattleReportSummary,
-    BattleReportTurnStateDraft,
+    BattleReportTerm,
     BattleReportTransitionDraft,
+    StoredBattleCombatant,
     StoredBattleEvent,
-    KNOWN_BATTLE_EVENT_KINDS,
 )
-from generate_battle_report_preview import (  # noqa: E402
-    build_preview_document,
+from game.rules.companion import (  # noqa: E402
+    COMPANION_APTITUDE_IDS,
+    CompanionTrace,
 )
+from generate_battle_report_preview import build_preview_document  # noqa: E402
 
 
 NOW = datetime.now(timezone.utc).replace(microsecond=0)
@@ -64,145 +80,64 @@ def main() -> None:
     with TemporaryDirectory() as directory:
         database = SqliteDatabase(Path(directory) / "battle-report.db")
         database.initialize()
-        service = BattleReportService(database, BattleReportStore(database))
-        first = _draft("segment-1", "第一战", NOW)
-        reference = service.capture(first)
-        replayed = service.capture(first)
-        assert replayed == reference
-
-        second = replace(
-            _draft("segment-2", "第二战", NOW + timedelta(minutes=10)),
-            summary=BattleReportSummary("探险战报", "2胜 0负", ("完成批次: 2",)),
-        )
-        second_reference = service.capture(second)
-        assert second_reference == reference
-
-        full = service.load_public(reference.share_id, logical_time=NOW + timedelta(days=6))
-        assert full is not None and full.detail_available
-        assert [item.segment_id for item in full.segments] == ["segment-1", "segment-2"]
-        assert full.summary.outcome == "2胜 0负"
-        assert full.segments[0].participants[0].key == "p0"
-        assert full.segments[0].events[1].source == "p0"
-        assert full.segments[0].participants[0].abilities == ("ability.test",)
-        assert full.segments[0].participants[0].effects == {
-            "effect.weapon.shared_charge": 2,
-            "effect.weapon.shared_mark": 1,
-        }
-        assert full.segments[0].final_participants[0].health == 750
-        assert len(full.segments[0].round_states) == 1
-        assert len(full.segments[0].turn_states) == 1
-        assert full.segments[0].round_states[0].participants[0].cooldowns == {
-            "ability.test": 2
-        }
-        transitions = full.segments[0].transitions
-        assert len(transitions) == 2
-        assert transitions[0].before is None
-        assert transitions[0].after.status == "active"
-        assert transitions[1].actor_key == "p0"
-        assert transitions[1].ability_id == "ability.test"
-        assert transitions[1].decision_rule_id == "ai.test.rule"
-        assert transitions[1].requested_selector_id == "target.enemy"
-        assert transitions[1].requested_target_keys == ("p1",)
-        assert transitions[1].resolved_target_keys == ("p1",)
-        assert transitions[1].before.revision == 1
-        assert transitions[1].after.status == "finished"
-        assert transitions[1].after.inactive_keys == ("p1",)
-
         services = build_game_services(
             database_path=database.path,
             identity_secret="battle-report-test-secret",
         )
+        service = services.battle_reports
+        first = _draft("segment-1", "第一战", NOW)
+        reference = service.capture(first)
+        assert service.capture(first) == reference
+
+        second = replace(
+            _draft("segment-2", "第二战", NOW + timedelta(minutes=10)),
+            summary=BattleReportSummary(
+                "探险战报",
+                "2胜 0负",
+                ("完成批次: 2",),
+                "victory",
+            ),
+        )
+        assert service.capture(second) == reference
+
+        full = service.load_public(
+            reference.share_id,
+            logical_time=NOW + timedelta(days=6),
+        )
+        assert full is not None and full.detail_available
+        assert [item.segment_id for item in full.segments] == ["segment-1", "segment-2"]
+        assert full.summary.outcome == "2胜 0负"
+        segment = full.segments[0]
+        assert segment.combatants[0].key == "p0"
+        assert segment.combatants[1].projection_kind == "companion_origin_world"
+        assert segment.combatants[1].projection_id == MAGIC_WORLD_ID
+        assert segment.combatants[2].projection_id == STELLAR_RING_WORLD_ID
+        assert segment.initial_participants[0].abilities == ("ability.test",)
+        assert [value.stacks for value in segment.initial_participants[0].effects] == [2, 1]
+        assert segment.final_participants[0].resources[str(HEALTH_CURRENT)] == 750
+        assert segment.combatants[0].gear[0].name == "铭刻·断潮"
+        assert len(segment.transitions) == 2
+        assert segment.transitions[0].before is None
+        assert segment.transitions[0].after.status == "running"
+        turn = segment.transitions[1]
+        assert turn.actor_key == "p0"
+        assert turn.ability_id == "ability.test"
+        assert turn.decision_rule_id == "ai.test.rule"
+        assert turn.requested_selector_id == "target.enemy"
+        assert turn.requested_target_keys == ("p2",)
+        assert turn.resolved_target_keys == ("p2",)
+        assert turn.before is not None and turn.before.revision == 1
+        assert turn.after.status == "finished"
+        assert turn.after.inactive_keys == ("p2",)
+
+        _assert_companion_origin_projection(services)
         previous = install_game_services(services)
         try:
             app = FastAPI()
             app.include_router(game_router)
             app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
             with TestClient(app) as client:
-                response = client.get(f"/battle/{reference.share_id}")
-                assert response.status_code == 200
-                assert "/static/battle-report/style.css" in response.text
-                assert "/static/battle-report/app.js" in response.text
-                assert 'script type="module"' in response.text
-                script_response = client.get("/static/battle-report/app.js")
-                assert script_response.status_code == 200
-                script = script_response.text
-                timeline_response = client.get("/static/battle-report/timeline.js")
-                ui_response = client.get("/static/battle-report/ui.js")
-                assert timeline_response.status_code == 200
-                assert ui_response.status_code == 200
-                timeline_script = timeline_response.text
-                ui_script = ui_response.text
-                assert 'const MODE_OPTIONS' in script
-                assert 'action === "mode"' in script
-                assert 'action === "segment"' in script
-                assert 'action === "snapshot"' in script
-                assert 'action === "participant-disclosure"' in script
-                assert 'action === "filter"' in script
-                assert 'label: "战斗记录"' in script
-                assert 'label: "全部事件"' in script
-                assert 'label: "原始"' not in timeline_script
-                assert 'compactNarrative' not in timeline_script
-                assert 'export function renderRawDataAccess' in timeline_script
-                assert 'details.addEventListener("toggle"' in timeline_script
-                assert 'const state' not in timeline_script
-                assert 'document.querySelector("#reportRoot")' not in timeline_script
-                assert 'export function node' in ui_script
-                assert 'const state' not in ui_script
-                assert 'function updateSegmentView()' in script
-                assert 'function updateSnapshotView()' in script
-                snapshot_update = script.split(
-                    'function updateSnapshotView()', 1
-                )[1].split('function updateFilterView()', 1)[0]
-                assert 'replaceRegion(root, ".summary-panel"' not in snapshot_update
-                assert 'replaceRegion(root, ".participant-stack"' in snapshot_update
-                assert 'disclosure.querySelector(".participant-disclosure-title span")' in snapshot_update
-                assert 'function updateParticipantDisclosure()' in script
-                assert 'content.toggleAttribute("inert", !state.participantExpanded)' in script
-                assert 'function updateFilterView()' in script
-                assert 'function selectSegment(index)' in script
-                assert 'const many = segments.length > 6' in script
-                assert 'select.dataset.action = "segment-select"' in script
-                assert 'segmentStepButton("上一片段"' in script
-                assert 'segmentStepButton("下一片段"' in script
-                combined_script = script + timeline_script + ui_script
-                assert 'document.startViewTransition' not in combined_script
-                assert 'transitionView' not in combined_script
-                assert script.count('renderReport();') == 1
-                style_response = client.get("/static/battle-report/style.css")
-                assert style_response.status_code == 200
-                assert 'prefers-reduced-motion' in style_response.text
-                assert 'scrollbar-width: none' in style_response.text
-                assert '.participant-stack {' in style_response.text
-                assert 'overflow: visible' in style_response.text
-                assert '.timeline-panel {' in style_response.text
-                assert 'font-family: var(--display-font)' not in style_response.text
-                assert '.segment-tabs.many-segments .segment-picker' in style_response.text
-                assert 'view-transition' not in style_response.text
-                assert '--stagger' not in style_response.text
-                assert "borrowed_edge" not in combined_script
-                assert "deferred_echo" not in combined_script
-
-                data_response = client.get(f"/battle/{reference.share_id}/data")
-                assert data_response.status_code == 200
-                payload = data_response.json()
-                assert payload["schema"] == PUBLIC_BATTLE_REPORT_SCHEMA
-                assert payload["version"] == PUBLIC_BATTLE_REPORT_VERSION
-                assert payload["summary"]["title"] == "探险战报"
-                segment = payload["detail"]["segments"][0]
-                assert segment["title"] == "第一战"
-                assert segment["initial_participants"][0]["effects"][0]["polarity"]
-                turn = segment["timeline"][1]
-                assert "受到 100 点伤害" in turn["events"][0]["text"]
-                assert turn["before"]["title"] == "动作前完整状态"
-                assert turn["after"]["title"] == "动作后完整状态"
-                assert any(
-                    fact["label"] == "实际目标" and fact["value"] == ["山魈"]
-                    for fact in turn["facts"]
-                )
-                assert "character-private-id" not in data_response.text
-                assert "enemy-private-id" not in data_response.text
-                assert client.get("/battle/not-found").status_code == 404
-                assert client.get("/battle/not-found/data").status_code == 404
+                _assert_web_assets(client, reference.share_id)
         finally:
             restore_game_services(previous)
 
@@ -210,7 +145,9 @@ def main() -> None:
         row = connection.execute(
             "SELECT uncompressed_bytes, compressed_bytes FROM battle_report"
         ).fetchone()
-        count = connection.execute("SELECT COUNT(*) FROM battle_report_segment").fetchone()[0]
+        count = connection.execute(
+            "SELECT COUNT(*) FROM battle_report_segment"
+        ).fetchone()[0]
         connection.close()
         assert count == 2
         assert row[0] > 0 and row[1] > 0 and row[1] < row[0]
@@ -236,6 +173,136 @@ def main() -> None:
     print("battle report tests passed")
 
 
+def _assert_companion_origin_projection(services) -> None:
+    species = next(
+        value
+        for value in services.content.companions.species
+        if str(value.origin_world_id) == MAGIC_WORLD_ID
+    )
+    trace = CompanionTrace(
+        index=1,
+        definition_id=species.id,
+        quality_id=RARE_QUALITY_ID,
+        level=10,
+        aptitudes={value: 100 for value in COMPANION_APTITUDE_IDS},
+        trait_behavior_id=species.trait_behavior_ids[0],
+        battle_seed="battle-report-companion-origin",
+    )
+    spec = services.battle_reports.builder.companion(
+        trace,
+        team_id="player",
+        team_label="跨界队伍",
+        entity_id="companion-origin-test",
+    )
+    magic = services.world_views.require(MAGIC_WORLD_ID).projector
+    assert spec.label == species.name
+    assert spec.projection_kind == "companion_origin_world"
+    assert spec.projection_id == MAGIC_WORLD_ID
+    assert spec.resolve_term(str(HEALTH_CURRENT)).compact_name == "生命"
+    assert spec.resolve_term(str(SPIRIT_CURRENT)).compact_name == "魔力"
+    assert spec.resolve_term(str(species.core_behavior_id)).name == magic.name(
+        species.core_behavior_id
+    )
+    assert spec.resolve_term(str(species.trait_behavior_ids[0])).name == magic.name(
+        species.trait_behavior_ids[0]
+    )
+
+
+def _assert_web_assets(client: TestClient, share_id: str) -> None:
+    response = client.get(f"/battle/{share_id}")
+    assert response.status_code == 200
+    assert "/static/battle-report/style.css?v=17" in response.text
+    assert "/static/battle-report/app.js?v=17" in response.text
+    assert 'script type="module"' in response.text
+
+    script = client.get("/static/battle-report/app.js").text
+    timeline_script = client.get("/static/battle-report/timeline.js").text
+    ui_script = client.get("/static/battle-report/ui.js").text
+    combined_script = script + timeline_script + ui_script
+    assert "state.report.ui.modes.map" in script
+    assert "state.report.ui.snapshots.map" in script
+    assert "ui.filters.map" in timeline_script
+    assert 'action === "mode"' in script
+    assert 'action === "segment"' in script
+    assert 'action === "snapshot"' in script
+    assert 'action === "participant-disclosure"' in script
+    assert 'action === "filter"' in script
+    assert "event.text" in timeline_script
+    assert "event.category" in timeline_script
+    assert "event.kind" not in combined_script
+    assert "const MODE_OPTIONS" not in combined_script
+    assert ".at(" not in combined_script
+    for forbidden in ("血气", "灵力", "生命", "魔力", "同步", "护盾", "伤害", "攻击", "防御"):
+        assert forbidden not in combined_script
+    assert 'export function renderRawDataAccess' in timeline_script
+    assert 'details.addEventListener("toggle"' in timeline_script
+    assert 'export function node' in ui_script
+    assert "function updateSegmentView()" in script
+    assert "function updateSnapshotView()" in script
+    assert "function updateParticipantDisclosure()" in script
+    assert "function updateFilterView()" in script
+    assert "function selectSegment(index)" in script
+    assert "const many = segments.length > 6" in script
+    assert 'select.dataset.action = "segment-select"' in script
+    assert "document.startViewTransition" not in combined_script
+    assert script.count("renderReport();") == 1
+
+    style = client.get("/static/battle-report/style.css").text
+    assert "prefers-reduced-motion" in style
+    assert "scrollbar-width: none" in style
+    assert ".participant-stack {" in style
+    assert ".timeline-panel {" in style
+    assert "view-transition" not in style
+
+    data_response = client.get(f"/battle/{share_id}/data")
+    assert data_response.status_code == 200
+    payload = data_response.json()
+    assert payload["schema"] == PUBLIC_BATTLE_REPORT_SCHEMA
+    assert payload["version"] == PUBLIC_BATTLE_REPORT_VERSION
+    assert payload["summary"]["title"] == "探险战报"
+    segment = payload["detail"]["segments"][0]
+    assert segment["title"] == "第一战"
+    participants = {
+        value["label"]: value for value in segment["initial_participants"]
+    }
+    assert participants["问道客"]["gauges"][0]["label"] == "气血"
+    assert participants["问道客"]["gauges"][1]["label"] == "灵力"
+    assert participants["星辉狮鹫"]["gauges"][0]["label"] == "生命"
+    assert participants["星辉狮鹫"]["gauges"][1]["label"] == "魔力"
+    assert participants["边界守卫"]["gauges"][0]["label"] == "生命"
+    assert participants["边界守卫"]["gauges"][1]["label"] == "同步"
+    companion = next(
+        value
+        for value in segment["combatants"]
+        if value["unit_kind"] == "companion"
+    )
+    assert companion["projection"] == {
+        "kind": "companion_origin_world",
+        "id": MAGIC_WORLD_ID,
+        "version": companion["projection"]["version"],
+    }
+    turn = segment["timeline"][1]
+    transfer = next(
+        value for value in turn["events"] if value["kind"] == "resource.transferred"
+    )
+    assert "同步" in transfer["text"] and "灵力" in transfer["text"]
+    health_change = next(
+        value for value in turn["events"] if value["kind"] == "resource.changed"
+    )
+    assert "消耗 100 点生命" in health_change["text"]
+    assert turn["comparison"]["before"]["title"] == "动作前完整状态"
+    assert turn["comparison"]["after"]["title"] == "动作后完整状态"
+    assert any(
+        fact["label"] == "实际目标" and fact["value"] == ["边界守卫"]
+        for fact in turn["facts"]
+    )
+    assert "character-private-id" not in data_response.text
+    assert "companion-private-id" not in data_response.text
+    assert "enemy-private-id" not in data_response.text
+    assert client.get("/battle/not-found").status_code == 404
+    assert client.get("/battle/not-found/data").status_code == 404
+
+
 def _assert_production_preview() -> None:
     preview_path = PREVIEW_ROOT / "battle-report-production.html"
     assert preview_path.is_file()
@@ -243,8 +310,8 @@ def _assert_production_preview() -> None:
     preview = preview_path.read_text(encoding="utf-8")
     assert "<style" not in preview
     assert "maximum-scale=1, user-scalable=no" in preview
-    assert "../../static/battle-report/style.css?v=16" in preview
-    assert "../../static/battle-report/app.js?v=16" in preview
+    assert "../../static/battle-report/style.css?v=17" in preview
+    assert "../../static/battle-report/app.js?v=17" in preview
     assert 'script type="module"' in preview
     opening = '<script id="battleReportPreviewData" type="application/json">'
     payload = preview.split(opening, 1)[1].split("</script>", 1)[0]
@@ -256,13 +323,11 @@ def _assert_production_preview() -> None:
     assert embedded["version"] == PUBLIC_BATTLE_REPORT_VERSION
     assert embedded["mode_id"] == "battle.mode.party_battle"
     assert embedded["detail"]["available"] is True
-    assert len(embedded["detail"]["segments"]) >= 1
-    assert all(segment["timeline"] for segment in embedded["detail"]["segments"])
-    assert {
-        "观潮客",
-        "砺锋客",
-        "司星者",
-    }.issubset(
+    assert embedded["detail"]["segments"]
+    assert all(
+        segment["timeline"] for segment in embedded["detail"]["segments"]
+    )
+    assert {"观潮客", "砺锋客", "司星者"}.issubset(
         {
             participant["label"]
             for participant in embedded["detail"]["segments"][0][
@@ -283,8 +348,7 @@ def _assert_production_preview() -> None:
     ]
     assert phase_events
     assert all(
-        event["registered"]
-        and "进入新的战斗阶段" in event["text"]
+        "进入新的战斗阶段" in event["text"]
         and "获得" in event["text"]
         and event["raw"]["values"]["behavior_ids"]
         for event in phase_events
@@ -292,9 +356,8 @@ def _assert_production_preview() -> None:
 
 
 def _assert_all_current_events_are_rendered() -> None:
-    paths = (ROOT / "game").rglob("*.py")
     discovered: set[str] = {"combat.damage.dealt", "combat.damage.prevented"}
-    for path in paths:
+    for path in (ROOT / "game").rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -325,7 +388,8 @@ def _assert_all_current_events_are_rendered() -> None:
                 _add_battle_event(discovered, node.args[4].value)
     assert discovered == KNOWN_BATTLE_EVENT_KINDS
     assert BATTLE_EVENT_PRESENTATIONS.registered_kinds == KNOWN_BATTLE_EVENT_KINDS
-    view = _FallbackView()
+
+    combatants = _event_test_combatants()
     for kind in sorted(KNOWN_BATTLE_EVENT_KINDS):
         event = present_battle_event(
             StoredBattleEvent(
@@ -336,36 +400,26 @@ def _assert_all_current_events_are_rendered() -> None:
                 NOW,
                 {},
             ),
-            {"p0": "甲", "p1": "乙"},
-            view,
+            combatants,
         )
-        assert event["registered"] is True, kind
-        assert event["text"] and event["tone"] != "unknown", kind
+        assert event["text"] and event["tone"], kind
 
-    unknown = present_battle_event(
-        StoredBattleEvent(
-            "combat.future.time_rewind",
-            "p0",
-            "p1",
-            "effect.future.time_rewind",
-            NOW,
-            {
-                "restored_health": 300,
-                "state": {"before": 100, "after": 400},
-                "operation_id": "private-operation",
-            },
-        ),
-        {"p0": "甲", "p1": "乙"},
-        view,
-    )
-    assert unknown["registered"] is False
-    assert unknown["tone"] == "unknown"
-    assert unknown["text"].startswith("甲 对 乙 触发未识别的战斗事件")
-    assert "combat.future.time_rewind" not in unknown["text"]
-    assert "effect.future.time_rewind" not in unknown["text"]
-    assert unknown["raw"]["values"]["state"] == {"before": 100, "after": 400}
-    assert unknown["raw"]["omitted_private_keys"] == ["operation_id"]
-    assert "private-operation" not in str(unknown)
+    try:
+        present_battle_event(
+            StoredBattleEvent(
+                "combat.future.time_rewind",
+                "p0",
+                "p1",
+                "effect.future.time_rewind",
+                NOW,
+                {"restored_health": 300},
+            ),
+            combatants,
+        )
+    except RuntimeError as exc:
+        assert "没有展示注册" in str(exc)
+    else:
+        raise AssertionError("未知战斗事件不得由 Web 或通用兜底猜测显示")
 
     rejected = present_battle_event(
         StoredBattleEvent(
@@ -376,26 +430,51 @@ def _assert_all_current_events_are_rendered() -> None:
             NOW,
             {"reason": "control_resisted", "chance": 0.5, "roll": 0.8},
         ),
-        {"p0": "甲", "p1": "乙"},
-        view,
+        combatants,
     )
-    assert rejected["registered"] is True
-    assert rejected["text"] == "乙抵抗了甲施加的效果"
+    assert rejected["text"] == "乙抵抗了甲施加的测试效果"
 
     revived = present_battle_event(
         StoredBattleEvent(
             "combat.target.revived",
             "p0",
             "p1",
-            "health.current",
+            str(HEALTH_CURRENT),
             NOW,
             {"before": 0, "after": 30, "actual": 30},
         ),
-        {"p0": "甲", "p1": "乙"},
-        view,
+        combatants,
     )
-    assert revived["registered"] is True
     assert revived["text"] == "甲使乙重新投入战斗"
+
+
+def _event_test_combatants() -> dict[str, StoredBattleCombatant]:
+    terms = {
+        "effect.test": BattleReportTerm("测试效果"),
+        str(HEALTH_CURRENT): BattleReportTerm("当前生命", "生命"),
+        str(HEALTH_MAXIMUM): BattleReportTerm("生命上限"),
+        str(SPIRIT_CURRENT): BattleReportTerm("当前能量", "能量"),
+        str(SPIRIT_MAXIMUM): BattleReportTerm("能量上限"),
+        str(SHIELD_CURRENT): BattleReportTerm("当前护盾", "护盾"),
+        str(COMBAT_DEFENSE): BattleReportTerm("防御"),
+    }
+    return {
+        key: StoredBattleCombatant(
+            key,
+            label,
+            team,
+            team_label,
+            "character",
+            "character_world",
+            world,
+            1,
+            terms,
+        )
+        for key, label, team, team_label, world in (
+            ("p0", "甲", "a", "甲方", TAIXUAN_WORLD_ID),
+            ("p1", "乙", "b", "乙方", MAGIC_WORLD_ID),
+        )
+    }
 
 
 def _add_battle_event(discovered: set[str], value: str) -> None:
@@ -403,182 +482,182 @@ def _add_battle_event(discovered: set[str], value: str) -> None:
         discovered.add(value)
 
 
-class _FallbackProjector:
-    @staticmethod
-    def name(_content_id: str) -> str:
-        raise KeyError
-
-
-class _FallbackView:
-    projector = _FallbackProjector()
-
-
 def _draft(segment_id: str, title: str, logical_time: datetime) -> BattleReportDraft:
-    events = (
-        RuleEvent(
-            kind="combat.round.started",
-            source_id="battle-private-id",
-            target_id="character-private-id",
-            subject_id="combat.round",
-            trace_id="private-trace-id",
-            rule_version="rule.test.v1",
-            ruleset_id="ruleset.standard",
-            logical_time=logical_time,
-            values={"round": 1},
-            phase=ExecutionPhase.PREPARE,
-        ),
-        RuleEvent(
-            kind="combat.turn.started",
-            source_id="character-private-id",
-            target_id="character-private-id",
-            subject_id="combat.turn",
-            trace_id="private-trace-id",
-            rule_version="rule.test.v1",
-            ruleset_id="ruleset.standard",
-            logical_time=logical_time,
-            values={"round": 1, "turn": 1},
-            phase=ExecutionPhase.PREPARE,
-        ),
-        *tuple(
-        RuleEvent(
-            kind="resource.changed",
-            source_id="character-private-id",
-            target_id="enemy-private-id",
-            subject_id=HEALTH_CURRENT,
-            trace_id="private-trace-id",
-            rule_version="rule.test.v1",
-            ruleset_id="ruleset.standard",
-            logical_time=logical_time,
-            values={"delta": -100 - index, "current": 900 - index},
-            phase=ExecutionPhase.RESOLVE,
-        )
-        for index in range(40)
-        ),
-    )
-    initial_participants = (
-        BattleReportParticipantDraft(
+    combatants = (
+        BattleReportCombatantDraft(
             "character-private-id",
             "问道客",
             "player",
-            1000,
-            1000,
-            100,
-            100,
-            attributes={"combat.attack": 100},
-            resources={"health.current": 1000},
+            "行者一方",
+            "character",
+            "character_world",
+            TAIXUAN_WORLD_ID,
+            1,
+            _taixuan_terms(),
+            (BattleReportGear("slot.weapon", "兵器", "铭刻·断潮"),),
+        ),
+        BattleReportCombatantDraft(
+            "companion-private-id",
+            "星辉狮鹫",
+            "player",
+            "行者一方",
+            "companion",
+            "companion_origin_world",
+            MAGIC_WORLD_ID,
+            1,
+            _magic_terms(),
+        ),
+        BattleReportCombatantDraft(
+            "enemy-private-id",
+            "边界守卫",
+            "enemy",
+            "敌方",
+            "enemy",
+            "enemy_world",
+            STELLAR_RING_WORLD_ID,
+            1,
+            _stellar_terms(),
+        ),
+    )
+    initial = (
+        BattleReportParticipantDraft(
+            "character-private-id",
+            attributes={
+                str(HEALTH_MAXIMUM): 1000,
+                str(SPIRIT_MAXIMUM): 100,
+                str(COMBAT_ATTACK): 100,
+                str(COMBAT_DEFENSE): 50,
+            },
+            resources={str(HEALTH_CURRENT): 1000, str(SPIRIT_CURRENT): 100},
             abilities=("ability.test",),
-            effects={
-                "effect.weapon.shared_charge": 2,
-                "effect.weapon.shared_mark": 1,
-            },
-            effect_remaining_turns={
-                "effect.weapon.shared_charge": (3,),
-                "effect.weapon.shared_mark": (2,),
-            },
+            effects=(
+                BattleReportEffectDraft(
+                    "effect-instance-charge",
+                    "effect.weapon.shared_charge",
+                    "character-private-id",
+                    2,
+                    3,
+                    "positive",
+                ),
+                BattleReportEffectDraft(
+                    "effect-instance-mark",
+                    "effect.weapon.shared_mark",
+                    "character-private-id",
+                    1,
+                    None,
+                    "neutral",
+                ),
+            ),
             cooldowns={"ability.test": 2},
             triggers=("trigger.test",),
         ),
         BattleReportParticipantDraft(
-            "enemy-private-id", "山魈", "enemy", 1000, 1000
+            "companion-private-id",
+            attributes={str(HEALTH_MAXIMUM): 700, str(SPIRIT_MAXIMUM): 140},
+            resources={str(HEALTH_CURRENT): 700, str(SPIRIT_CURRENT): 140},
+            abilities=("ability.basic_attack",),
+        ),
+        BattleReportParticipantDraft(
+            "enemy-private-id",
+            attributes={str(HEALTH_MAXIMUM): 1000, str(SPIRIT_MAXIMUM): 200},
+            resources={str(HEALTH_CURRENT): 1000, str(SPIRIT_CURRENT): 200},
+            abilities=("ability.basic_attack",),
         ),
     )
-    final_participants = (
+    final = (
         replace(
-            initial_participants[0],
-            health=750,
-            resources={"health.current": 750},
-            effects={},
-            effect_remaining_turns={},
+            initial[0],
+            resources={str(HEALTH_CURRENT): 750, str(SPIRIT_CURRENT): 120},
+            effects=(),
             cooldowns={},
         ),
-        replace(initial_participants[1], health=0, resources={"health.current": 0}),
+        initial[1],
+        replace(
+            initial[2],
+            resources={str(HEALTH_CURRENT): 0, str(SPIRIT_CURRENT): 160},
+        ),
     )
+    start_events = (
+        _event(
+            "combat.battle.started",
+            "battle-private-id",
+            "character-private-id",
+            "battle.start",
+            logical_time,
+            {"round": 1},
+        ),
+        _event(
+            "combat.round.started",
+            "battle-private-id",
+            "character-private-id",
+            "combat.round",
+            logical_time,
+            {"round": 1},
+        ),
+    )
+    turn_events = (
+        _event(
+            "combat.turn.started",
+            "character-private-id",
+            "character-private-id",
+            "combat.turn",
+            logical_time,
+            {"round": 1, "turn": 1},
+        ),
+        _event(
+            "resource.transferred",
+            "character-private-id",
+            "enemy-private-id",
+            str(SPIRIT_CURRENT),
+            logical_time,
+            {"drained": 20, "received": 20, "overflow": 0, "efficiency": 1},
+        ),
+        *(
+            _event(
+                "resource.changed",
+                "character-private-id",
+                "enemy-private-id",
+                str(HEALTH_CURRENT),
+                logical_time,
+                {"delta": -100 - index, "current": 900 - index},
+            )
+            for index in range(40)
+        ),
+    )
+    before = _frame(logical_time, 0, 1, "running", initial)
+    after = _frame(logical_time, 1, 2, "finished", final)
     return BattleReportDraft(
         report_id="battle-report:exploration:session-private-id",
         mode_id="battle.mode.exploration",
-        presentation_skin_id=CULTIVATION_SKIN_ID,
-        presentation_skin_version=CULTIVATION_SKIN_VERSION,
         content_fingerprint="content-fingerprint",
-        summary=BattleReportSummary("探险战报", "1胜 0负", ("完成批次: 1",)),
+        summary=BattleReportSummary(
+            "探险战报",
+            "1胜 0负",
+            ("完成批次: 1",),
+            "victory",
+        ),
         segment=BattleReportSegmentDraft(
-            segment_id,
-            title,
-            initial_participants,
-            events,
-            "胜利",
-            logical_time,
-            logical_time,
-            final_participants=final_participants,
-            round_states=(BattleReportRoundStateDraft(1, initial_participants),),
-            turn_states=(
-                BattleReportTurnStateDraft(
-                    1,
-                    1,
-                    "character-private-id",
-                    initial_participants,
-                ),
-            ),
+            segment_id=segment_id,
+            title=title,
+            combatants=combatants,
+            initial_participants=initial,
+            final_participants=final,
             transitions=(
                 BattleReportTransitionDraft(
                     sequence=0,
                     kind="start",
                     subject_id="battle.transition.start",
                     before=None,
-                    after=BattleReportFrameDraft(
-                        logical_time=logical_time,
-                        round_number=1,
-                        turn_number=0,
-                        status="active",
-                        revision=0,
-                        current_actor_entity_id="character-private-id",
-                        turn_order_entity_ids=(
-                            "character-private-id",
-                            "enemy-private-id",
-                        ),
-                        inactive_entity_ids=(),
-                        winning_team_ids=(),
-                        action_progress={"character-private-id": 0.2},
-                        participants=initial_participants,
-                    ),
-                    events=events[:2],
+                    after=_frame(logical_time, 0, 0, "running", initial),
+                    events=start_events,
                 ),
                 BattleReportTransitionDraft(
                     sequence=1,
                     kind="turn",
                     subject_id="battle.transition.turn",
-                    before=BattleReportFrameDraft(
-                        logical_time=logical_time,
-                        round_number=1,
-                        turn_number=0,
-                        status="active",
-                        revision=1,
-                        current_actor_entity_id="character-private-id",
-                        turn_order_entity_ids=(
-                            "character-private-id",
-                            "enemy-private-id",
-                        ),
-                        inactive_entity_ids=(),
-                        winning_team_ids=(),
-                        action_progress={"character-private-id": 0.2},
-                        participants=initial_participants,
-                    ),
-                    after=BattleReportFrameDraft(
-                        logical_time=logical_time,
-                        round_number=1,
-                        turn_number=1,
-                        status="finished",
-                        revision=2,
-                        current_actor_entity_id=None,
-                        turn_order_entity_ids=(
-                            "character-private-id",
-                            "enemy-private-id",
-                        ),
-                        inactive_entity_ids=("enemy-private-id",),
-                        winning_team_ids=("player",),
-                        action_progress={"character-private-id": 1.0},
-                        participants=final_participants,
-                    ),
-                    events=events[2:],
+                    before=before,
+                    after=after,
+                    events=turn_events,
                     actor_entity_id="character-private-id",
                     action_id="action:test:1",
                     ability_id="ability.test",
@@ -590,8 +669,86 @@ def _draft(segment_id: str, title: str, logical_time: datetime) -> BattleReportD
                     action_context_tags=("scene.test",),
                 ),
             ),
+            source_owners={
+                "character-private-id": "character-private-id",
+                "companion-private-id": "companion-private-id",
+                "enemy-private-id": "enemy-private-id",
+            },
+            outcome="胜利",
+            started_at=logical_time,
+            finished_at=logical_time,
         ),
     )
+
+
+def _frame(logical_time, turn, revision, status, participants):
+    return BattleReportFrameDraft(
+        logical_time=logical_time,
+        round_number=1,
+        turn_number=turn,
+        status=status,
+        revision=revision,
+        current_actor_entity_id=(
+            None if status == "finished" else "character-private-id"
+        ),
+        turn_order_entity_ids=(
+            "character-private-id",
+            "companion-private-id",
+            "enemy-private-id",
+        ),
+        inactive_entity_ids=("enemy-private-id",) if status == "finished" else (),
+        winning_team_ids=("player",) if status == "finished" else (),
+        action_progress={"character-private-id": 1.0 if status == "finished" else 0.2},
+        participants=participants,
+    )
+
+
+def _event(kind, source, target, subject, logical_time, values):
+    return RuleEvent(
+        kind=kind,
+        source_id=source,
+        target_id=target,
+        subject_id=subject,
+        trace_id="private-trace-id",
+        rule_version="rule.test.v1",
+        ruleset_id="ruleset.standard",
+        logical_time=logical_time,
+        values=values,
+        phase=ExecutionPhase.RESOLVE,
+    )
+
+
+def _taixuan_terms():
+    return _terms("当前气血", "气血", "气血上限", "当前灵力", "灵力", "灵力上限", "基础防御")
+
+
+def _magic_terms():
+    return _terms("当前生命", "生命", "生命上限", "当前魔力", "魔力", "魔力上限", "基础护甲")
+
+
+def _stellar_terms():
+    return _terms("当前生命", "生命", "生命上限", "当前同步", "同步", "同步上限", "基础护甲")
+
+
+def _terms(health_name, health_short, health_max, spirit_name, spirit_short, spirit_max, defense):
+    return {
+        str(HEALTH_CURRENT): BattleReportTerm(health_name, health_short),
+        str(HEALTH_MAXIMUM): BattleReportTerm(health_max),
+        str(SPIRIT_CURRENT): BattleReportTerm(spirit_name, spirit_short),
+        str(SPIRIT_MAXIMUM): BattleReportTerm(spirit_max),
+        str(SHIELD_CURRENT): BattleReportTerm("当前护盾", "护盾"),
+        str(COMBAT_ATTACK): BattleReportTerm("攻击力", "攻击"),
+        str(COMBAT_DEFENSE): BattleReportTerm(defense, "防御"),
+        "ability.test": BattleReportTerm("潮生一式"),
+        "ability.basic_attack": BattleReportTerm("普通攻击"),
+        "effect.weapon.shared_charge": BattleReportTerm("潮势蓄积"),
+        "effect.weapon.shared_mark": BattleReportTerm("潮痕"),
+        "trigger.test": BattleReportTerm("回潮"),
+        "ai.test.rule": BattleReportTerm("优先攻敌"),
+        "target.enemy": BattleReportTerm("敌方目标"),
+        "scene.test": BattleReportTerm("边界战场"),
+        "combat.turn": BattleReportTerm("行动"),
+    }
 
 
 if __name__ == "__main__":

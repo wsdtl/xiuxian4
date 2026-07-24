@@ -14,7 +14,7 @@ from .errors import (
 )
 
 
-PERSISTENCE_SCHEMA_VERSION = 5
+PERSISTENCE_SCHEMA_VERSION = 6
 SNAPSHOT_CODEC_VERSION = 1
 
 _REQUIRED_TABLES = frozenset(
@@ -261,8 +261,6 @@ _EXPECTED_COLUMNS = {
         ("report_id", "TEXT", 1),
         ("share_id", "TEXT", 0),
         ("mode_id", "TEXT", 0),
-        ("presentation_skin_id", "TEXT", 0),
-        ("presentation_skin_version", "INTEGER", 0),
         ("content_fingerprint", "TEXT", 0),
         ("summary_payload", "TEXT", 0),
         ("started_at", "TEXT", 0),
@@ -580,8 +578,6 @@ CREATE TABLE battle_report (
     report_id TEXT PRIMARY KEY,
     share_id TEXT NOT NULL UNIQUE,
     mode_id TEXT NOT NULL,
-    presentation_skin_id TEXT NOT NULL,
-    presentation_skin_version INTEGER NOT NULL CHECK (presentation_skin_version > 0),
     content_fingerprint TEXT NOT NULL,
     summary_payload TEXT NOT NULL,
     started_at TEXT NOT NULL,

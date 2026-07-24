@@ -16,6 +16,7 @@ from game.core.gameplay import (
     CharacterState,
     ConsumeStack,
     HEALTH_CURRENT,
+    InscriptionPreference,
     InventoryState,
     InventoryTransaction,
     ItemStack,
@@ -30,10 +31,7 @@ from game.core.gameplay import (
 )
 from game.rules.battle_report import (
     BattleReportDraft,
-    BattleReportSegmentDraft,
     BattleReportSummary,
-    capture_battle_participant,
-    capture_battle_transitions,
 )
 from game.rules.character import CharacterWorldState, MULTIVERSE_WORLD_STATE_ID
 from game.rules.companion import (
@@ -721,6 +719,12 @@ class CompanionFeature:
                 character_id,
                 LoadoutState,
             )
+            inscription_preference = self.snapshots.load(
+                uow,
+                self.storage.inscription_preference,
+                character_id,
+                InscriptionPreference,
+            )
             try:
                 selected = self.engine.select_trace(
                     sanctuary,
@@ -801,8 +805,11 @@ class CompanionFeature:
                 uow,
                 self._battle_report(
                     character,
+                    dimension,
+                    inventory,
                     roster,
                     loadout,
+                    inscription_preference,
                     selected,
                     battle,
                     logical_time,
@@ -1071,8 +1078,11 @@ class CompanionFeature:
     def _battle_report(
         self,
         character,
+        character_world,
+        inventory,
         roster,
         loadout,
+        inscription_preference,
         sanctuary,
         battle,
         logical_time,
@@ -1083,35 +1093,35 @@ class CompanionFeature:
         target_species = self.content.companions.species.require(
             target_trace.definition_id
         )
-        labels = {character.id: (character.name, "player")}
+        combatants = [
+            self.battle_reports.builder.character(
+                character,
+                character_world,
+                inventory,
+                loadout,
+                team_id="player",
+                team_label="追猎者一方",
+                inscription_preference=inscription_preference,
+            )
+        ]
         own_companion = roster.companion_for_preset(loadout.active_preset_id)
         if own_companion is not None:
-            own_species = self.content.companions.require_definition(
-                own_companion.definition_id
+            combatants.append(
+                self.battle_reports.builder.companion(
+                    own_companion,
+                    team_id="player",
+                    team_label="追猎者一方",
+                )
             )
-            labels[own_companion.id] = (own_species.name, "companion")
-        labels[battle.target_id] = (f"野生·{target_species.name}", "target")
-        initial = battle.trace.initial_frame.state
-        final = battle.trace.final_frame.state
-        participant_ids = tuple(initial.participants)
-        attributes = self.content.catalog.enemy_projector.attributes
-        initial_participants = tuple(
-            capture_battle_participant(
-                initial.entities[entity_id],
-                labels[entity_id][0],
-                labels[entity_id][1],
-                attributes,
+        combatants.append(
+            self.battle_reports.builder.companion(
+                target_trace,
+                team_id="target",
+                team_label="秘境目标",
+                unit_kind="wild_companion",
+                entity_id=battle.target_id,
+                label_prefix="野生·",
             )
-            for entity_id in participant_ids
-        )
-        final_participants = tuple(
-            capture_battle_participant(
-                final.entities[entity_id],
-                labels[entity_id][0],
-                labels[entity_id][1],
-                attributes,
-            )
-            for entity_id in participant_ids
         )
         view = self.world_views.require(sanctuary.world_id)
         outcome = "追猎成功" if battle.victory else "追猎失败"
@@ -1122,8 +1132,6 @@ class CompanionFeature:
         return BattleReportDraft(
             report_id=report_id,
             mode_id="battle.mode.companion_sanctuary",
-            presentation_skin_id=str(view.skin.id),
-            presentation_skin_version=view.skin.version,
             content_fingerprint=self.content.catalog.report.content_fingerprint,
             summary=BattleReportSummary(
                 f"{view.projector.name('term.companion_sanctuary')}·{target_species.name}",
@@ -1132,21 +1140,16 @@ class CompanionFeature:
                     f"战斗行动: {battle.turns}",
                     f"角色余血: {battle.player_health_after:.0f}",
                 ),
+                "victory" if battle.victory else "defeat",
             ),
-            segment=BattleReportSegmentDraft(
+            segment=self.battle_reports.builder.segment(
                 segment_id=f"{sanctuary.session_id}:{sanctuary.attempt_count + 1}",
                 title=f"追踪 {target_species.name}",
-                participants=initial_participants,
-                events=battle.trace.events,
+                trace=battle.trace,
+                combatants=combatants,
                 outcome=outcome,
                 started_at=logical_time,
                 finished_at=logical_time,
-                final_participants=final_participants,
-                transitions=capture_battle_transitions(
-                    battle.trace,
-                    labels,
-                    attributes,
-                ),
             ),
         )
 

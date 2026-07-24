@@ -41,15 +41,7 @@ def public_battle_report_data(share_id: str) -> JSONResponse:
     """返回与具体网页实现无关的版本化公共战报文档。"""
 
     report, services = _load_public_report(share_id)
-    view = (
-        services.world_views.require_skin(
-            report.presentation_skin_id,
-            report.presentation_skin_version,
-        )
-        if report.detail_available and report.segments
-        else None
-    )
-    document = build_public_battle_report(report, view)
+    document = build_public_battle_report(report)
     document["game_name"] = GAME_NAME
     return JSONResponse(document, headers=_PUBLIC_HEADERS)
 

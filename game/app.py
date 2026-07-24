@@ -145,7 +145,7 @@ from game.features.lottery import (
     LotteryStorageKinds,
     lottery_codec_registrations,
 )
-from game.features.battle_report import BattleReportService
+from game.features.battle_report import BattleReportBuilder, BattleReportService
 from game.features.build_trial import BuildTrialFeature, BuildTrialStorageKinds
 from game.features.companion import (
     CompanionFeature,
@@ -829,7 +829,12 @@ def build_game_services(
         world_progress.view,
         world_views.world_ids(),
     )
-    battle_reports = BattleReportService(database, BattleReportStore(database))
+    battle_report_builder = BattleReportBuilder(content, world_views)
+    battle_reports = BattleReportService(
+        database,
+        BattleReportStore(database),
+        battle_report_builder,
+    )
     build_trials = BuildTrialFeature(
         database,
         content,
@@ -843,6 +848,7 @@ def build_game_services(
             inventory=INVENTORY_AGGREGATE,
             loadout=LOADOUT_AGGREGATE,
             companion_roster=COMPANION_ROSTER_AGGREGATE,
+            inscription_preference=INSCRIPTION_PREFERENCE_AGGREGATE,
         ),
     )
     companions = CompanionFeature(
@@ -868,6 +874,7 @@ def build_game_services(
             roster=COMPANION_ROSTER_AGGREGATE,
             sanctuary=COMPANION_SANCTUARY_AGGREGATE,
             world=WORLD_AGGREGATE,
+            inscription_preference=INSCRIPTION_PREFERENCE_AGGREGATE,
         ),
         companion_growth,
     )
@@ -902,6 +909,7 @@ def build_game_services(
             WEAPON_AGGREGATE,
             WORLD_AGGREGATE,
             CHARACTER_WORLD_AGGREGATE,
+            INSCRIPTION_PREFERENCE_AGGREGATE,
         ),
         RewardSettlementStorageKeys,
         companion_growth_settlement,
@@ -927,6 +935,7 @@ def build_game_services(
             LOADOUT_AGGREGATE,
             COMPANION_ROSTER_AGGREGATE,
             REWARD_CLAIM_AGGREGATE,
+            INSCRIPTION_PREFERENCE_AGGREGATE,
         ),
         RewardSettlementStorageKeys,
         companion_growth_settlement,
@@ -1078,6 +1087,8 @@ def build_game_services(
             exploration=EXPLORATION_AGGREGATE,
             reward_claim=REWARD_CLAIM_AGGREGATE,
             weapon=WEAPON_AGGREGATE,
+            character_world=CHARACTER_WORLD_AGGREGATE,
+            inscription_preference=INSCRIPTION_PREFERENCE_AGGREGATE,
         ),
         RewardSettlementStorageKeys,
         companion_growth_settlement,
@@ -1099,6 +1110,7 @@ def build_game_services(
             loadout=LOADOUT_AGGREGATE,
             companion_roster=COMPANION_ROSTER_AGGREGATE,
             character_world=CHARACTER_WORLD_AGGREGATE,
+            inscription_preference=INSCRIPTION_PREFERENCE_AGGREGATE,
         ),
         party_scope_id=PARTY_SCOPE_ID,
     )
@@ -1116,6 +1128,7 @@ def build_game_services(
             inventory=INVENTORY_AGGREGATE,
             loadout=LOADOUT_AGGREGATE,
             companion_roster=COMPANION_ROSTER_AGGREGATE,
+            inscription_preference=INSCRIPTION_PREFERENCE_AGGREGATE,
         ),
     )
     return GameServices(

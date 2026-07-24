@@ -11,6 +11,7 @@ from game.content.catalog.social import (
 )
 from game.core.gameplay import (
     CharacterState,
+    InscriptionPreference,
     CreateSocialRequest,
     HEALTH_CURRENT,
     InventoryState,
@@ -28,12 +29,7 @@ from game.core.gameplay import (
 )
 from game.rules.battle_report import (
     BattleReportDraft,
-    BattleReportSegmentDraft,
     BattleReportSummary,
-    capture_battle_participant,
-    capture_battle_round_states,
-    capture_battle_transitions,
-    capture_battle_turn_states,
 )
 from game.rules.character import CharacterWorldState
 from game.rules.companion import CompanionRosterState
@@ -362,39 +358,56 @@ class PartySparringFeature:
         outcome,
         logical_time,
     ):
-        labels = {}
-        self._add_labels(
-            labels,
-            challenger_bundles,
-            outcome.challenger_lineups,
-            "team.challenger",
-        )
-        self._add_labels(
-            labels,
-            defender_bundles,
-            outcome.defender_lineups,
-            "team.defender",
-        )
-        initial = outcome.trace.initial_frame.state
-        final = outcome.trace.final_frame.state
-        participants = tuple(
-            capture_battle_participant(
-                initial.entities[entity_id],
-                label,
-                team_id,
-                self.content.catalog.enemy_projector.attributes,
-            )
-            for entity_id, (label, team_id) in labels.items()
-        )
-        final_participants = tuple(
-            capture_battle_participant(
-                final.entities[entity_id],
-                label,
-                team_id,
-                self.content.catalog.enemy_projector.attributes,
-            )
-            for entity_id, (label, team_id) in labels.items()
-        )
+        combatants = []
+        for bundles, lineups, team_id, team_label in (
+            (
+                challenger_bundles,
+                outcome.challenger_lineups,
+                "team.challenger",
+                "挑战方",
+            ),
+            (
+                defender_bundles,
+                outcome.defender_lineups,
+                "team.defender",
+                "应战方",
+            ),
+        ):
+            for character, inventory, loadout, roster in bundles:
+                character_world = self.snapshots.require(
+                    uow,
+                    self.storage.character_world,
+                    character.id,
+                    CharacterWorldState,
+                )
+                inscription_preference = self.snapshots.load(
+                    uow,
+                    self.storage.inscription_preference,
+                    character.id,
+                    InscriptionPreference,
+                )
+                combatants.append(
+                    self.battle_reports.builder.character(
+                        character,
+                        character_world,
+                        inventory,
+                        loadout,
+                        team_id=team_id,
+                        team_label=team_label,
+                        inscription_preference=inscription_preference,
+                    )
+                )
+                lineup = lineups[character.id]
+                if lineup.companion is None:
+                    continue
+                companion = roster.instances[lineup.companion.companion_id]
+                combatants.append(
+                    self.battle_reports.builder.companion(
+                        companion,
+                        team_id=team_id,
+                        team_label=team_label,
+                    )
+                )
         challenger_leader = next(
             value[0] for value in challenger_bundles if value[0].id == challenger_party.leader_id
         )
@@ -409,18 +422,9 @@ class PartySparringFeature:
                 if outcome.challenger_victory
                 else f"{defender_leader.name}一方获胜"
             )
-        dimension = self.snapshots.require(
-            uow,
-            self.storage.character_world,
-            challenger_party.leader_id,
-            CharacterWorldState,
-        )
-        view = self.world_views.require(dimension.world_id)
         return BattleReportDraft(
             report_id=self._report_id(request.id),
             mode_id="battle.mode.party_sparring",
-            presentation_skin_id=str(view.skin.id),
-            presentation_skin_version=view.skin.version,
             content_fingerprint=self.content.catalog.report.content_fingerprint,
             summary=BattleReportSummary(
                 f"组队切磋·{challenger_leader.name} vs {defender_leader.name}",
@@ -429,46 +433,18 @@ class PartySparringFeature:
                     f"阵容: {len(challenger_party.members)} vs {len(defender_party.members)}",
                     f"战斗行动: {outcome.turns}",
                 ),
+                "neutral" if outcome.draw else "victory",
             ),
-            segment=BattleReportSegmentDraft(
+            segment=self.battle_reports.builder.segment(
                 segment_id=request.id,
                 title=f"{challenger_leader.name}一方 vs {defender_leader.name}一方",
-                participants=participants,
-                events=outcome.trace.events,
+                trace=outcome.trace,
+                combatants=combatants,
                 outcome=result_text,
                 started_at=logical_time,
                 finished_at=logical_time,
-                final_participants=final_participants,
-                round_states=capture_battle_round_states(
-                    outcome.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                turn_states=capture_battle_turn_states(
-                    outcome.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                transitions=capture_battle_transitions(
-                    outcome.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
             ),
         )
-
-    def _add_labels(self, labels, bundles, lineups, team_id):
-        for character, _inventory, _loadout, roster in bundles:
-            labels[character.id] = (character.name, team_id)
-            lineup = lineups[character.id]
-            if lineup.companion is None:
-                continue
-            companion_id = lineup.companion.companion_id
-            companion = roster.instances[companion_id]
-            definition = self.content.companions.require_definition(
-                companion.definition_id
-            )
-            labels[companion_id] = (definition.name, team_id)
 
     def _party_bundles(self, uow, party):
         members = tuple(sorted(party.members.values(), key=lambda value: value.slot))

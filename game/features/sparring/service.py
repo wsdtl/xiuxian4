@@ -11,6 +11,7 @@ from game.content.catalog.social import (
 )
 from game.core.gameplay import (
     CharacterState,
+    InscriptionPreference,
     CreateSocialRequest,
     HEALTH_CURRENT,
     InventoryState,
@@ -27,12 +28,7 @@ from game.core.gameplay import (
 from game.rules.battle_report import (
     BattleReportDraft,
     BattleReportReference,
-    BattleReportSegmentDraft,
     BattleReportSummary,
-    capture_battle_participant,
-    capture_battle_round_states,
-    capture_battle_transitions,
-    capture_battle_turn_states,
 )
 from game.rules.character import CharacterWorldState
 from game.rules.companion import CompanionRosterState
@@ -57,6 +53,7 @@ class SparringStorageKinds:
     inventory: str
     loadout: str
     companion_roster: str
+    inscription_preference: str
 
 
 @dataclass(frozen=True)
@@ -220,8 +217,20 @@ class SparringFeature:
                 return SparringResult("terminal", request=request, failure_message="切磋请求已经处理")
             challenger_bundle = self._snapshot_bundle(uow, challenger.id)
             defender_bundle = self._snapshot_bundle(uow, defender.id)
-            challenger_inventory, challenger_loadout, challenger_dimension, challenger_roster = challenger_bundle
-            defender_inventory, defender_loadout, defender_dimension, defender_roster = defender_bundle
+            (
+                challenger_inventory,
+                challenger_loadout,
+                _challenger_dimension,
+                challenger_roster,
+                _challenger_inscription,
+            ) = challenger_bundle
+            (
+                defender_inventory,
+                defender_loadout,
+                _defender_dimension,
+                defender_roster,
+                _defender_inscription,
+            ) = defender_bundle
             outcome = self.simulator.simulate(
                 challenger,
                 challenger_inventory,
@@ -238,10 +247,8 @@ class SparringFeature:
                 request,
                 challenger,
                 defender,
-                challenger_dimension,
-                defender_dimension,
-                challenger_roster,
-                defender_roster,
+                challenger_bundle,
+                defender_bundle,
                 outcome,
                 logical_time,
             )
@@ -320,56 +327,63 @@ class SparringFeature:
             character_id,
             CompanionRosterState,
         ) or CompanionRosterState(character_id)
-        return inventory, loadout, dimension, roster
+        inscription_preference = self.snapshots.load(
+            uow,
+            self.storage.inscription_preference,
+            character_id,
+            InscriptionPreference,
+        )
+        return inventory, loadout, dimension, roster, inscription_preference
 
     def _battle_report_draft(
         self,
         request,
         challenger,
         defender,
-        challenger_dimension,
-        defender_dimension,
-        challenger_roster,
-        defender_roster,
+        challenger_bundle,
+        defender_bundle,
         outcome,
         logical_time,
     ):
-        skin = self.world_views.require(challenger_dimension.world_id)
-        labels = {
-            challenger.id: (challenger.name, "challenger"),
-            defender.id: (defender.name, "defender"),
-        }
-        for roster, companion_id, role in (
-            (challenger_roster, outcome.challenger_companion_id, "challenger_companion"),
-            (defender_roster, outcome.defender_companion_id, "defender_companion"),
+        combatants = []
+        for character, bundle, companion_id, team_id, team_label in (
+            (
+                challenger,
+                challenger_bundle,
+                outcome.challenger_companion_id,
+                "challenger",
+                "挑战方",
+            ),
+            (
+                defender,
+                defender_bundle,
+                outcome.defender_companion_id,
+                "defender",
+                "应战方",
+            ),
         ):
+            inventory, loadout, dimension, roster, inscription_preference = bundle
+            combatants.append(
+                self.battle_reports.builder.character(
+                    character,
+                    dimension,
+                    inventory,
+                    loadout,
+                    team_id=team_id,
+                    team_label=team_label,
+                    inscription_preference=inscription_preference,
+                )
+            )
             if companion_id is None:
                 continue
             companion = roster.instances[companion_id]
-            labels[companion_id] = (
-                self.content.companions.require_definition(companion.definition_id).name,
-                role,
+            combatants.append(
+                self.battle_reports.builder.companion(
+                    companion,
+                    team_id=team_id,
+                    team_label=team_label,
+                )
             )
-        initial = outcome.trace.initial_frame.state
-        final = outcome.trace.final_frame.state
-        initial_participants = tuple(
-            capture_battle_participant(
-                initial.entities[entity_id],
-                labels[entity_id][0],
-                labels[entity_id][1],
-                self.content.catalog.enemy_projector.attributes,
-            )
-            for entity_id in labels
-        )
-        final_participants = tuple(
-            capture_battle_participant(
-                final.entities[entity_id],
-                labels[entity_id][0],
-                labels[entity_id][1],
-                self.content.catalog.enemy_projector.attributes,
-            )
-            for entity_id in labels
-        )
         if outcome.draw:
             result_text = "切磋平局"
         else:
@@ -378,8 +392,6 @@ class SparringFeature:
         return BattleReportDraft(
             report_id=self._report_id(request.id),
             mode_id="battle.mode.sparring",
-            presentation_skin_id=str(skin.skin.id),
-            presentation_skin_version=skin.skin.version,
             content_fingerprint=self.content.catalog.report.content_fingerprint,
             summary=BattleReportSummary(
                 f"切磋·{challenger.name} vs {defender.name}",
@@ -389,31 +401,16 @@ class SparringFeature:
                     f"{challenger.name}余血: {outcome.challenger_health_after:.0f}",
                     f"{defender.name}余血: {outcome.defender_health_after:.0f}",
                 ),
+                "neutral" if outcome.draw else "victory",
             ),
-            segment=BattleReportSegmentDraft(
+            segment=self.battle_reports.builder.segment(
                 segment_id=request.id,
                 title=f"{challenger.name} vs {defender.name}",
-                participants=initial_participants,
-                events=outcome.trace.events,
+                trace=outcome.trace,
+                combatants=combatants,
                 outcome=result_text,
                 started_at=logical_time,
                 finished_at=logical_time,
-                final_participants=final_participants,
-                round_states=capture_battle_round_states(
-                    outcome.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                turn_states=capture_battle_turn_states(
-                    outcome.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
-                transitions=capture_battle_transitions(
-                    outcome.trace,
-                    labels,
-                    self.content.catalog.enemy_projector.attributes,
-                ),
             ),
         )
 

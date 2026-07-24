@@ -138,7 +138,8 @@ async def _main() -> None:
                 assert view.mode_id.startswith("battle.mode.build_trial.")
                 assert len(view.segments) == 1
                 segment = view.segments[0]
-                assert len(segment.participants) == expected_participants[mode_id]
+                assert len(segment.combatants) == expected_participants[mode_id]
+                assert len(segment.initial_participants) == expected_participants[mode_id]
                 assert segment.events and segment.transitions
                 assert any(value.kind == "turn" for value in segment.transitions)
                 assert segment.final_participants

@@ -1,5 +1,6 @@
 """统一战报应用服务与公共展示协议入口。"""
 
+from .assembly import BattleCombatantSpec, BattleReportBuilder
 from .presentation import (
     BATTLE_EVENT_PRESENTATIONS,
     PUBLIC_BATTLE_REPORT_SCHEMA,
@@ -13,7 +14,9 @@ from .service import BattleReportService, DETAIL_RETENTION, SUMMARY_RETENTION
 
 __all__ = [
     "BATTLE_EVENT_PRESENTATIONS",
+    "BattleCombatantSpec",
     "BattleEventPresentationRegistry",
+    "BattleReportBuilder",
     "BattleReportService",
     "DETAIL_RETENTION",
     "PUBLIC_BATTLE_REPORT_SCHEMA",

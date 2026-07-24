@@ -102,11 +102,7 @@ def build_preview_document() -> dict[str, object]:
         )
         if report is None or not report.detail_available or not report.segments:
             raise RuntimeError("official party battle produced no battle report")
-        view = services.world_views.require_skin(
-            report.presentation_skin_id,
-            report.presentation_skin_version,
-        )
-        document = build_public_battle_report(report, view)
+        document = build_public_battle_report(report)
         document["game_name"] = GAME_NAME
         return document
 
@@ -147,7 +143,7 @@ def render_preview(document: dict[str, object]) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <title>万象行纪 · 正式战报预览</title>
-  <link rel="stylesheet" href="../../static/battle-report/style.css?v=16">
+  <link rel="stylesheet" href="../../static/battle-report/style.css?v=17">
 </head>
 <body data-mode="compact">
   <main class="report-shell" id="reportRoot" aria-live="polite">
@@ -157,7 +153,7 @@ def render_preview(document: dict[str, object]) -> str:
     </section>
   </main>
   <script id="battleReportPreviewData" type="application/json">{payload}</script>
-  <script type="module" src="../../static/battle-report/app.js?v=16"></script>
+  <script type="module" src="../../static/battle-report/app.js?v=17"></script>
 </body>
 </html>
 """

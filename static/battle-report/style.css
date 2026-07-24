@@ -386,11 +386,11 @@ h3 {
   transition: width 420ms cubic-bezier(.2, .8, .2, 1);
 }
 
-.vital-bar.health .vital-fill {
+.vital-bar.tone-primary .vital-fill {
   background: var(--red);
 }
 
-.vital-bar.spirit .vital-fill {
+.vital-bar.tone-secondary .vital-fill {
   background: var(--blue);
 }
 
@@ -831,13 +831,13 @@ body[data-mode="detail"] .mode-switch::before {
   font-size: .68rem;
 }
 
-.effect-chip.positive {
+.effect-chip.tone-positive {
   border-color: #b0cebf;
   background: #eef8f3;
   color: #17624f;
 }
 
-.effect-chip.negative {
+.effect-chip.tone-negative {
   border-color: #deb8b2;
   background: var(--red-soft);
   color: #8a342d;
@@ -968,29 +968,29 @@ body[data-mode="detail"] .compact-panel {
   box-shadow: 0 4px 12px rgba(34, 49, 41, .06);
 }
 
-.action-card.damage-action {
+.action-card.tone-damage {
   border-left-color: var(--red);
 }
 
-.action-card.damage-action::before {
+.action-card.tone-damage::before {
   background: var(--red);
   box-shadow: 0 0 0 1px var(--red);
 }
 
-.action-card.status-action {
+.action-card.tone-status {
   border-left-color: var(--gold);
 }
 
-.action-card.status-action::before {
+.action-card.tone-status::before {
   background: var(--gold);
   box-shadow: 0 0 0 1px var(--gold);
 }
 
-.action-card.resource-action {
+.action-card.tone-resource {
   border-left-color: var(--blue);
 }
 
-.action-card.resource-action::before {
+.action-card.tone-resource::before {
   background: var(--blue);
   box-shadow: 0 0 0 1px var(--blue);
 }
@@ -1098,15 +1098,15 @@ details[open] > :not(summary) {
   background: #81928a;
 }
 
-.event-marker.damage {
+.event-marker.tone-damage {
   background: var(--red);
 }
 
-.event-marker.status {
+.event-marker.tone-status {
   background: var(--gold);
 }
 
-.event-marker.resource {
+.event-marker.tone-resource {
   background: var(--blue);
 }
 

@@ -76,6 +76,7 @@ class PartySparringStorageKinds:
     loadout: str
     companion_roster: str
     character_world: str
+    inscription_preference: str
 
 
 @dataclass(frozen=True)

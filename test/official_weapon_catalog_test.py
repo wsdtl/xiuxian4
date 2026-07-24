@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,8 @@ from game.content.world_skins import (  # noqa: E402
     STELLAR_RING_SKIN_ID,
 )
 from game.core.gameplay import (  # noqa: E402
+    COMBAT_DEFENSE,
+    HEALTH_CURRENT,
     AbilityUse,
     ActiveEffect,
     GameplayExecutor,
@@ -39,12 +42,18 @@ from game.core.gameplay import (  # noqa: E402
     Ruleset,
     SeededRandomSource,
 )
+from game.content.catalog.combat.stats import SHIELD_CURRENT  # noqa: E402
 from game.features.battle_report import present_battle_event  # noqa: E402
 from game.rules import (  # noqa: E402
     WeaponGenerationRequest,
     WeaponInstanceGenerator,
 )
-from game.rules.battle_report import KNOWN_BATTLE_EVENT_KINDS, StoredBattleEvent  # noqa: E402
+from game.rules.battle_report import (  # noqa: E402
+    KNOWN_BATTLE_EVENT_KINDS,
+    BattleReportTerm,
+    StoredBattleCombatant,
+    StoredBattleEvent,
+)
 
 
 def main() -> None:
@@ -369,6 +378,11 @@ def _assert_borrowed_force_and_report_projection(
     )
 
     view = select_world_skin(catalog, CULTIVATION_SKIN_ID)
+    combatants = _frozen_combatants(
+        view,
+        {"actor": "试剑者", "target": "镜前敌"},
+        high.value.events,
+    )
     presented = [
         present_battle_event(
             StoredBattleEvent(
@@ -380,12 +394,11 @@ def _assert_borrowed_force_and_report_projection(
                 dict(event.values),
                 event.phase.value,
             ),
-            {"actor": "试剑者", "target": "镜前敌"},
-            view,
+            combatants,
         )
         for event in high.value.events
     ]
-    assert all(event["registered"] for event in presented)
+    assert all(event["text"] for event in presented)
     assert any("移星换斗镜·主效" in event["text"] for event in presented)
     assert any("移星换斗镜·辅效" in event["text"] for event in presented)
     assert any("126 点有效伤害" in event["text"] for event in presented)
@@ -454,6 +467,12 @@ def _assert_deferred_echo_and_report_projection(
     )
 
     view = select_world_skin(catalog, CULTIVATION_SKIN_ID)
+    report_events = (*applied.value.events, *released.events)
+    combatants = _frozen_combatants(
+        view,
+        {"actor": "奏璧者", "target": "闻声敌"},
+        report_events,
+    )
     presented = [
         present_battle_event(
             StoredBattleEvent(
@@ -465,15 +484,63 @@ def _assert_deferred_echo_and_report_projection(
                 dict(event.values),
                 event.phase.value,
             ),
-            {"actor": "奏璧者", "target": "闻声敌"},
-            view,
+            combatants,
         )
-        for event in (*applied.value.events, *released.events)
+        for event in report_events
     ]
-    assert all(event["registered"] for event in presented)
+    assert all(event["text"] for event in presented)
     assert any("空桑回音璧·回响标记" in event["text"] for event in presented)
     assert any("空桑回音璧·回响结算" in event["text"] for event in presented)
     assert any("61.2 点有效伤害" in event["text"] for event in presented)
+
+
+def _frozen_combatants(view, labels, events):
+    identifiers = {
+        str(HEALTH_CURRENT),
+        str(SHIELD_CURRENT),
+        str(COMBAT_DEFENSE),
+    }
+    for event in events:
+        identifiers.add(str(event.subject_id))
+        identifiers.update(_content_identifiers(event.values))
+    terms = {}
+    for identifier in identifiers:
+        try:
+            entry = view.projector.entry(identifier)
+        except (KeyError, ValueError):
+            terms[identifier] = BattleReportTerm(identifier)
+        else:
+            terms[identifier] = BattleReportTerm(
+                entry.name,
+                entry.compact_name or entry.name,
+            )
+    return {
+        key: StoredBattleCombatant(
+            key,
+            label,
+            key,
+            label,
+            "character",
+            "character_world",
+            str(view.world.id),
+            view.skin.version,
+            terms,
+        )
+        for key, label in labels.items()
+    }
+
+
+def _content_identifiers(value):
+    if isinstance(value, Mapping):
+        for item in value.values():
+            yield from _content_identifiers(item)
+        return
+    if isinstance(value, (tuple, list, set, frozenset)):
+        for item in value:
+            yield from _content_identifiers(item)
+        return
+    if isinstance(value, str) and "." in value and ":" not in value:
+        yield value
 
 
 def _assert_fast_balance(catalog) -> None:

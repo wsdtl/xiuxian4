@@ -54,6 +54,12 @@ class CompanionCombatProjector:
         context_tags: TagSet = TagSet(),
     ) -> CompanionCombatProjection:
         definition = self.companions.require_definition(value.definition_id)
+        if isinstance(value, CompanionInstance):
+            origin_world_id = value.origin_world_id
+            if origin_world_id != definition.origin_world_id:
+                raise ValueError("伙伴实例来源世界与内容定义不一致")
+        else:
+            origin_world_id = definition.origin_world_id
         behaviors = tuple(
             self.content.enemies.behaviors.require(behavior_id)
             for behavior_id in (definition.core_behavior_id, value.trait_behavior_id)
@@ -86,7 +92,7 @@ class CompanionCombatProjector:
                 "entity.companion",
                 f"entity.companion.{_kind(value)}",
                 f"companion.definition.{definition.id}",
-                f"companion.origin.{definition.origin_world_id}",
+                f"companion.origin.{origin_world_id}",
             ).merged(context_tags),
             active_effects=effects,
         )

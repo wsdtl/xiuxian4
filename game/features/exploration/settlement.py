@@ -12,6 +12,7 @@ from game.core.gameplay import (
     SPIRIT_MAXIMUM,
     CharacterState,
     InventoryState,
+    InscriptionPreference,
     LoadoutState,
     LootRollCommand,
     LootState,
@@ -70,6 +71,7 @@ class _BatchInputs:
     loadout: LoadoutState
     roster: CompanionRosterState
     settings: CharacterSettingsState
+    inscription_preference: InscriptionPreference | None
     character_level: int
 
 
@@ -300,9 +302,14 @@ class ExplorationSettlementService:
                     uow,
                     build_exploration_battle_report(
                         self.content,
+                        self.battle_reports.builder,
                         state,
                         next_state,
                         inputs.character,
+                        inputs.character_world,
+                        inputs.inventory,
+                        inputs.loadout,
+                        inputs.inscription_preference,
                         inputs.roster,
                         simulation.battle,
                         context.trace_id,
@@ -345,6 +352,12 @@ class ExplorationSettlementService:
             character_id,
             CharacterSettingsState,
         )
+        inscription_preference = self.snapshots.load(
+            uow,
+            self.storage.inscription_preference,
+            character_id,
+            InscriptionPreference,
+        )
         level = character.progressions[CHARACTER_LEVEL_PROGRESSION_ID].level
         return _BatchInputs(
             state,
@@ -355,6 +368,7 @@ class ExplorationSettlementService:
             loadout,
             roster,
             settings,
+            inscription_preference,
             level,
         )
 

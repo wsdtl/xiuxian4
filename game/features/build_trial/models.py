@@ -15,6 +15,7 @@ class BuildTrialStorageKinds:
     inventory: str
     loadout: str
     companion_roster: str
+    inscription_preference: str
 
 
 @dataclass(frozen=True)

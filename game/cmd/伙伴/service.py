@@ -91,7 +91,7 @@ async def bind_companion(message: str, result: CharacterOverviewResult) -> None:
         if outcome.status == "transfer_required" and outcome.roster is not None:
             await send_game_reply(_transfer_confirmation(outcome, overview))
             return
-        await send_game_reply(_bind_result(outcome, overview))
+        await send_game_reply(_bind_result(outcome))
     except Exception as exc:
         await _logged_failure("伙伴出战失败", overview.character.id, exc)
 
@@ -116,7 +116,7 @@ async def confirm_bind_transfer(message: str, result: CharacterOverviewResult) -
             expected_revision=revision,
             logical_time=command_time(),
         )
-        await send_game_reply(_bind_result(outcome, overview))
+        await send_game_reply(_bind_result(outcome))
     except (TypeError, ValueError):
         await send_game_reply(_failure("出战确认已经失效"))
     except Exception as exc:
@@ -177,7 +177,7 @@ async def hunt_companion(message: str, result: CharacterOverviewResult) -> None:
             trace_index,
             logical_time=command_time(),
         )
-        await send_game_reply(_hunt_result(outcome, overview))
+        await send_game_reply(_hunt_result(outcome))
     except ValueError:
         await send_game_reply(_failure("发送：秘境追踪 1"))
     except Exception as exc:
@@ -557,6 +557,7 @@ def _companion_list(roster, overview: CharacterOverview) -> DocumentMessage:
     for companion in sorted(roster.instances.values(), key=lambda value: int(value.reference[1:])):
         preset = roster.preset_for_companion(companion.id)
         status = f"配装 {_preset_index(preset)}" if preset is not None else "休战"
+        companion_projector = _companion_projector(companion)
         builder.line(
             M.command(companion.reference, f"伙伴 {companion.reference}"),
             " ",
@@ -564,7 +565,7 @@ def _companion_list(roster, overview: CharacterOverview) -> DocumentMessage:
             FieldSeparator(),
             "人物" if companion.kind is CompanionKind.PERSON else "宠物",
             FieldSeparator(),
-            _projector(overview).name(companion.quality_id),
+            companion_projector.name(companion.quality_id),
             FieldSeparator(),
             f"Lv{companion.level}",
             FieldSeparator(),
@@ -582,7 +583,9 @@ def _companion_detail(roster, reference: str, overview: CharacterOverview) -> Do
     if companion is None:
         raise ValueError("找不到这名伙伴")
     definition = _companion_definition(companion)
-    origin = current_game_services().world_views.require(companion.origin_world_id).skin.name
+    origin_view = current_game_services().world_views.require(companion.origin_world_id)
+    projector = _companion_projector(companion)
+    origin = origin_view.skin.name
     preset = roster.preset_for_companion(companion.id)
     character_level = overview.character.progressions[CHARACTER_LEVEL_PROGRESSION_ID].level
     required = current_game_services().content.companions.growth.required_for_next_level(
@@ -601,7 +604,7 @@ def _companion_detail(roster, reference: str, overview: CharacterOverview) -> Do
     builder = (
         M.document()
         .section(f"{companion.reference} {definition.name}", icon="player")
-        .row(("品阶", _projector(overview).name(companion.quality_id)), ("等级", f"Lv{companion.level}"))
+        .row(("品阶", projector.name(companion.quality_id)), ("等级", f"Lv{companion.level}"))
         .row(("类型", "人物" if companion.kind is CompanionKind.PERSON else "宠物"), ("定位", _ROLE_NAMES[definition.role]))
         .field("来源", origin)
         .field("状态", f"配装 {_preset_index(preset)}" if preset is not None else "休战")
@@ -612,22 +615,22 @@ def _companion_detail(roster, reference: str, overview: CharacterOverview) -> Do
     builder.row(*((_APTITUDE_NAMES[str(key)], value) for key, value in companion.aptitudes.items()))
     builder.section("战斗属性", icon="combat")
     builder.row(
-        ("血气", _number(attributes.value(HEALTH_MAXIMUM))),
-        ("灵力", _number(attributes.value(SPIRIT_MAXIMUM))),
+        (projector.name(HEALTH_MAXIMUM), _number(attributes.value(HEALTH_MAXIMUM))),
+        (projector.name(SPIRIT_MAXIMUM), _number(attributes.value(SPIRIT_MAXIMUM))),
     )
     builder.row(
-        ("攻击", _number(attributes.value(COMBAT_ATTACK))),
-        ("防御", _number(attributes.value(COMBAT_DEFENSE))),
-        ("速度", _number(attributes.value(COMBAT_SPEED))),
+        (projector.name(COMBAT_ATTACK), _number(attributes.value(COMBAT_ATTACK))),
+        (projector.name(COMBAT_DEFENSE), _number(attributes.value(COMBAT_DEFENSE))),
+        (projector.name(COMBAT_SPEED), _number(attributes.value(COMBAT_SPEED))),
     )
     builder.section("战斗机制", icon="combat")
-    builder.field("主动行动", _projector(overview).name(definition.core_behavior_id))
-    builder.field("特色效果", _projector(overview).name(companion.trait_behavior_id))
+    builder.field("主动行动", projector.name(definition.core_behavior_id))
+    builder.field("特色效果", projector.name(companion.trait_behavior_id))
     actions = []
     if preset == overview.loadout.active_preset_id:
         actions.append(Action("companion.unbind", "休战", "伙伴休战", behavior="send"))
     else:
-        actions.append(Action("companion.bind", _projector(overview).name("term.companion_bind"), f"伙伴出战 {companion.reference}", behavior="send"))
+        actions.append(Action("companion.bind", projector.name("term.companion_bind"), f"伙伴出战 {companion.reference}", behavior="send"))
     actions.append(Action("companion.farewell", "告别", f"告别 {companion.reference}", behavior="send", style="secondary"))
     return builder.actions(actions).build()
 
@@ -679,19 +682,19 @@ def _sanctuary_message(sanctuary, overview: CharacterOverview) -> DocumentMessag
     return builder.actions(actions).build()
 
 
-def _hunt_result(outcome, overview: CharacterOverview) -> DocumentMessage:
+def _hunt_result(outcome) -> DocumentMessage:
     if outcome.status == "captured" and outcome.companion is not None:
         companion = outcome.companion
         builder = (
             M.document()
             .section("捕获成功", icon="reward")
-            .field("世界", _world_name(overview))
+            .field("来源世界", _world_name_by_id(companion.origin_world_id))
             .field("宠物", f"{companion.reference} {_companion_name(companion)}")
-            .row(("品阶", _projector(overview).name(companion.quality_id)), ("等级", f"Lv{companion.level}"))
+            .row(("品阶", _companion_projector(companion).name(companion.quality_id)), ("等级", f"Lv{companion.level}"))
         )
         if outcome.battle_report is not None:
             builder.field("战报", M.link("查看完整战报", public_url("battle", outcome.battle_report.share_id)))
-        return builder.actions((Action("companion.bind", _projector(overview).name("term.companion_bind"), f"伙伴出战 {companion.reference}", behavior="send"),)).build()
+        return builder.actions((Action("companion.bind", _companion_projector(companion).name("term.companion_bind"), f"伙伴出战 {companion.reference}", behavior="send"),)).build()
     if outcome.status == "defeated":
         builder = M.document().section("追踪失败", icon="combat").line("目标仍停留在原踪迹，恢复后可以再次挑战。")
         if outcome.battle_report is not None:
@@ -714,9 +717,9 @@ def _transfer_confirmation(outcome, overview: CharacterOverview) -> DocumentMess
     )
 
 
-def _bind_result(outcome, overview: CharacterOverview) -> DocumentMessage:
+def _bind_result(outcome) -> DocumentMessage:
     if outcome.status in {"bound", "transferred", "already_bound"} and outcome.companion is not None:
-        action = _projector(overview).name("term.companion_bind")
+        action = _companion_projector(outcome.companion).name("term.companion_bind")
         text = "已经随当前配装出战" if outcome.status != "already_bound" else "本就属于当前配装"
         return M.document().section(f"伙伴{action}", icon="player").line(f"{_companion_name(outcome.companion)} {text}").build()
     return _failure(outcome.failure_message or "伙伴出战没有完成")
@@ -730,6 +733,15 @@ def _companion_definition(companion):
 
 def _companion_name(companion) -> str:
     return _companion_definition(companion).name
+
+
+def _companion_projector(companion):
+    definition = _companion_definition(companion)
+    if companion.origin_world_id != definition.origin_world_id:
+        raise ValueError("伙伴实例来源世界与内容定义不一致")
+    return current_game_services().world_views.require(
+        companion.origin_world_id
+    ).projector
 
 
 def _world_name(overview: CharacterOverview) -> str:

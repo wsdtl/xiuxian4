@@ -282,7 +282,11 @@ def _assert_persisted_loop() -> None:
                 logical_time=TIME + timedelta(seconds=EXPLORATION_BATCH_SECONDS),
             )
             assert report is not None and report.segments
-            assert report.segments[0].round_states
+            assert report.segments[0].transitions
+            assert all(
+                transition.after.participants
+                for transition in report.segments[0].transitions
+            )
             assert report.segments[0].final_participants
         repeated = services.exploration.settle_due(
             character_id,
